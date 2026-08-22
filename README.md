@@ -90,6 +90,26 @@ local Vitest server and Home Assistant. E2E credentials are not copied into
 managed worktrees: copy the ignored `tests/e2e/.env.test` into the paired card
 worktree explicitly before running the E2E action.
 
+### How the paired card worktree gets `node_modules`
+
+By default it is a **single symlink** to the main checkout's `node_modules` —
+the same thing `scripts/feature` does. Lint, typecheck and the Vitest suite all
+run against it unchanged.
+
+`card-e2e` switches to a **farm**: every package file symlinked individually,
+with `.cache`, `.vite` and `.vite-temp` as real local directories. Vite's
+dep-optimiser writes into `node_modules/.vite`, so under a plain symlink two
+trees building at once contend for the main checkout's cache. The farm exists
+for those local cache directories and nothing else.
+
+Override with `GROWSPACE_NODE_MODULES=symlink|farm`.
+
+> Prefer `symlink`. In the farm, a symlinked *file* is a write-through:
+> anything that rewrites a file in place inside the worktree's `node_modules`
+> — `patch-package`, a postinstall, `npm rebuild` — edits the **main
+> checkout's** dependencies. The farm also costs ~24k symlinks per worktree
+> against the symlink's one.
+
 ## First-time setup
 
 1. `./scripts/ha dev up`, then open http://localhost:8123 and complete onboarding.
