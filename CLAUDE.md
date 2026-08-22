@@ -22,3 +22,15 @@ validation levels, worktree workflow, and the cross-repo contract. Read it first
 - When something fails at runtime, read `ha-dev/home-assistant.log` directly
   before theorising.
 - Use plan mode for anything spanning both repos.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs are tracked in this repository's GitHub Issues. See
+`docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+This repository uses a single-context domain-documentation layout. See
+`docs/agents/domain.md`.
