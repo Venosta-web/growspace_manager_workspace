@@ -35,27 +35,43 @@ That is a 28-file diff — worth its own commit, not folded into feature work.
 
 | Stage | Result |
 |---|---|
-| `eslint` | **96 problems** (1 error, 95 warnings) ⚠️ |
-| `typecheck` (`tsc --noEmit`) | **errors present** ⚠️ |
-| `test` (unit) | **BLOCKED — no browser installed** ❌ |
+| `eslint` | **95 problems, 0 errors** (warnings only) ✅ |
+| `typecheck` (`tsc --noEmit`) | **clean** ✅ |
+| `test` (unit, real Chromium) | **7261 passed / 355 files** in ~70 s ✅ |
 
-### The blocker
+`./scripts/check card fast` passes.
 
-Unit tests run in real Chromium through `@vitest/browser-playwright`. The
-browser binary is missing:
+### Playwright on Ubuntu 26.04
+
+`npx playwright install chromium` fails outright here:
 
 ```
-Executable doesn't exist at /home/maxi/.cache/ms-playwright/
-  chromium_headless_shell-1200/chrome-headless-shell-linux64/chrome-headless-shell
+ERROR: Playwright does not support chromium on ubuntu26.04-x64
 ```
 
-`~/.cache/ms-playwright/` exists but is empty — no browsers have ever been
-installed for this Playwright version (`^1.60.0`). Until that is fixed, `npm
-test`, `npm run test:coverage` and the e2e suite cannot run at all.
+Playwright gates downloads on a known distro list, and its newest Linux target
+is `ubuntu24.04`. The gate is the only problem — the binaries it fetches are
+distro-independent Chrome-for-Testing builds (`chrome-linux64.zip`). Override
+the host-platform check:
 
 ```bash
-cd ~/dev/lovelace-growspace-manager-card && npx playwright install chromium
+cd ~/dev/lovelace-growspace-manager-card
+PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64 npx playwright install chromium
 ```
+
+Installed and verified: `chromium-1223`, `chromium_headless_shell-1223`,
+`ffmpeg-1011`; `chrome --version` reports Chrome for Testing 148.0.7778.96 and
+runs natively on 26.04. **Re-run this after any Playwright major/minor bump** —
+browser builds are pinned per Playwright version.
+
+### After a `git reset --hard`, reinstall node deps
+
+The reset moved `package.json` forward 38 commits but left `node_modules`
+behind (Playwright 1.57 vs `^1.60.0`, vitest 4.1.7 vs `^4.1.8`). That mismatch
+was also producing a phantom eslint error and TS errors in
+`src/adapters/growspace-adapter.ts` — both vanished after `npm install`.
+If lint or typecheck reports something that looks impossible, check dependency
+drift before believing it.
 
 ## Build output — code splitting
 
