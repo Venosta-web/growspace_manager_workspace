@@ -64,6 +64,25 @@ cd worktrees/irrigation-v2/backend && claude --add-dir ../card
 
 Never run two agents in the same checkout.
 
+### Codex managed worktrees
+
+Select the checked-in **growspace workspace** local environment when starting a
+Codex worktree task. Its setup creates an isolated matched pair on the same
+`codex/codex-<id>` branch, using `prerelease` for the backend and `dev` for the
+card. The pair and its mutable caches stay under `worktrees/codex-<id>/`; the
+existing backend venv and card `node_modules` are reused through links rather
+than copied or reinstalled.
+
+The environment actions run the normal checks against the matched pair. From a
+terminal, the equivalent commands are:
+
+```bash
+./scripts/codex-worktree status
+./scripts/codex-worktree precommit
+./scripts/codex-worktree check backend fast
+./scripts/codex-worktree check all full
+```
+
 ## First-time setup
 
 1. `./scripts/ha dev up`, then open http://localhost:8123 and complete onboarding.

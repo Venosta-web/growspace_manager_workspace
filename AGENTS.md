@@ -90,6 +90,12 @@ Never run two agents in the same checkout. Create a matched worktree pair:
 ./scripts/feature rm  irrigation-v2
 ```
 
+For a Codex-managed worktree of this hub, select the checked-in **growspace
+workspace** local environment instead. It creates the matched pair during
+setup; use `./scripts/codex-worktree path` to locate it and
+`./scripts/codex-worktree check ...` to validate it. Do not create a second
+pair with `scripts/feature` in the same task.
+
 **The backend worktree must live at `growspace_manager/.worktrees/<name>`.**
 Upstream's pre-commit hooks are declared as `entry: ../../.venv/bin/pytest`
 (and the same for mypy). That relative path resolves to the repo venv only from
