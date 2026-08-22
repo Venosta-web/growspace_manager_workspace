@@ -22,6 +22,42 @@ esac
 
 dc() { docker compose "${PROFILE[@]}" "$@"; }
 
+# The runtime belongs to the main hub checkout, never to a worktree of it.
+#
+# docker-compose.yml mounts ../growspace_manager and
+# ../lovelace-growspace-manager-card *relative to the compose file*, and both
+# checkouts produce the same Compose project and container names. Run this from
+# a hub worktree and Compose does not start a second stack — it recreates the
+# shared one with that worktree's siblings mounted instead. Those have no built
+# dist/, so Docker silently creates an empty directory, HA serves 404 for the
+# card, and every dashboard e2e spec fails with "card never visible".
+#
+# ha-dev/ (onboarding, tokens, the SQLite DB) lives beside the compose file too,
+# so a worktree run would also point HA at an empty config.
+require_main_checkout() {
+  local common main
+  common="$(git -C "$WS" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+  [ -n "$common" ] || return 0          # not a git checkout at all; nothing to guard
+  main="$(dirname "$common")"
+  [ "$main" = "$WS" ] && return 0
+
+  echo "ERROR: '$INSTANCE $CMD' must run from the main hub checkout, not a worktree." >&2
+  echo "       here: $WS" >&2
+  echo "       main: $main" >&2
+  echo "       Running it here would repoint the shared :$PORT container at this" >&2
+  echo "       worktree's siblings and its empty ha-$INSTANCE/ config." >&2
+  echo >&2
+  echo "       To serve this worktree's card bundle, run from the main checkout" >&2
+  echo "       with the dist override — the config and backend mounts stay correct:" >&2
+  echo "         GROWSPACE_CARD_DIST=$WS/../lovelace-growspace-manager-card/dist \\" >&2
+  echo "           $main/scripts/ha $INSTANCE restart" >&2
+  exit 1
+}
+
+case "$CMD" in
+  up|down|restart|reload|reset) require_main_checkout ;;
+esac
+
 case "$CMD" in
   up)
     # Fail early and loudly if something else already owns the port —
