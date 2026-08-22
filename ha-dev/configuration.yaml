@@ -11,6 +11,8 @@ default_config:
 
 homeassistant:
   name: Growspace Dev
+  # Simulated e2e sensors live here; regenerate with ./scripts/gen-e2e-sensors
+  packages: !include_dir_named packages
   time_zone: Europe/Berlin
   unit_system: metric
   currency: EUR

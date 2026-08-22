@@ -13,6 +13,7 @@ ha-dev/.ha_run.lock
 ha-dev/.cache/
 ha-dev/secrets.yaml
 ha-dev/blueprints/
+# NOTE: ha-dev/packages/ is generated but TRACKED — see scripts/gen-e2e-sensors
 ha-dev/image/
 ha-dev/www/community/
 ha-dev/custom_components/
