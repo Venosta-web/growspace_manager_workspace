@@ -88,3 +88,39 @@ cd ../lovelace-growspace-manager-card && npm run test:ha
 
 `.env.test` holds a long-lived token — it is gitignored and chmod 600. Never
 commit it.
+
+## Status
+
+Verified 2026-08-22 against the generated environment:
+
+| Spec | Result |
+|---|---|
+| `vwc-day-cycle` (pure-API, 12 tests) | **10 passed, 2 flaky** in 21.8 min |
+
+Before the generators existed, all 12 failed at setup — the sensors, pumps and
+input_numbers simply were not there.
+
+### The two flaky tests
+
+`P2 — maintenance shot fires after target reached` (veg and flower) fails on the
+first attempt and passes on retry:
+
+```
+Entity switch.sim_e2e_vwc_flower_irrigation_pump expected "on" but got "off" after 90000ms
+```
+
+This is **not** caused by the simulation. VWC growspaces use `input_number`
+helpers for every signal, which the spec sets directly — none of their values
+come from the generated sine waves. The test waits up to 90 s for the
+coordinator to schedule a maintenance shot, and that window appears to be
+marginal relative to the coordinator's polling interval. Worth raising the
+timeout or triggering a coordinator refresh explicitly rather than waiting.
+
+### Runtime
+
+The suite is slow — ~22 min for one spec — because it waits on real coordinator
+cycles. Run individual specs while iterating:
+
+```bash
+npm run test:ha -- vwc-day-cycle
+```
