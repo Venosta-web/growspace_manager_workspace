@@ -170,6 +170,25 @@ run_card_precommit() {
   exec "$BACKEND_REPO/.venv/bin/pre-commit" run --all-files
 }
 
+# Point the shared dev runtime at a card dist/ and wait for it to serve again.
+# scripts/ha refuses to run from a worktree — the compose file resolves ha-dev/
+# and the backend mount relative to itself — so drive the main checkout's copy
+# and override only the card bundle.
+remount_card_dist() {
+  local dist="$1" code
+  GROWSPACE_CARD_DIST="$dist" "$LOCAL_HUB/scripts/ha" dev restart >/dev/null
+
+  for _ in $(seq 1 60); do
+    code="$(curl -s -o /dev/null -w '%{http_code}' \
+      http://localhost:8123/local/community/lovelace-growspace-manager-card/growspace-manager-card.js 2>/dev/null || true)"
+    [ "$code" = "200" ] && { printf '→ HA serving %s\n' "$dist"; return 0; }
+    sleep 2
+  done
+
+  echo "ERROR: HA did not serve the card bundle from $dist within 120s" >&2
+  return 1
+}
+
 run_card_e2e() {
   # The browser flow drives Vite, which writes its dep-optimiser cache into
   # node_modules/.vite. Under a plain symlink that cache is the main checkout's,
@@ -181,8 +200,22 @@ run_card_e2e() {
     echo "ERROR: copy the card E2E config into $CARD_WORKTREE/tests/e2e/.env.test first" >&2
     exit 1
   }
+
   cd "$CARD_WORKTREE"
-  exec npm run test:e2e
+
+  # Build, then actually serve what was built. Without the remount, HA keeps
+  # serving the main checkout's dist/ and the suite silently validates a bundle
+  # this worktree never produced. rollup also deletes and recreates dist/, so
+  # the remount has to happen after the build or Docker holds the dead inode.
+  npm run build
+
+  # The runtime is a singleton shared with the main checkout; hand it back on
+  # the way out however we exit, so a failed run does not leave :8123 serving
+  # this worktree's bundle.
+  trap 'remount_card_dist "$CARD_REPO/dist" >/dev/null 2>&1 || true' EXIT
+  remount_card_dist "$CARD_WORKTREE/dist"
+
+  npm run test:ha
 }
 
 case "${1:-setup}" in
