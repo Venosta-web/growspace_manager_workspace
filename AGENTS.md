@@ -20,8 +20,16 @@ The actual code lives in two sibling repositories.
     └── worktrees/                   matched cross-repo agent worktrees
 ```
 
-**Each repo has its own `AGENTS.md`.** Read the one for the repo you are changing;
-it is canonical for that repo's commands and rules.
+**Each repo has its own upstream-maintained `AGENTS.md`.** Read the one for the
+repo you are changing — it is canonical and it wins over anything here. Notably
+it documents conventions this hub must respect:
+
+- The main checkout is **shared by concurrent agent sessions**; a pre-commit
+  guard (`no-commit-to-branch`) rejects commits made on protected branches.
+  Work in a worktree.
+- Architecture/refactor work integrates on **`prerelease`**, not `main`.
+- **Never** use a HA-core venv — its `syrupy` is newer than the one
+  `pytest-homeassistant-custom-component` pins and every test dies at collection.
 
 ## Core design rule
 
@@ -49,6 +57,14 @@ The dev instance mounts:
 | `../growspace_manager/custom_components/growspace_manager` | `/config/custom_components/growspace_manager` |
 | `../lovelace-growspace-manager-card/dist` | `/config/www/community/lovelace-growspace-manager-card` (ro) |
 | `./ha-dev` | `/config` |
+
+The card is **code-split**: a thin `growspace-manager-card.js` entry plus ~16
+lazy `growspace-[name]-[hash].js` chunks. The whole `dist/` directory is
+mounted so chunk imports resolve; never mount just the entry file.
+
+> **After any `git reset --hard` or branch switch that recreates `dist/`, run
+> `./scripts/ha dev restart`.** Docker bind-mounts by inode — replacing the
+> directory silently leaves the container serving a stale, deleted one (404s).
 
 So: edit Python → `./scripts/ha dev reload`. Edit TypeScript → `npm run watch`
 in the card repo → hard-refresh the browser. **Neither needs HACS.** HACS is the
@@ -98,5 +114,9 @@ exist. See `docs/CONTRACT.md`.
   `src/` instead.
 - **Don't commit `ha-dev/.storage/`** or anything else HA generates; it is
   git-ignored and contains your tokens.
+- **Don't commit the card's build output.** `dist/*.js` is git-ignored upstream
+  as of `a39faf67 chore(release): untrack built bundle`.
+- **Don't work from a stale checkout.** `git fetch` and compare against
+  `origin/main` before concluding anything is broken — these repos move fast.
 - **Don't start a second thing on :8123.** `./scripts/ha dev up` refuses rather
   than silently losing the race.

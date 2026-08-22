@@ -12,6 +12,11 @@ entity ids / attributes ──────────────▶    store a
 response payloads       ──────────────▶    schemas/api-schema.ts  (zod)
 ```
 
+> **Upstream already has tooling for this.** The card ships
+> `npm run test:contract-fixture` (`vitest.contract.config.ts`), and the backend
+> has `tests/contract/`. Use those rather than inventing a parallel mechanism —
+> this document explains the *discipline*, not a separate system.
+
 ## Why this file exists
 
 An agent working in one repo cannot see the other's tests. Without an explicit
@@ -38,6 +43,10 @@ Use a matched worktree pair so both sides are on the same branch:
 cd ~/dev/growspace_manager_workspace/worktrees/<name>/backend
 claude --add-dir ../card
 ```
+
+Worktrees branch from **`origin/prerelease`** by default — upstream's stated
+base for architecture and refactor work. Override with `BASE=main`. The card
+repo has no `prerelease`, so it falls back to `origin/main` automatically.
 
 ## Breaking-change checklist
 

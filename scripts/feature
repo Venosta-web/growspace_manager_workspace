@@ -20,13 +20,18 @@ BACKEND="$WS/../growspace_manager"
 CARD="$WS/../lovelace-growspace-manager-card"
 ROOT="$WS/worktrees"
 
+# Base branch. Upstream convention: architecture/refactor work integrates on
+# `prerelease`, not main. Override per-invocation with BASE=main ./scripts/feature ...
+BASE="${BASE:-prerelease}"
+
 add_wt() { # repo, dest, branch
   local repo="$1" dest="$2" branch="$3"
   if git -C "$repo" show-ref --verify --quiet "refs/heads/$branch"; then
     git -C "$repo" worktree add "$dest" "$branch"
   else
     git -C "$repo" fetch --quiet origin || true
-    git -C "$repo" worktree add -b "$branch" "$dest" origin/main 2>/dev/null \
+    git -C "$repo" worktree add -b "$branch" "$dest" "origin/$BASE" 2>/dev/null \
+      || git -C "$repo" worktree add -b "$branch" "$dest" "origin/main" 2>/dev/null \
       || git -C "$repo" worktree add -b "$branch" "$dest" main
   fi
 }
@@ -52,7 +57,7 @@ case "${1:-}" in
     fi
 
     echo
-    echo "✓ feature '$NAME' ready on branch $BRANCH"
+    echo "✓ feature '$NAME' ready on branch $BRANCH (base: origin/$BASE)"
     [ -d "$ROOT/$NAME/backend" ] && echo "   backend: $ROOT/$NAME/backend"
     [ -d "$ROOT/$NAME/card" ]    && echo "   card:    $ROOT/$NAME/card"
     echo

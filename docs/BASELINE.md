@@ -1,85 +1,69 @@
-# Quality baseline — 2026-08-22
+# Quality baseline
 
-Captured the day the workspace was set up, **before** any code cleanup, so you
-and your agents can tell "I broke this" from "this was already red".
+Measured **2026-08-22**, against `origin/main`:
 
-`./scripts/check all fast` **fails today.** That is accurate, not a bug in the
-script — the gate reports what is actually true about the repos.
+- `growspace_manager` @ `29395aa`
+- `lovelace-growspace-manager-card` @ `a39faf67`
+
+Re-measure with `./scripts/check all full`. Update this file when numbers move.
+
+> An earlier version of this file recorded far worse numbers (255 mypy errors,
+> 3 failing tests, 188 eslint errors). Those were measured against a local
+> checkout that turned out to be **699 commits behind** origin/main. They were
+> never representative. The figures below are from current upstream code.
 
 ## Backend — `growspace_manager`
 
 | Stage | Result |
 |---|---|
-| `ruff check` | **82 errors** (7 auto-fixable, 46 more with `--unsafe-fixes`) |
-| `ruff format --check` | **6 files** would be reformatted (93 clean) |
-| `mypy` | **255 errors in 38 files** (99 files checked) |
-| `pytest` | **1 failed, 2 errors, 1968 passed** in ~45 s |
+| `ruff check` | **All checks passed** ✅ |
+| `ruff format --check` | **28 files** would be reformatted ⚠️ |
+| `mypy` | **Success — no issues in 205 source files** ✅ |
+| `pytest` | **5091 passed**, 0 failed, in ~113 s ✅ |
 
-Known failures:
+The only red is formatting. Pre-commit's `ruff-format` hook covers the same
+scope (`^(custom_components|tests)/.+\.(py|pyi)$`) but only runs on changed
+files, so untouched files drifted. Fix in one shot when you want it:
 
+```bash
+cd ~/dev/growspace_manager && .venv/bin/python -m ruff format custom_components/ tests/
 ```
-FAILED tests/integration/test_storage_manager_coverage.py::test_storage_backup_corrupt_data_exception
-ERROR  tests/services/test_notification_batching.py::test_batching_trigger
-ERROR  tests/services/test_nutrient_deduction_integration.py::test_water_growspace_per_plant_compatibility
-```
 
-> **mypy was previously reporting nothing useful.** `mypy.ini` was a verbatim
-> copy of HA Core's hassfest-generated config pinned to `python_version = 3.13`,
-> so mypy aborted on a syntax error inside HA's own site-packages before
-> checking any project code. Fixing the pin to 3.14 is what surfaced these 257
-> errors — they are pre-existing, not new.
+That is a 28-file diff — worth its own commit, not folded into feature work.
 
 ## Frontend — `lovelace-growspace-manager-card`
 
 | Stage | Result |
 |---|---|
-| `eslint` | **188 errors, 549 warnings** (53 errors auto-fixable) |
-| `tsc --noEmit` | **clean** ✅ |
-| `vitest` | not captured — runs real Chromium, measure on a quiet machine |
+| `eslint` | **96 problems** (1 error, 95 warnings) ⚠️ |
+| `typecheck` (`tsc --noEmit`) | **errors present** ⚠️ |
+| `test` (unit) | **BLOCKED — no browser installed** ❌ |
 
-## Fixed during setup (2026-08-22)
+### The blocker
 
-**`hass.components` was removed from Home Assistant**, and
-`custom_components/growspace_manager/__init__.py` still called
-`hass.components.frontend.async_remove_panel(DOMAIN)` at two sites. On HA
-2026.8.2 this raised `AttributeError` in `async_unload_entry`, leaving the
-config entry in `failed_unload`. Consequences:
+Unit tests run in real Chromium through `@vitest/browser-playwright`. The
+browser binary is missing:
 
-- `./scripts/ha dev reload` could not work — every Python change needed a full
-  HA restart.
-- Users could not reload or cleanly remove the integration.
-- HA returns **HTTP 403** on a reload request for an entry already stuck in
-  `failed_unload`, which is why the first reload attempt failed even after the
-  code fix; the script's container-restart fallback recovered it.
-
-Fixed by importing the module directly and using the current signature:
-
-```python
-from homeassistant.components import frontend, panel_custom
-frontend.async_remove_panel(hass, DOMAIN)   # was hass.components.frontend...
+```
+Executable doesn't exist at /home/maxi/.cache/ms-playwright/
+  chromium_headless_shell-1200/chrome-headless-shell-linux64/chrome-headless-shell
 ```
 
-Two tests in `tests/integration/test_init_extra_coverage.py` asserted against
-the old API by stubbing `hass.components = MagicMock()`. That stub is why the
-breakage never showed up in CI — it mocked away the very attribute that no
-longer exists. They now patch
-`custom_components.growspace_manager.frontend.async_remove_panel` and assert the
-real `(hass, DOMAIN)` signature.
-
-Verified live: two consecutive `./scripts/ha dev reload` runs both end with
-`state = loaded`, no unload errors in the log, 46 services registered.
-
-## Suggested order of attack
-
-1. `ruff format` + `ruff check --fix` on the backend — mechanical, zero risk.
-2. `eslint --fix` on the card — 53 of 188 errors disappear.
-3. The 3 failing backend tests — real signal, small surface.
-4. mypy's 257 errors — grind these down per-module; don't try it in one pass.
-
-Re-measure any time:
+`~/.cache/ms-playwright/` exists but is empty — no browsers have ever been
+installed for this Playwright version (`^1.60.0`). Until that is fixed, `npm
+test`, `npm run test:coverage` and the e2e suite cannot run at all.
 
 ```bash
-./scripts/check all full
+cd ~/dev/lovelace-growspace-manager-card && npx playwright install chromium
 ```
 
-Update this file when the numbers move, so it stays a useful reference point.
+## Build output — code splitting
+
+Upstream now **code-splits**: `rollup.config.js` emits a thin entry
+`dist/growspace-manager-card.js` (~1 KB) plus ~16 lazy chunks
+`growspace-[name]-[hash].js`. The workspace mounts the whole `dist/` directory
+into Home Assistant, so chunks resolve correctly — a single-file mount would
+break the card entirely. Verified: entry HTTP 200, chunks HTTP 200.
+
+`dist/*.js` and `dist/*.js.map` are **git-ignored** upstream as of
+`a39faf67 chore(release): untrack built bundle`. Do not commit built output.

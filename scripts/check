@@ -43,12 +43,13 @@ check_backend() {
 check_card() {
   cd "$CARD"
   run "eslint"     npm run --silent lint
-  run "tsc"        npx --no-install tsc --noEmit
+  run "typecheck"  npm run --silent typecheck
   if [ "$LEVEL" = full ]; then
-    run "vitest (coverage)" npm run --silent test:coverage
-    run "rollup build"      npm run --silent build
+    run "unit tests (coverage)" npm run --silent test:coverage
+    run "contract fixture"      npm run --silent test:contract-fixture
+    run "rollup build"          npm run --silent build
   else
-    run "vitest" npm run --silent test
+    run "unit tests" npm run --silent test
   fi
 }
 
