@@ -37,7 +37,12 @@ case "$CMD" in
     echo "  config on host: $WS/ha-$INSTANCE"
     ;;
   down)     dc stop "$SVC" ;;
-  restart)  dc restart "$SVC"; echo "→ restarted $CTR" ;;
+  restart)
+    # Recreate rather than merely restarting so bind mounts resolve the current
+    # host path/inode. Rollup deletes and recreates the card's dist/ directory.
+    dc up -d --force-recreate "$SVC"
+    echo "→ recreated $CTR"
+    ;;
   logs)     docker logs -f --tail 200 "$CTR" ;;
   shell)    docker exec -it "$CTR" bash ;;
   url)      echo "http://localhost:$PORT" ;;

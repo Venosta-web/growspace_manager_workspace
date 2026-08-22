@@ -182,7 +182,7 @@ run_card_e2e() {
     exit 1
   }
   cd "$CARD_WORKTREE"
-  exec npm run test:ha
+  exec npm run test:e2e
 }
 
 case "${1:-setup}" in

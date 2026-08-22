@@ -41,7 +41,7 @@ services:
 
       # The card's rollup output, mounted at the exact path HACS would use.
       # `npm run watch` writes dist/ -> file is live -> hard-refresh browser.
-      - ../lovelace-growspace-manager-card/dist:/config/www/community/lovelace-growspace-manager-card:ro
+      - ${GROWSPACE_CARD_DIST:-../lovelace-growspace-manager-card/dist}:/config/www/community/lovelace-growspace-manager-card:ro
 
   # ---------------------------------------------------------------------
   # TEST — clean-room release verification. Deliberately NO source mounts.
