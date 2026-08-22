@@ -83,7 +83,7 @@ cd ~/dev/growspace_manager_workspace
 ./scripts/gen-e2e-sensors && ./scripts/ha dev restart
 # then the e2e-setup compile-and-run above
 node scripts/gen-e2e-dashboards.cjs
-cd ../lovelace-growspace-manager-card && npm run test:ha
+cd ../lovelace-growspace-manager-card && npm run test:e2e
 ```
 
 `.env.test` holds a long-lived token — it is gitignored and chmod 600. Never
@@ -162,6 +162,13 @@ being too short for the 351 KB code-split chunk (the dialog mounts in ~400 ms).
 > fresh `rollup -c` bundles it correctly. Since `clean-dist` does
 > `rmSync('dist')`, rebuilding also recreates the directory, so it needs
 > `./scripts/ha dev restart` or Docker keeps serving the deleted inode.
+
+All root-level e2e commands now run a bundle preflight before Playwright. The build
+contains a hash of runtime source/build inputs plus a unique build ID; the preflight
+compares both with the bundle served by HA. `npm run test:e2e` rebuilds, recreates HA
+with the calling checkout's `dist/` mounted, waits for the exact build to be served,
+then starts the suite. Direct `test:ha`, headed, and debug runs fail fast with the
+required build/restart action when either side is stale.
 
 ### Full-suite breakdown
 
