@@ -62,10 +62,22 @@ The card is **code-split**: a thin `growspace-manager-card.js` entry plus ~16
 lazy `growspace-[name]-[hash].js` chunks. The whole `dist/` directory is
 mounted so chunk imports resolve; never mount just the entry file.
 
-> **After any `git reset --hard`, branch switch, or build that recreates `dist/`, run
-> `./scripts/ha dev restart`.** The command recreates the container so Docker
-> remounts the current directory inode. Root-level card e2e commands enforce this
-> automatically and refuse to start Playwright against a stale served bundle.
+> **After any `git reset --hard`, branch switch, or build that recreates `dist/`,
+> run `./scripts/ha dev restart`.** Docker bind-mounts by inode, and rollup
+> deletes and recreates `dist/`, so without this the container keeps serving the
+> old, deleted directory and every chunk 404s. `restart` force-recreates the
+> container, which is what re-resolves the path.
+>
+> **Nothing enforces this for you.** `npm run test:e2e` in the card repo is
+> `npm run build && npm run test:ha` — it recreates `dist/` and then runs
+> Playwright without remounting, so it validates whatever HA was already
+> serving. Restart between the build and the run. The symptom when you forget is
+> not a build error: every dashboard spec times out on `growspace-manager-card`
+> never becoming visible.
+>
+> `./scripts/codex-worktree card-e2e` is the exception — it builds, remounts the
+> shared runtime at its own `dist/` via `GROWSPACE_CARD_DIST`, waits for the
+> bundle to serve, and hands the runtime back on exit.
 
 So: edit Python → `./scripts/ha dev reload`. Edit TypeScript → `npm run watch`
 in the card repo → hard-refresh the browser. **Neither needs HACS.** HACS is the
@@ -144,3 +156,9 @@ exist. See `docs/CONTRACT.md`.
   `origin/main` before concluding anything is broken — these repos move fast.
 - **Don't start a second thing on :8123.** `./scripts/ha dev up` refuses rather
   than silently losing the race.
+- **Don't drive the runtime from a hub worktree.** `docker-compose.yml` resolves
+  `ha-dev/` and both source mounts *relative to itself*, and a worktree yields
+  the same Compose project and container names — so it does not start a second
+  stack the port guard would catch, it recreates the shared one against that
+  worktree's unbuilt siblings and empty config. `./scripts/ha` refuses; to serve
+  a worktree's bundle, run it from the main checkout with `GROWSPACE_CARD_DIST`.
