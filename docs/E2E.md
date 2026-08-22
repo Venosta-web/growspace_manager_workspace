@@ -70,9 +70,13 @@ Seven of the nine specs navigate to a dashboard and wait for
 node scripts/gen-e2e-dashboards.cjs
 ```
 
-Creates one dashboard per growspace (`/e2e-veg/0`, `/e2e-vwc-flower/0`, …), each
-holding a single card bound to that growspace. Idempotent; uses the WebSocket
-API because HA has no REST endpoint for `lovelace/dashboards/create`.
+Creates one dashboard per growspace (`/e2e-veg/0`, `/e2e-vwc-flower/0`, …).
+Each dashboard uses a Sections view capped at four columns for a representative
+desktop layout, with a single card bound to that growspace and sized to four
+grid rows. The command is idempotent: rerunning it updates every existing stage
+dashboard to the same layout and creates only the missing dashboards. It uses
+the WebSocket API because HA has no REST endpoint for
+`lovelace/dashboards/create`.
 
 ## Full rebuild from scratch
 
