@@ -101,6 +101,10 @@ Verified 2026-08-22 against the generated environment:
 Before the generators existed, all of these failed at setup — the sensors,
 pumps, input_numbers and dashboards simply were not there.
 
+Full-suite run, 2026-08-22 (37 tests, 41.3 min): **17 passed, 18 failed,
+2 flaky.** The dialog cause below is fixed; the remaining failures are the
+three unrelated groups in "Full-suite breakdown".
+
 ### Two setup traps worth remembering
 
 **The Lovelace resource must be registered over websocket.** A `resources:`
@@ -118,19 +122,75 @@ With both fixed, the card renders the right growspace and displays the simulated
 readings (temperature 24 °C, humidity 57.5 %, VPD 1.1 kPa, CO2 800 ppm — the
 generated midpoints).
 
-### Remaining `vwc-strategy` failures
+### Solved: no dialog could open — HA's service worker reloaded the page
 
-All three fail waiting on a dialog:
+Every dialog spec failed the same way:
 
 ```
 expect(locator('config-dialog ha-dialog')).toHaveAttribute('open', '')
   element(s) not found, timeout 5000ms
 ```
 
-This is app/test level, not environment: all 17 built chunks serve HTTP 200, so
-it is not a lazy-load 404. Either the dialog does not open, or the 5 s timeout is
-too short for a first-click chunk fetch now that the card is code-split
-(`growspace-config-dialog-*.js` is 351 KB).
+That reads like the dialog never opened. It did. Polling the card's store every
+200 ms after the click shows it open and then destroyed:
+
+```
+[poll  400ms] {"type":"CONFIG","portal":true,  "hostDefined":true}
+[poll 2600ms] {"type":"CONFIG","portal":true,  "hostDefined":true}
+[poll 2800ms] {"n":0}                       ← document gone
+[poll 3000ms] {"type":"NONE", "portal":false, "hostDefined":false}
+```
+
+The HA frontend registers a **service worker** and calls `location.reload()` the
+moment it takes control (`controllerchange`). Every Playwright context starts
+with an empty SW registry, so the reload fires ~2 s into each test. Because
+`growspace-manager-card` portals dialogs into `document.body`, the reload
+destroys the portal *and* resets the global `activeDialog$` atom to `NONE`.
+
+Fix: `serviceWorkers: 'block'` in `tests/e2e/playwright.config.ts`. Nothing under
+test depends on the SW. `vwc-strategy` went 3 failed → **3 passed in 22 s, no
+retries**.
+
+Two earlier hypotheses were both wrong and worth not re-running: it is not a
+lazy-load 404 (all 17 chunks serve 200), and it is not the 5 s expect timeout
+being too short for the 351 KB code-split chunk (the dialog mounts in ~400 ms).
+
+> **A stale `dist/` will masquerade as this.** The bundle being served was
+> v1.0.31-alpha.1 while `package.json` said 1.1.6, and it shipped an unbundled
+> bare specifier — `Failed to resolve module specifier "qrcode-generator"` —
+> which broke the dialog-host chunk outright. Rollup emitted **no warning**. A
+> fresh `rollup -c` bundles it correctly. Since `clean-dist` does
+> `rmSync('dist')`, rebuilding also recreates the directory, so it needs
+> `./scripts/ha dev restart` or Docker keeps serving the deleted inode.
+
+### Full-suite breakdown
+
+The 18 remaining failures are three groups, none of them the dialog layer:
+
+**14 — the legacy dashboard path does not exist.** `TEST_DASHBOARD_PATH` is
+`/dashboard-tesat/0`, but `gen-e2e-dashboards.cjs` only creates the eight
+`e2e-*` dashboards. Every spec still on `testContext.dashboardPath` navigates to
+a 404 and times out waiting for the card: `smoke` (4), `setup-dialogs` (4),
+`plant-actions` (3), `insights-dialogs` (3). Either point that variable at
+`e2e-veg`, or migrate those specs to a stage-specific path.
+
+**2 — the simulated tank drains below the irrigation threshold.**
+`vwc-day-cycle` veg P1/P2 wait 90 s for a pump that never fires, because the
+coordinator refuses to run:
+
+```
+Irrigation skipped — tank 'Tank' is low (29.0% < 30.0%)
+```
+
+This is state drift across a long-lived dev instance, not the simulation feeding
+bad values. Reset the tank level before the VWC specs.
+
+**2 — genuine test timeouts.** `add-plant-dialog` (30 s) and
+`plant-watering-round-trip` (45 s) both get *past* dialog-open and die while
+filling a field or clicking a button, so they are slow rather than blocked.
+
+`vwc-day-cycle` is pure-API — it never navigates a browser — so none of its
+results are affected by the service-worker change.
 
 ### The two flaky tests
 
