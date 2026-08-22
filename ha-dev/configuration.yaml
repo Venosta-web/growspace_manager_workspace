@@ -34,13 +34,14 @@ logger:
     custom_components.growspace_manager: debug
     homeassistant.components.websocket_api: info
 
-# Lovelace in storage mode (edit via UI), but resources declared here so the
-# card is registered deterministically on every fresh boot.
+# Lovelace in storage mode (edit via UI).
+#
+# Do NOT add a `resources:` block here. `lovelace.resources` is only honoured in
+# YAML mode; in storage mode it is silently ignored and the card never loads.
+# Resources live in .storage/lovelace_resources and are registered via the
+# websocket API — see scripts/gen-e2e-dashboards.cjs.
 lovelace:
   mode: storage
-  resources:
-    - url: /local/community/lovelace-growspace-manager-card/growspace-manager-card.js
-      type: module
 
 # Keep the recorder small and disposable — this is a dev box, not an archive.
 recorder:

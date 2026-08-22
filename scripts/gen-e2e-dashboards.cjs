@@ -47,7 +47,28 @@ ws.on('message', async (raw) => {
   if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); }
 });
 
+const CARD_URL = '/local/community/lovelace-growspace-manager-card/growspace-manager-card.js';
+
+/*
+ * Register the card as a Lovelace resource.
+ *
+ * This CANNOT be done from configuration.yaml: `lovelace.resources` is only
+ * honoured in YAML mode. This instance runs `lovelace: mode: storage`, where
+ * resources live in .storage/lovelace_resources and are managed through the
+ * websocket API. A YAML `resources:` block is silently ignored — the card JS
+ * never loads, <growspace-manager-card> is never defined, and every spec that
+ * waits for it times out with an empty page.
+ */
+async function ensureResource() {
+  const list = await send({ type: 'lovelace/resources' });
+  const have = (list.result || []).find((r) => r.url === CARD_URL);
+  if (have) { console.log('  resource already registered'); return; }
+  const r = await send({ type: 'lovelace/resources/create', res_type: 'module', url: CARD_URL });
+  console.log(r.success ? `  registered resource ${CARD_URL}` : `  FAIL resource: ${JSON.stringify(r.error)}`);
+}
+
 async function run() {
+  await ensureResource();
   const existing = await send({ type: 'lovelace/dashboards/list' });
   const have = new Set((existing.result || []).map(d => d.url_path));
   console.log('  existing dashboards:', [...have].join(', ') || '(none)');
