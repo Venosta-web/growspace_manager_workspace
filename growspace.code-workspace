@@ -1,0 +1,148 @@
+{
+  // Multi-root workspace: one window, four roots, four independent git repos.
+  // Open with:  code ~/dev/growspace_manager_workspace/growspace.code-workspace
+  "folders": [
+    {
+      "name": "⚙ WORKSPACE (runtime + scripts)",
+      "path": "."
+    },
+    {
+      "name": "🐍 BACKEND — growspace_manager",
+      "path": "../growspace_manager"
+    },
+    {
+      "name": "🎴 FRONTEND — lovelace card",
+      "path": "../lovelace-growspace-manager-card"
+    },
+    {
+      "name": "📖 HA CORE (reference, read-only)",
+      "path": "../core"
+    }
+  ],
+
+  "settings": {
+    // --- Python -------------------------------------------------------
+    // The real venv. NOT /home/maxi/core/core/.venv, which does not exist.
+    "python.defaultInterpreterPath": "../growspace_manager/.venv/bin/python",
+    "python.testing.pytestEnabled": true,
+    "python.testing.unittestEnabled": false,
+    "python.analysis.autoImportCompletions": true,
+
+    // --- Treat HA Core as reference material, not editable source -----
+    // Keeps 3.7 GB of Core out of search, file watching and the file tree's
+    // hot path. This is what stops agents wandering into Core by accident.
+    "files.readonlyInclude": {
+      "../core/**": true
+    },
+    "files.watcherExclude": {
+      "**/.git/objects/**": true,
+      "**/node_modules/**": true,
+      "**/.venv/**": true,
+      "**/dist/**": true,
+      "../core/**": true,
+      "**/ha-dev/.storage/**": true,
+      "**/ha-dev/*.db*": true,
+      "**/ha-dev/*.log*": true
+    },
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/.venv": true,
+      "**/dist": true,
+      "**/coverage*": true,
+      "**/*.map": true,
+      "growspace-manager-card.js": true,
+      "ha-dev/.storage": true,
+      "ha-dev/home-assistant*.log": true,
+      "worktrees": true
+    },
+    // Core stays searchable on demand (Ctrl+Shift+F with "search in folder")
+    // but never pollutes default results.
+    "search.useIgnoreFiles": true,
+
+    // --- Editor -------------------------------------------------------
+    "editor.formatOnSave": true,
+    "[python]": { "editor.defaultFormatter": "charliermarsh.ruff" },
+    "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+    "[javascript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+
+    // Never let anyone (human or agent) hand-edit the built bundles.
+    "files.exclude": {
+      "**/.mypy_cache": true,
+      "**/.pytest_cache": true,
+      "**/__pycache__": true
+    },
+
+    "terminal.integrated.cwd": "${workspaceFolder}"
+  },
+
+  "extensions": {
+    "recommendations": [
+      "ms-python.python",
+      "ms-python.vscode-pylance",
+      "charliermarsh.ruff",
+      "esbenp.prettier-vscode",
+      "dbaeumer.vscode-eslint",
+      "ms-azuretools.vscode-docker",
+      "redhat.vscode-yaml",
+      "anthropic.claude-code"
+    ]
+  },
+
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "HA: up (dev)",
+        "type": "shell",
+        "command": "./scripts/ha dev up",
+        "options": { "cwd": "${workspaceFolder:⚙ WORKSPACE (runtime + scripts)}" },
+        "problemMatcher": []
+      },
+      {
+        "label": "HA: logs (follow)",
+        "type": "shell",
+        "command": "./scripts/ha dev logs",
+        "options": { "cwd": "${workspaceFolder:⚙ WORKSPACE (runtime + scripts)}" },
+        "isBackground": true,
+        "problemMatcher": []
+      },
+      {
+        "label": "HA: reload integration",
+        "type": "shell",
+        "command": "./scripts/ha dev reload",
+        "options": { "cwd": "${workspaceFolder:⚙ WORKSPACE (runtime + scripts)}" },
+        "problemMatcher": []
+      },
+      {
+        "label": "Card: watch (rollup)",
+        "type": "shell",
+        "command": "npm run watch",
+        "options": { "cwd": "${workspaceFolder:🎴 FRONTEND — lovelace card}" },
+        "isBackground": true,
+        "problemMatcher": []
+      },
+      {
+        "label": "Backend: fast checks",
+        "type": "shell",
+        "command": "./scripts/check backend fast",
+        "options": { "cwd": "${workspaceFolder:⚙ WORKSPACE (runtime + scripts)}" },
+        "group": "test",
+        "problemMatcher": []
+      },
+      {
+        "label": "Frontend: fast checks",
+        "type": "shell",
+        "command": "./scripts/check card fast",
+        "options": { "cwd": "${workspaceFolder:⚙ WORKSPACE (runtime + scripts)}" },
+        "group": "test",
+        "problemMatcher": []
+      },
+      {
+        "label": "Dev loop: HA up + card watch",
+        "dependsOn": ["HA: up (dev)", "Card: watch (rollup)"],
+        "dependsOrder": "sequence",
+        "problemMatcher": []
+      }
+    ]
+  }
+}

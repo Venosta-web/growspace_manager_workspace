@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Matched cross-repo git worktrees for parallel agent work.
+#
+# A growspace feature almost always spans both repos, so a worktree in only one
+# of them is a trap: the agent edits the backend and silently type-checks the
+# card from `main`. This creates BOTH sides on the same branch name.
+#
+#   ./scripts/feature new  irrigation-v2 [--backend-only|--card-only]
+#   ./scripts/feature list
+#   ./scripts/feature rm   irrigation-v2
+#   ./scripts/feature cd   irrigation-v2      # prints path, for: cd "$(...)"
+#
+# Layout:
+#   worktrees/irrigation-v2/backend  -> branch feature/irrigation-v2
+#   worktrees/irrigation-v2/card     -> branch feature/irrigation-v2
+set -euo pipefail
+
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BACKEND="$WS/../growspace_manager"
+CARD="$WS/../lovelace-growspace-manager-card"
+ROOT="$WS/worktrees"
+
+add_wt() { # repo, dest, branch
+  local repo="$1" dest="$2" branch="$3"
+  if git -C "$repo" show-ref --verify --quiet "refs/heads/$branch"; then
+    git -C "$repo" worktree add "$dest" "$branch"
+  else
+    git -C "$repo" fetch --quiet origin || true
+    git -C "$repo" worktree add -b "$branch" "$dest" origin/main 2>/dev/null \
+      || git -C "$repo" worktree add -b "$branch" "$dest" main
+  fi
+}
+
+case "${1:-}" in
+  new)
+    NAME="${2:?feature name required}"
+    BRANCH="feature/$NAME"
+    SCOPE="${3:-both}"
+    mkdir -p "$ROOT/$NAME"
+
+    [ "$SCOPE" = "--card-only" ]    || add_wt "$BACKEND" "$ROOT/$NAME/backend" "$BRANCH"
+    [ "$SCOPE" = "--backend-only" ] || add_wt "$CARD"    "$ROOT/$NAME/card"    "$BRANCH"
+
+    # The card worktree has no node_modules; symlink the main checkout's so the
+    # agent can lint/test immediately instead of a 2-minute npm install.
+    if [ -d "$ROOT/$NAME/card" ] && [ ! -e "$ROOT/$NAME/card/node_modules" ]; then
+      ln -s "$CARD/node_modules" "$ROOT/$NAME/card/node_modules"
+    fi
+    # Same for the backend venv.
+    if [ -d "$ROOT/$NAME/backend" ] && [ ! -e "$ROOT/$NAME/backend/.venv" ]; then
+      ln -s "$BACKEND/.venv" "$ROOT/$NAME/backend/.venv"
+    fi
+
+    echo
+    echo "✓ feature '$NAME' ready on branch $BRANCH"
+    [ -d "$ROOT/$NAME/backend" ] && echo "   backend: $ROOT/$NAME/backend"
+    [ -d "$ROOT/$NAME/card" ]    && echo "   card:    $ROOT/$NAME/card"
+    echo
+    echo "Launch a cross-repo agent with both roots in context:"
+    echo "   cd $ROOT/$NAME/backend && claude --add-dir ../card"
+    ;;
+
+  list)
+    echo "── backend ──"; git -C "$BACKEND" worktree list
+    echo; echo "── card ──";  git -C "$CARD"    worktree list
+    ;;
+
+  rm)
+    NAME="${2:?feature name required}"
+    # Remove the symlinks first so git doesn't chase them.
+    rm -f "$ROOT/$NAME/card/node_modules" "$ROOT/$NAME/backend/.venv"
+    git -C "$BACKEND" worktree remove --force "$ROOT/$NAME/backend" 2>/dev/null || true
+    git -C "$CARD"    worktree remove --force "$ROOT/$NAME/card"    2>/dev/null || true
+    rmdir "$ROOT/$NAME" 2>/dev/null || true
+    git -C "$BACKEND" worktree prune; git -C "$CARD" worktree prune
+    echo "✓ removed worktrees for '$NAME' (branches kept)"
+    ;;
+
+  cd) echo "$ROOT/${2:?feature name required}" ;;
+
+  *) sed -n '2,16p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 2 ;;
+esac

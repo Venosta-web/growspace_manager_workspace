@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Layered validation. Agents are told to run these exact commands — no guessing
+# at venv paths, no inventing flags.
+#
+#   ./scripts/check backend fast     ruff + mypy + targeted pytest
+#   ./scripts/check backend full     + whole pytest suite w/ coverage
+#   ./scripts/check card    fast     eslint + tsc + vitest
+#   ./scripts/check card    full     + coverage + production build
+#   ./scripts/check all     fast|full
+#
+# Exit code is non-zero if ANY stage fails (nothing is swallowed).
+set -uo pipefail
+
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BACKEND="$WS/../growspace_manager"
+CARD="$WS/../lovelace-growspace-manager-card"
+PY="$BACKEND/.venv/bin/python"
+
+TARGET="${1:-all}"
+LEVEL="${2:-fast}"
+RC=0
+
+hdr() { printf '\n\033[1;36m━━ %s\033[0m\n' "$*"; }
+run() {
+  hdr "$1"; shift
+  "$@" || { RC=1; printf '\033[1;31m✗ FAILED: %s\033[0m\n' "$*"; }
+}
+
+check_backend() {
+  [ -x "$PY" ] || { echo "ERROR: venv missing at $PY — run: python3 -m venv $BACKEND/.venv" >&2; RC=1; return; }
+  cd "$BACKEND"
+  run "ruff check"   "$PY" -m ruff check custom_components/growspace_manager/
+  run "ruff format"  "$PY" -m ruff format --check custom_components/growspace_manager/
+  run "mypy"         "$PY" -m mypy custom_components/growspace_manager/
+  if [ "$LEVEL" = full ]; then
+    run "pytest (full + coverage)" "$PY" -m pytest tests/ \
+      --cov=custom_components.growspace_manager --cov-report=term-missing -q
+  else
+    run "pytest" "$PY" -m pytest tests/ -q
+  fi
+}
+
+check_card() {
+  cd "$CARD"
+  run "eslint"     npm run --silent lint
+  run "tsc"        npx --no-install tsc --noEmit
+  if [ "$LEVEL" = full ]; then
+    run "vitest (coverage)" npm run --silent test:coverage
+    run "rollup build"      npm run --silent build
+  else
+    run "vitest" npm run --silent test
+  fi
+}
+
+case "$TARGET" in
+  backend) check_backend ;;
+  card)    check_card ;;
+  all)     check_backend; check_card ;;
+  *) echo "usage: $0 {backend|card|all} {fast|full}" >&2; exit 2 ;;
+esac
+
+if [ $RC -eq 0 ]; then
+  printf '\n\033[1;32m✓ %s / %s — all checks passed\033[0m\n' "$TARGET" "$LEVEL"
+else
+  printf '\n\033[1;31m✗ %s / %s — one or more checks FAILED\033[0m\n' "$TARGET" "$LEVEL"
+fi
+exit $RC

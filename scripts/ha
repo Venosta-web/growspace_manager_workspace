@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+# Control the Growspace Home Assistant dev/test runtimes.
+#
+#   ./scripts/ha dev  up|down|restart|logs|reload|shell|url|token|reset
+#   ./scripts/ha test up|down|restart|logs|shell|url|reset
+#
+# "dev"  = localhost:8123, source bind-mounted live from both repos
+# "test" = localhost:8124, virgin config for HACS release verification
+set -euo pipefail
+
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$WS"
+
+INSTANCE="${1:-dev}"
+CMD="${2:-}"
+
+case "$INSTANCE" in
+  dev)  SVC=ha-dev;  CTR=growspace-ha-dev;  PORT=8123; PROFILE=() ;;
+  test) SVC=ha-test; CTR=growspace-ha-test; PORT=8124; PROFILE=(--profile test) ;;
+  *)    echo "usage: $0 {dev|test} <command>" >&2; exit 2 ;;
+esac
+
+dc() { docker compose "${PROFILE[@]}" "$@"; }
+
+case "$CMD" in
+  up)
+    # Fail early and loudly if something else already owns the port —
+    # this is exactly how the HA Core devcontainer used to silently win.
+    if ss -ltn "sport = :$PORT" 2>/dev/null | grep -q ":$PORT"; then
+      owner="$(docker ps --format '{{.Names}}\t{{.Ports}}' | grep ":$PORT->" | cut -f1 || true)"
+      echo "ERROR: port $PORT is already in use${owner:+ by container '$owner'}." >&2
+      echo "       Free it first (e.g. docker stop $owner) then re-run." >&2
+      exit 1
+    fi
+    dc up -d "$SVC"
+    echo "→ $INSTANCE starting at http://localhost:$PORT"
+    echo "  config on host: $WS/ha-$INSTANCE"
+    ;;
+  down)     dc stop "$SVC" ;;
+  restart)  dc restart "$SVC"; echo "→ restarted $CTR" ;;
+  logs)     docker logs -f --tail 200 "$CTR" ;;
+  shell)    docker exec -it "$CTR" bash ;;
+  url)      echo "http://localhost:$PORT" ;;
+
+  reload)
+    # Reload just our integration without a full HA restart.
+    # Looks up the real config entry id via the REST API, then reloads it.
+    if [ ! -f "$WS/.ha-token" ]; then
+      echo "No token yet. Run: ./scripts/ha $INSTANCE token" >&2; exit 1
+    fi
+    TOKEN="$(cat "$WS/.ha-token")"
+    API="http://localhost:$PORT/api"
+
+    ENTRY_IDS=$(curl -sf -H "Authorization: Bearer $TOKEN" \
+      "$API/config/config_entries/entry" 2>/dev/null \
+      | python3 -c "import sys,json;print(' '.join(e['entry_id'] for e in json.load(sys.stdin) if e.get('domain')=='growspace_manager'))" 2>/dev/null || true)
+
+    if [ -z "${ENTRY_IDS// /}" ]; then
+      echo "No growspace_manager config entry found (not set up yet, or token lacks admin)."
+      echo "Falling back to a full container restart."
+      dc restart "$SVC"
+      exit 0
+    fi
+
+    rc=0
+    for id in $ENTRY_IDS; do
+      code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+        "$API/config/config_entries/entry/$id/reload" \
+        -H "Authorization: Bearer $TOKEN")
+      if [ "$code" = "200" ]; then
+        echo "→ reloaded config entry $id"
+      else
+        echo "→ reload of $id returned HTTP $code" >&2; rc=1
+      fi
+    done
+    if [ $rc -ne 0 ]; then
+      echo "Reload failed; falling back to container restart." >&2
+      dc restart "$SVC"
+    fi
+    ;;
+
+  token)
+    echo "Create a long-lived token in HA:"
+    echo "  1. open http://localhost:$PORT/profile/security"
+    echo "  2. bottom of page → 'Create token'"
+    echo "  3. paste it here:"
+    read -r -s tok
+    printf '%s' "$tok" > "$WS/.ha-token"
+    chmod 600 "$WS/.ha-token"
+    echo "saved → $WS/.ha-token (git-ignored)"
+    ;;
+
+  reset)
+    # Nuke instance state but keep configuration.yaml and friends.
+    read -r -p "Delete .storage/, DB and logs for '$INSTANCE'? [y/N] " ans
+    [ "$ans" = "y" ] || { echo "aborted"; exit 0; }
+    dc stop "$SVC" 2>/dev/null || true
+    rm -rf "$WS/ha-$INSTANCE/.storage" \
+           "$WS/ha-$INSTANCE"/home-assistant*.db* \
+           "$WS/ha-$INSTANCE"/home-assistant.log*
+    echo "→ '$INSTANCE' reset to a fresh onboarding state"
+    ;;
+
+  *)
+    sed -n '2,8p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'
+    exit 2 ;;
+esac

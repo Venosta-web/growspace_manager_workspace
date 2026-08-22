@@ -1,0 +1,55 @@
+# Home Assistant — Growspace DEV instance
+#
+# This file lives on the HOST at:
+#   ~/dev/growspace_manager_workspace/ha-dev/configuration.yaml
+# and is bind-mounted into the container at /config/configuration.yaml.
+#
+# Everything HA writes (.storage/, home-assistant.log, www/) is therefore
+# readable and editable from the host by you, Claude Code, and Codex.
+
+default_config:
+
+homeassistant:
+  name: Growspace Dev
+  time_zone: Europe/Berlin
+  unit_system: metric
+  currency: EUR
+  country: DE
+
+# Trust the Docker bridge so the browser + Playwright can reach HA without
+# tripping the "invalid login attempt" IP ban during local development.
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 172.16.0.0/12
+    - 127.0.0.1
+    - ::1
+
+# Verbose logging for our own integration only; everything else stays quiet.
+logger:
+  default: warning
+  logs:
+    custom_components.growspace_manager: debug
+    homeassistant.components.websocket_api: info
+
+# Lovelace in storage mode (edit via UI), but resources declared here so the
+# card is registered deterministically on every fresh boot.
+lovelace:
+  mode: storage
+  resources:
+    - url: /local/community/lovelace-growspace-manager-card/growspace-manager-card.js
+      type: module
+
+# Keep the recorder small and disposable — this is a dev box, not an archive.
+recorder:
+  db_url: "sqlite:////config/home-assistant_v2.db"
+  purge_keep_days: 3
+  commit_interval: 1
+
+# Long-lived token creation for Playwright e2e is done in the UI:
+#   Profile -> Security -> Long-lived access tokens
+# then paste into lovelace-growspace-manager-card/tests/e2e/.env.test
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml

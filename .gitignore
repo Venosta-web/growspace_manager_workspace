@@ -1,0 +1,45 @@
+# --- Home Assistant runtime state (never commit: contains tokens & secrets) ---
+ha-dev/.storage/
+ha-dev/.cloud/
+ha-dev/deps/
+ha-dev/tts/
+ha-dev/*.db
+ha-dev/*.db-*
+ha-dev/*.log
+ha-dev/*.log.*
+ha-dev/.HA_VERSION
+ha-dev/.uuid
+ha-dev/.ha_run.lock
+ha-dev/secrets.yaml
+ha-dev/blueprints/
+ha-dev/image/
+ha-dev/www/community/
+ha-dev/custom_components/
+
+ha-test/.storage/
+ha-test/.cloud/
+ha-test/deps/
+ha-test/tts/
+ha-test/*.db
+ha-test/*.db-*
+ha-test/*.log
+ha-test/*.log.*
+ha-test/.HA_VERSION
+ha-test/.uuid
+ha-test/.ha_run.lock
+ha-test/secrets.yaml
+ha-test/blueprints/
+ha-test/image/
+ha-test/www/
+ha-test/custom_components/
+
+# --- local credentials ---
+.ha-token
+
+# --- agent worktrees (they are real checkouts, not workspace content) ---
+worktrees/
+
+# --- editor / os ---
+.vscode/
+*.code-workspace.bak
+.DS_Store

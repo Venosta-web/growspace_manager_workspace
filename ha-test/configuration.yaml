@@ -1,0 +1,42 @@
+# Home Assistant — Growspace CLEAN/RELEASE-TEST instance
+#
+# Purpose: verify a *real HACS installation* of both repos against a virgin
+# config. Nothing from this repo is bind-mounted into custom_components here —
+# that is deliberate. If it works here, it works for your users.
+#
+# Host path: ~/dev/growspace_manager_workspace/ha-test/configuration.yaml
+# Served on: http://localhost:8124
+
+default_config:
+
+homeassistant:
+  name: Growspace Release Test
+  time_zone: Europe/Berlin
+  unit_system: metric
+  currency: EUR
+  country: DE
+
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 172.16.0.0/12
+    - 127.0.0.1
+    - ::1
+
+logger:
+  default: warning
+  logs:
+    custom_components.growspace_manager: debug
+
+# NOTE: no `lovelace.resources` block here on purpose — the HACS install flow
+# must register the resource itself. If the card only works when you hand-add
+# the resource, that is a packaging bug worth catching before release.
+lovelace:
+  mode: storage
+
+recorder:
+  purge_keep_days: 1
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
