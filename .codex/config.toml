@@ -1,0 +1,17 @@
+# Browser-mode unit tests and E2E use only exact local development endpoints.
+default_permissions = "growspace_workspace"
+
+[features]
+network_proxy = true
+
+[permissions.growspace_workspace]
+description = "Growspace workspace with exact localhost browser-test access"
+extends = ":workspace"
+
+[permissions.growspace_workspace.network]
+enabled = true
+
+[permissions.growspace_workspace.network.domains]
+"localhost" = "allow"
+"127.0.0.1" = "allow"
+"::1" = "allow"

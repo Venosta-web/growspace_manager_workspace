@@ -80,8 +80,15 @@ terminal, the equivalent commands are:
 ./scripts/codex-worktree status
 ./scripts/codex-worktree precommit
 ./scripts/codex-worktree check backend fast
+./scripts/codex-worktree card-precommit
+./scripts/codex-worktree card-e2e
 ./scripts/codex-worktree check all full
 ```
+
+Card browser tests receive an exact localhost/loopback allowlist for their
+local Vitest server and Home Assistant. E2E credentials are not copied into
+managed worktrees: copy the ignored `tests/e2e/.env.test` into the paired card
+worktree explicitly before running the E2E action.
 
 ## First-time setup
 
