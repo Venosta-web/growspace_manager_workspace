@@ -83,7 +83,13 @@ async function run() {
       console.log(`  created dashboard ${urlPath}`);
     } else { console.log(`  dashboard ${urlPath} already exists`); }
 
-    const cfg = { views: [{ title, cards: [{ type: 'custom:growspace-manager-card', growspace_id: gsId }] }] };
+    // The config key is `default_growspace` (see GrowspaceManagerCardConfig in
+    // src/lib/types/config.ts). An unrecognised key is ignored and the card
+    // auto-selects an arbitrary growspace instead — which looks like it works
+    // until you notice every dashboard is showing the same wrong space.
+    const cfg = {
+      views: [{ title, cards: [{ type: 'custom:growspace-manager-card', default_growspace: gsId }] }],
+    };
     const s = await send({ type: 'lovelace/config/save', url_path: urlPath, config: cfg });
     console.log(`    config saved: ${s.success ? 'ok' : JSON.stringify(s.error)}  -> growspace ${gsId.slice(0,8)}`);
   }

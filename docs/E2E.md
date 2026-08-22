@@ -96,9 +96,41 @@ Verified 2026-08-22 against the generated environment:
 | Spec | Result |
 |---|---|
 | `vwc-day-cycle` (pure-API, 12 tests) | **10 passed, 2 flaky** in 21.8 min |
+| `vwc-strategy` (dashboard, 3 tests) | card renders correctly; 3 fail on dialog interaction |
 
-Before the generators existed, all 12 failed at setup — the sensors, pumps and
-input_numbers simply were not there.
+Before the generators existed, all of these failed at setup — the sensors,
+pumps, input_numbers and dashboards simply were not there.
+
+### Two setup traps worth remembering
+
+**The Lovelace resource must be registered over websocket.** A `resources:`
+block under `lovelace:` is only honoured in YAML mode. This instance runs
+`mode: storage`, where the block is silently ignored — the card JS never loads
+and every navigating spec times out against an empty page with no error to
+explain it. `gen-e2e-dashboards.cjs` handles this.
+
+**The card config key is `default_growspace`, not `growspace_id`.** An
+unrecognised key is ignored and the card auto-selects an arbitrary growspace, so
+the dashboard renders fine while showing the *wrong* space — the "E2E VWC Veg"
+dashboard displayed the Dry growspace. Silent and easy to miss.
+
+With both fixed, the card renders the right growspace and displays the simulated
+readings (temperature 24 °C, humidity 57.5 %, VPD 1.1 kPa, CO2 800 ppm — the
+generated midpoints).
+
+### Remaining `vwc-strategy` failures
+
+All three fail waiting on a dialog:
+
+```
+expect(locator('config-dialog ha-dialog')).toHaveAttribute('open', '')
+  element(s) not found, timeout 5000ms
+```
+
+This is app/test level, not environment: all 17 built chunks serve HTTP 200, so
+it is not a lazy-load 404. Either the dialog does not open, or the 5 s timeout is
+too short for a first-click chunk fetch now that the card is code-split
+(`growspace-config-dialog-*.js` is 351 KB).
 
 ### The two flaky tests
 
