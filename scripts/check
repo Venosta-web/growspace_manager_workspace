@@ -34,10 +34,8 @@ check_backend() {
   #   ruff-format  files: ^(custom_components|tests)/.+\.(py|pyi)$
   #   mypy         files: ^custom_components/.+\.(py|pyi)$   args: --follow-imports=silent
   #   pytest       whole suite (pass_filenames: false)
-  # ruff-check has no `files` filter upstream, but the only repo-root .py that
-  # fails it is the tracked scratch file `scratch_mock_test.py`, which no real
-  # commit stages. Checking source dirs keeps the gate meaningful.
-  run "ruff check"  "$PY" -m ruff check custom_components/ tests/
+  #   ruff-check   no `files:` filter -> whole repo
+  run "ruff check"  "$PY" -m ruff check .
   run "ruff format" "$PY" -m ruff format --check custom_components/ tests/
   run "mypy"        "$PY" -m mypy --follow-imports=silent custom_components/
   if [ "$LEVEL" = full ]; then
