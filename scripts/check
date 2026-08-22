@@ -27,11 +27,19 @@ run() {
 }
 
 check_backend() {
-  [ -x "$PY" ] || { echo "ERROR: venv missing at $PY — run: python3 -m venv $BACKEND/.venv" >&2; RC=1; return; }
+  [ -x "$PY" ] || { echo "ERROR: venv missing at $PY — see the repo's CLAUDE.md" >&2; RC=1; return; }
   cd "$BACKEND"
-  run "ruff check"   "$PY" -m ruff check custom_components/growspace_manager/
-  run "ruff format"  "$PY" -m ruff format --check custom_components/growspace_manager/
-  run "mypy"         "$PY" -m mypy custom_components/growspace_manager/
+  # Scopes below mirror .pre-commit-config.yaml exactly, so a green run here
+  # means the hooks will not reject your commit:
+  #   ruff-format  files: ^(custom_components|tests)/.+\.(py|pyi)$
+  #   mypy         files: ^custom_components/.+\.(py|pyi)$   args: --follow-imports=silent
+  #   pytest       whole suite (pass_filenames: false)
+  # ruff-check has no `files` filter upstream, but the only repo-root .py that
+  # fails it is the tracked scratch file `scratch_mock_test.py`, which no real
+  # commit stages. Checking source dirs keeps the gate meaningful.
+  run "ruff check"  "$PY" -m ruff check custom_components/ tests/
+  run "ruff format" "$PY" -m ruff format --check custom_components/ tests/
+  run "mypy"        "$PY" -m mypy --follow-imports=silent custom_components/
   if [ "$LEVEL" = full ]; then
     run "pytest (full + coverage)" "$PY" -m pytest tests/ \
       --cov=custom_components.growspace_manager --cov-report=term-missing -q

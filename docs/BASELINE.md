@@ -14,22 +14,48 @@ Re-measure with `./scripts/check all full`. Update this file when numbers move.
 
 ## Backend — `growspace_manager`
 
-| Stage | Result |
-|---|---|
-| `ruff check` | **All checks passed** ✅ |
-| `ruff format --check` | **28 files** would be reformatted ⚠️ |
-| `mypy` | **Success — no issues in 205 source files** ✅ |
-| `pytest` | **5091 passed**, 0 failed, in ~113 s ✅ |
+| Stage | Scope | Result |
+|---|---|---|
+| `ruff check` | `custom_components/ tests/` | **All checks passed** ✅ |
+| `ruff format --check` | `custom_components/ tests/` (614 files) | **all formatted** ✅ |
+| `mypy --follow-imports=silent` | `custom_components/` (206 files) | **no issues** ✅ |
+| `pytest` | whole suite | **5091 passed** in ~113 s ✅ |
 
-The only red is formatting. Pre-commit's `ruff-format` hook covers the same
-scope (`^(custom_components|tests)/.+\.(py|pyi)$`) but only runs on changed
-files, so untouched files drifted. Fix in one shot when you want it:
+`./scripts/check backend fast` passes. Scopes mirror `.pre-commit-config.yaml`,
+so a green run here means the hooks will not reject the commit.
+
+> The formatting drift (140 files across `custom_components/` and `tests/`) was
+> cleared by `50160f6` on branch `chore/ruff-format`. All 140 were verified
+> AST-identical to their previous versions — mechanical reformat, zero
+> semantic change.
+
+### Known: one tracked scratch file fails lint
+
+`scratch_mock_test.py` at the repo root is **tracked** (1 KB) and is the only
+source of ruff errors repo-wide — 6 of them (`T201` print, `D100`, `D103`,
+`SIM105`). Upstream's `ruff-check` hook has no `files:` filter, so it would fire
+if that file were ever staged. `scripts/check` deliberately scopes to
+`custom_components/ tests/` so the gate stays meaningful. Deleting the scratch
+file would make repo-wide `ruff check .` clean.
+
+### Committing: you must be in a worktree
+
+Upstream's pytest and mypy hooks are declared as `entry: ../../.venv/bin/pytest`.
+That path resolves to the repo venv **only** from `<repo>/.worktrees/<name>`.
+From the main checkout it resolves to `~/dev/.venv`, which does not exist, so
+both hooks fail and the commit is rejected. `no-commit-to-branch` additionally
+blocks `main` and `dev`.
 
 ```bash
-cd ~/dev/growspace_manager && .venv/bin/python -m ruff format custom_components/ tests/
+./scripts/feature new <name>     # creates the worktree in the right place
 ```
 
-That is a 28-file diff — worth its own commit, not folded into feature work.
+Verified: hooks from a generated worktree give pytest Passed / mypy Passed;
+from the main checkout, both Failed.
+
+> Do **not** run `pre-commit run --all-files` casually — prettier and
+> `ruff --fix` rewrite files (43 in one observed run). Normal commits only run
+> hooks on staged files.
 
 ## Frontend — `lovelace-growspace-manager-card`
 
