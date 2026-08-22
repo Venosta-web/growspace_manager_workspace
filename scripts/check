@@ -12,8 +12,8 @@
 set -uo pipefail
 
 WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BACKEND="$WS/../growspace_manager"
-CARD="$WS/../lovelace-growspace-manager-card"
+BACKEND="${GROWSPACE_BACKEND:-$WS/../growspace_manager}"
+CARD="${GROWSPACE_CARD:-$WS/../lovelace-growspace-manager-card}"
 PY="$BACKEND/.venv/bin/python"
 
 TARGET="${1:-all}"

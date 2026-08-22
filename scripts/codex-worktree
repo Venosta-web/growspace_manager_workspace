@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# Create and address the matched backend/card pair used by a Codex-managed
+# worktree of this workspace hub.
+set -euo pipefail
+
+HUB_WORKTREE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+HUB_COMMON_GIT_DIR="$(git -C "$HUB_WORKTREE" rev-parse --path-format=absolute --git-common-dir)"
+LOCAL_HUB="$(dirname "$HUB_COMMON_GIT_DIR")"
+DEV_ROOT="$(dirname "$LOCAL_HUB")"
+BACKEND_REPO="$DEV_ROOT/growspace_manager"
+CARD_REPO="$DEV_ROOT/lovelace-growspace-manager-card"
+
+WORKTREE_KEY="$(printf '%s' "$HUB_WORKTREE" | sha256sum | cut -c1-12)"
+NAME="codex-$WORKTREE_KEY"
+BRANCH="codex/$NAME"
+PAIR_ROOT="$HUB_WORKTREE/worktrees/$NAME"
+BACKEND_CONTAINER="$PAIR_ROOT/growspace_manager"
+BACKEND_WORKTREE="$BACKEND_CONTAINER/.worktrees/backend"
+CARD_WORKTREE="$PAIR_ROOT/card"
+
+require_repo() {
+  local repo="$1"
+  git -C "$repo" rev-parse --git-dir >/dev/null 2>&1 || {
+    echo "ERROR: expected Git repository at $repo" >&2
+    exit 1
+  }
+}
+
+resolve_base() {
+  local repo="$1" preferred="$2" candidate
+  for candidate in \
+    "refs/remotes/origin/$preferred" \
+    "refs/heads/$preferred" \
+    refs/remotes/origin/main \
+    refs/heads/main; do
+    if git -C "$repo" show-ref --verify --quiet "$candidate"; then
+      printf '%s\n' "$candidate"
+      return
+    fi
+  done
+  echo "ERROR: no usable $preferred or main base in $repo" >&2
+  exit 1
+}
+
+add_worktree() {
+  local repo="$1" destination="$2" base="$3"
+
+  if [ -d "$destination" ] && git -C "$destination" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return
+  fi
+  if [ -e "$destination" ]; then
+    echo "ERROR: worktree destination already exists: $destination" >&2
+    exit 1
+  fi
+
+  mkdir -p "$(dirname "$destination")"
+  if git -C "$repo" show-ref --verify --quiet "refs/heads/$BRANCH"; then
+    git -C "$repo" worktree add "$destination" "$BRANCH"
+  else
+    git -C "$repo" worktree add -b "$BRANCH" "$destination" "$base"
+  fi
+}
+
+setup_pair() {
+  local backend_base card_base
+
+  require_repo "$BACKEND_REPO"
+  require_repo "$CARD_REPO"
+  [ -x "$BACKEND_REPO/.venv/bin/python" ] || {
+    echo "ERROR: shared backend venv missing at $BACKEND_REPO/.venv" >&2
+    exit 1
+  }
+  [ -d "$CARD_REPO/node_modules" ] || {
+    echo "ERROR: shared card dependencies missing at $CARD_REPO/node_modules" >&2
+    exit 1
+  }
+
+  backend_base="$(resolve_base "$BACKEND_REPO" "${CODEX_BACKEND_BASE:-prerelease}")"
+  card_base="$(resolve_base "$CARD_REPO" "${CODEX_CARD_BASE:-dev}")"
+
+  mkdir -p "$BACKEND_CONTAINER" "$PAIR_ROOT/.cache"
+  ln -sfn "$BACKEND_REPO/.venv" "$BACKEND_CONTAINER/.venv"
+  add_worktree "$BACKEND_REPO" "$BACKEND_WORKTREE" "$backend_base"
+  add_worktree "$CARD_REPO" "$CARD_WORKTREE" "$card_base"
+  ln -sfn "$BACKEND_WORKTREE" "$PAIR_ROOT/backend"
+  [ -e "$BACKEND_WORKTREE/.venv" ] || ln -s "$BACKEND_REPO/.venv" "$BACKEND_WORKTREE/.venv"
+  if [ -L "$CARD_WORKTREE/node_modules" ]; then
+    unlink "$CARD_WORKTREE/node_modules"
+  fi
+  if [ ! -d "$CARD_WORKTREE/node_modules" ]; then
+    mkdir "$CARD_WORKTREE/node_modules"
+    cp -as "$CARD_REPO/node_modules/." "$CARD_WORKTREE/node_modules/"
+  fi
+
+  printf 'Matched Codex worktrees ready on %s\n' "$BRANCH"
+  printf '  backend: %s\n' "$BACKEND_WORKTREE"
+  printf '  card:    %s\n' "$CARD_WORKTREE"
+  printf '  pair:    %s\n' "$PAIR_ROOT"
+}
+
+run_check() {
+  local target="${1:-all}" level="${2:-fast}"
+  setup_pair >/dev/null
+  export GROWSPACE_BACKEND="$BACKEND_WORKTREE"
+  export GROWSPACE_CARD="$CARD_WORKTREE"
+  export PRE_COMMIT_HOME="$PAIR_ROOT/.cache/pre-commit"
+  export PYTHONDONTWRITEBYTECODE=1
+  exec "$HUB_WORKTREE/scripts/check" "$target" "$level"
+}
+
+run_precommit() {
+  setup_pair >/dev/null
+  export PRE_COMMIT_HOME="$PAIR_ROOT/.cache/pre-commit"
+  export PYTHONDONTWRITEBYTECODE=1
+  cd "$BACKEND_WORKTREE"
+  exec ./.venv/bin/pre-commit run --all-files
+}
+
+case "${1:-setup}" in
+  setup) setup_pair ;;
+  path) printf '%s\n' "$PAIR_ROOT" ;;
+  check) shift; run_check "$@" ;;
+  precommit) run_precommit ;;
+  status)
+    setup_pair >/dev/null
+    git -C "$BACKEND_WORKTREE" status --short --branch
+    git -C "$CARD_WORKTREE" status --short --branch
+    ;;
+  *)
+    echo "usage: $0 {setup|path|status|precommit|check [backend|card|all] [fast|full]}" >&2
+    exit 2
+    ;;
+esac
