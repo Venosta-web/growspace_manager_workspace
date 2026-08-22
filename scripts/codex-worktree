@@ -61,9 +61,62 @@ add_worktree() {
   fi
 }
 
+# How the card worktree gets its dependencies.
+#
+#   symlink (default) — one symlink to the main checkout's node_modules. This is
+#     what scripts/feature does and what AGENTS.md documents. Nothing in the
+#     worktree can write into the shared tree by accident.
+#
+#   farm — every package file symlinked individually (~24k links), with
+#     .cache/.vite/.vite-temp as real local directories. Only Vite's caches are
+#     genuinely per-worktree; that is the entire reason this mode exists, and it
+#     is why the browser/e2e flows opt into it.
+#
+# The farm is a fallback, not the default, because a symlinked *file* is a
+# write-through: anything that rewrites a file in place inside the worktree's
+# node_modules (patch-package, a postinstall, npm rebuild) edits the main
+# checkout's dependencies. Prefer `symlink` unless a tool actually needs to
+# write into node_modules.
+NODE_MODULES_MODE="${GROWSPACE_NODE_MODULES:-symlink}"
+
+link_node_modules() {
+  local nm="$CARD_WORKTREE/node_modules"
+
+  case "$NODE_MODULES_MODE" in
+    symlink)
+      # A leftover farm is a real directory; replace it rather than nesting into it.
+      if [ -d "$nm" ] && [ ! -L "$nm" ]; then
+        rm -rf "$nm"
+      fi
+      ln -sfn "$CARD_REPO/node_modules" "$nm"
+      ;;
+    farm)
+      [ -L "$nm" ] && unlink "$nm"
+      mkdir -p "$nm"
+      find "$CARD_REPO/node_modules" -mindepth 1 -maxdepth 1 \
+        ! -name .cache ! -name .vite ! -name .vite-temp \
+        -exec cp -as --update=none -t "$nm" {} +
+      mkdir -p "$nm/.cache" "$nm/.vite" "$nm/.vite-temp"
+      ;;
+  esac
+}
+
+# Validated before setup_pair does any work, so a typo cannot leave a
+# half-created pair behind.
+require_node_modules_mode() {
+  case "$NODE_MODULES_MODE" in
+    symlink|farm) ;;
+    *)
+      echo "ERROR: GROWSPACE_NODE_MODULES must be 'symlink' or 'farm', got '$NODE_MODULES_MODE'" >&2
+      exit 2
+      ;;
+  esac
+}
+
 setup_pair() {
   local backend_base card_base
 
+  require_node_modules_mode
   require_repo "$BACKEND_REPO"
   require_repo "$CARD_REPO"
   [ -x "$BACKEND_REPO/.venv/bin/python" ] || {
@@ -84,19 +137,7 @@ setup_pair() {
   add_worktree "$CARD_REPO" "$CARD_WORKTREE" "$card_base"
   ln -sfn "$BACKEND_WORKTREE" "$PAIR_ROOT/backend"
   [ -e "$BACKEND_WORKTREE/.venv" ] || ln -s "$BACKEND_REPO/.venv" "$BACKEND_WORKTREE/.venv"
-  if [ -L "$CARD_WORKTREE/node_modules" ]; then
-    unlink "$CARD_WORKTREE/node_modules"
-  fi
-  if [ ! -d "$CARD_WORKTREE/node_modules" ]; then
-    mkdir "$CARD_WORKTREE/node_modules"
-  fi
-  find "$CARD_REPO/node_modules" -mindepth 1 -maxdepth 1 \
-    ! -name .cache ! -name .vite ! -name .vite-temp \
-    -exec cp -as --update=none -t "$CARD_WORKTREE/node_modules" {} +
-  mkdir -p \
-    "$CARD_WORKTREE/node_modules/.cache" \
-    "$CARD_WORKTREE/node_modules/.vite" \
-    "$CARD_WORKTREE/node_modules/.vite-temp"
+  link_node_modules
 
   printf 'Matched Codex worktrees ready on %s\n' "$BRANCH"
   printf '  backend: %s\n' "$BACKEND_WORKTREE"
@@ -130,6 +171,11 @@ run_card_precommit() {
 }
 
 run_card_e2e() {
+  # The browser flow drives Vite, which writes its dep-optimiser cache into
+  # node_modules/.vite. Under a plain symlink that cache is the main checkout's,
+  # so two trees building at once fight over it. This is the one flow that
+  # actually needs the farm's local cache directories.
+  NODE_MODULES_MODE="${GROWSPACE_NODE_MODULES:-farm}"
   setup_pair >/dev/null
   [ -f "$CARD_WORKTREE/tests/e2e/.env.test" ] || {
     echo "ERROR: copy the card E2E config into $CARD_WORKTREE/tests/e2e/.env.test first" >&2
