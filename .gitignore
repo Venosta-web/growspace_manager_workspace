@@ -10,6 +10,7 @@ ha-dev/*.log.*
 ha-dev/.HA_VERSION
 ha-dev/.uuid
 ha-dev/.ha_run.lock
+ha-dev/.cache/
 ha-dev/secrets.yaml
 ha-dev/blueprints/
 ha-dev/image/
@@ -27,6 +28,7 @@ ha-test/*.log.*
 ha-test/.HA_VERSION
 ha-test/.uuid
 ha-test/.ha_run.lock
+ha-test/.cache/
 ha-test/secrets.yaml
 ha-test/blueprints/
 ha-test/image/
