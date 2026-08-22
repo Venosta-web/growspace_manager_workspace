@@ -80,7 +80,7 @@ release test at :8124, not the dev loop.
 
 These are the exact commands to run — do not improvise venv paths or test flags.
 
-## Parallel agents
+## Parallel agents — and why you cannot commit from the main checkout
 
 Never run two agents in the same checkout. Create a matched worktree pair:
 
@@ -90,8 +90,22 @@ Never run two agents in the same checkout. Create a matched worktree pair:
 ./scripts/feature rm  irrigation-v2
 ```
 
-`node_modules` and `.venv` are symlinked into new worktrees, so checks run
-immediately without a reinstall.
+**The backend worktree must live at `growspace_manager/.worktrees/<name>`.**
+Upstream's pre-commit hooks are declared as `entry: ../../.venv/bin/pytest`
+(and the same for mypy). That relative path resolves to the repo venv only from
+exactly that depth. From the main checkout it resolves to `~/dev/.venv`, which
+does not exist, so the pytest and mypy hooks fail and **every commit from the
+main checkout is rejected**. This is the "worktree guard" upstream's AGENTS.md
+refers to; it is a side effect of the path, not a separate check.
+
+`./scripts/feature` creates it in the right place and symlinks it to
+`worktrees/<name>/backend` for the paired view. Run backend tests from a
+worktree as `../../.venv/bin/pytest tests/ -q`.
+
+The card has no such constraint — its hooks are `npm run ...` — but its
+worktree gets a `node_modules` symlink so checks run without a reinstall.
+
+`no-commit-to-branch` additionally blocks `main` and `dev` outright.
 
 ## Cross-repo contract
 
