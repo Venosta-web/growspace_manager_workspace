@@ -30,6 +30,18 @@ command = "./scripts/codex-worktree check card fast"
 platform = "linux"
 
 [[actions]]
+name = "Card pre-commit"
+icon = "tool"
+command = "./scripts/codex-worktree card-precommit"
+platform = "linux"
+
+[[actions]]
+name = "Card E2E"
+icon = "tool"
+command = "./scripts/codex-worktree card-e2e"
+platform = "linux"
+
+[[actions]]
 name = "All checks"
 icon = "tool"
 command = "./scripts/codex-worktree check all fast"

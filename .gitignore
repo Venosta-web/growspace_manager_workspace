@@ -50,6 +50,7 @@ worktrees/
 # Share the Codex environment for this multi-repo hub, but keep any other
 # machine-local Codex state out of git.
 .codex/*
+!.codex/config.toml
 !.codex/environments/
 .codex/environments/*
 !.codex/environments/environment.toml

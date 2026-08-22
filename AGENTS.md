@@ -94,7 +94,10 @@ For a Codex-managed worktree of this hub, select the checked-in **growspace
 workspace** local environment instead. It creates the matched pair during
 setup; use `./scripts/codex-worktree path` to locate it and
 `./scripts/codex-worktree check ...` to validate it. Do not create a second
-pair with `scripts/feature` in the same task.
+pair with `scripts/feature` in the same task. Card browser tests use an exact
+localhost/loopback allowlist. E2E credentials are never copied automatically;
+place the ignored `tests/e2e/.env.test` in the managed card worktree explicitly
+when E2E is required.
 
 **The backend worktree must live at `growspace_manager/.worktrees/<name>`.**
 Upstream's pre-commit hooks are declared as `entry: ../../.venv/bin/pytest`
