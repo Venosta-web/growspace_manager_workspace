@@ -89,8 +89,14 @@ setup_pair() {
   fi
   if [ ! -d "$CARD_WORKTREE/node_modules" ]; then
     mkdir "$CARD_WORKTREE/node_modules"
-    cp -as "$CARD_REPO/node_modules/." "$CARD_WORKTREE/node_modules/"
   fi
+  find "$CARD_REPO/node_modules" -mindepth 1 -maxdepth 1 \
+    ! -name .cache ! -name .vite ! -name .vite-temp \
+    -exec cp -as --update=none -t "$CARD_WORKTREE/node_modules" {} +
+  mkdir -p \
+    "$CARD_WORKTREE/node_modules/.cache" \
+    "$CARD_WORKTREE/node_modules/.vite" \
+    "$CARD_WORKTREE/node_modules/.vite-temp"
 
   printf 'Matched Codex worktrees ready on %s\n' "$BRANCH"
   printf '  backend: %s\n' "$BACKEND_WORKTREE"
@@ -116,18 +122,37 @@ run_precommit() {
   exec ./.venv/bin/pre-commit run --all-files
 }
 
+run_card_precommit() {
+  setup_pair >/dev/null
+  export PRE_COMMIT_HOME="$PAIR_ROOT/.cache/pre-commit"
+  cd "$CARD_WORKTREE"
+  exec "$BACKEND_REPO/.venv/bin/pre-commit" run --all-files
+}
+
+run_card_e2e() {
+  setup_pair >/dev/null
+  [ -f "$CARD_WORKTREE/tests/e2e/.env.test" ] || {
+    echo "ERROR: copy the card E2E config into $CARD_WORKTREE/tests/e2e/.env.test first" >&2
+    exit 1
+  }
+  cd "$CARD_WORKTREE"
+  exec npm run test:ha
+}
+
 case "${1:-setup}" in
   setup) setup_pair ;;
   path) printf '%s\n' "$PAIR_ROOT" ;;
   check) shift; run_check "$@" ;;
   precommit) run_precommit ;;
+  card-precommit) run_card_precommit ;;
+  card-e2e) run_card_e2e ;;
   status)
     setup_pair >/dev/null
     git -C "$BACKEND_WORKTREE" status --short --branch
     git -C "$CARD_WORKTREE" status --short --branch
     ;;
   *)
-    echo "usage: $0 {setup|path|status|precommit|check [backend|card|all] [fast|full]}" >&2
+    echo "usage: $0 {setup|path|status|precommit|card-precommit|card-e2e|check [backend|card|all] [fast|full]}" >&2
     exit 2
     ;;
 esac
