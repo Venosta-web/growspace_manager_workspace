@@ -62,9 +62,10 @@ The card is **code-split**: a thin `growspace-manager-card.js` entry plus ~16
 lazy `growspace-[name]-[hash].js` chunks. The whole `dist/` directory is
 mounted so chunk imports resolve; never mount just the entry file.
 
-> **After any `git reset --hard` or branch switch that recreates `dist/`, run
-> `./scripts/ha dev restart`.** Docker bind-mounts by inode — replacing the
-> directory silently leaves the container serving a stale, deleted one (404s).
+> **After any `git reset --hard`, branch switch, or build that recreates `dist/`, run
+> `./scripts/ha dev restart`.** The command recreates the container so Docker
+> remounts the current directory inode. Root-level card e2e commands enforce this
+> automatically and refuse to start Playwright against a stale served bundle.
 
 So: edit Python → `./scripts/ha dev reload`. Edit TypeScript → `npm run watch`
 in the card repo → hard-refresh the browser. **Neither needs HACS.** HACS is the
