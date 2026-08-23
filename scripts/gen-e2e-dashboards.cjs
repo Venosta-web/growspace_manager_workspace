@@ -27,6 +27,7 @@ const STAGES = [
   ['e2e-cure',       'TEST_CURE_GROWSPACE_ID',       'E2E Cure'],
   ['e2e-vwc-veg',    'TEST_VWC_VEG_GROWSPACE_ID',    'E2E VWC Veg'],
   ['e2e-vwc-flower', 'TEST_VWC_FLOWER_GROWSPACE_ID', 'E2E VWC Flower'],
+  ['e2e-telemetry-multi', 'TEST_TELEMETRY_MULTI_GROWSPACE_ID', 'E2E Multi Telemetry'],
 ];
 
 function buildDashboardConfig(title, growspaceId) {

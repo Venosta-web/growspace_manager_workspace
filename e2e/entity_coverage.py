@@ -177,7 +177,7 @@ PROFILES: tuple[CapabilityProfile, ...] = (
     CapabilityProfile(
         "telemetry_multi",
         "Multi-sensor environmental aggregation",
-        (ProfileInstance("telemetry_multi", "E2E Multi Telemetry", "veg_start"),),
+        (ProfileInstance("telemetry_multi", "E2E Telemetry Multi", "veg_start"),),
         18,
     ),
     CapabilityProfile(
@@ -203,7 +203,7 @@ PROFILES: tuple[CapabilityProfile, ...] = (
     CapabilityProfile(
         "climate_plain",
         "Plain Home Assistant climate actuator forms",
-        (ProfileInstance("climate_plain", "E2E Plain Climate", "flower_start"),),
+        (ProfileInstance("climate_plain", "E2E Climate Plain", "flower_start"),),
         21,
     ),
     CapabilityProfile(
@@ -235,20 +235,47 @@ def _setup(
     )
 
 
+# A mirrored sensor is a real ``sensor.*`` entity — so it carries a unit, a
+# device class and a state class, and is therefore selectable, recordable and
+# formattable like production hardware — whose value a test can still drive,
+# because it reads a writable ``input_number``. The gate below decides which of
+# the two it shows.
+MIRROR_SENSOR = "mirror_sensor"
+MANUAL_GATE_ROLE = "simulation.manual_telemetry"
+
+
+def mirror_backing_entity_id(sensor_entity_id: str) -> str:
+    """Return the writable input backing a mirrored telemetry sensor.
+
+    One rule, applied both to declare the backing role and to render the
+    template that reads it, so the two can never name different entities. It
+    takes a naming *rule* as readily as a concrete ID.
+    """
+
+    return f"input_number.sim_{sensor_entity_id.split('.', 1)[1]}"
+
+
 def _covered_telemetry_assignments(
-    suffix: str, field_name: str, shape: str, *, include_vwc: bool = True
+    suffix: str,
+    field_name: str,
+    shape: str,
+    *,
+    include_stage: bool = True,
+    include_vwc: bool = True,
 ) -> tuple[Assignment, ...]:
-    assignments = (
-        Assignment(
-            "stage",
-            f"sensor.e2e_{{slug}}_{suffix}",
-            "sensor",
-            Behavior.READ_ONLY,
-            Status.COVERED,
-            generator="waveform",
-            setup=_setup(field_name, shape),
-        ),
-    )
+    assignments: tuple[Assignment, ...] = ()
+    if include_stage:
+        assignments += (
+            Assignment(
+                "stage",
+                f"sensor.e2e_{{slug}}_{suffix}",
+                "sensor",
+                Behavior.READ_ONLY,
+                Status.COVERED,
+                generator="waveform",
+                setup=_setup(field_name, shape),
+            ),
+        )
     if include_vwc:
         assignments += (
             Assignment(
@@ -285,22 +312,25 @@ def _telemetry_role(
     control_maximum: int | float | None = None,
     control_step: int | float | None = None,
     control_initial: int | float | None = None,
+    include_stage: bool = True,
     include_vwc: bool = True,
+    include_multi: bool = True,
 ) -> CoverageRole:
-    assignments = (
-        _covered_telemetry_assignments(
-            suffix, field_name, shape, include_vwc=include_vwc
-        )
-        + (
+    multi_assignments: tuple[Assignment, ...] = ()
+    if include_multi:
+        multi_assignments = (
             Assignment(
                 "telemetry_multi",
-                f"input_number.e2e_{{slug}}_{suffix}{{ordinal_suffix}}",
-                "input_number",
-                Behavior.CONTROLLABLE,
-                Status.PLANNED,
+                f"sensor.e2e_{{slug}}_{suffix}{{ordinal_suffix}}",
+                "sensor",
+                Behavior.READ_ONLY,
+                Status.COVERED,
                 count=multi_count,
-                delivery_ticket=18,
+                generator=MIRROR_SENSOR,
                 setup=_setup(
+                    # A category with several sensors is addressed through its
+                    # canonical plural field; a genuinely singular one keeps its
+                    # scalar spelling, because the backend has no plural for it.
                     field_name
                     if shape != "scalar" or multi_count == 1
                     else f"{field_name}s",
@@ -308,6 +338,15 @@ def _telemetry_role(
                 ),
             ),
         )
+    assignments = (
+        _covered_telemetry_assignments(
+            suffix,
+            field_name,
+            shape,
+            include_stage=include_stage,
+            include_vwc=include_vwc,
+        )
+        + multi_assignments
         + extra_assignments
     )
     return CoverageRole(
@@ -483,6 +522,10 @@ ROLES: tuple[CoverageRole, ...] = (
         low=18.0,
         high=24.0,
         period_seconds=5400,
+        # A second probe here is what gives the card's own aggregation core a
+        # plural category to average on live data — the hero metrics take a
+        # different path and expose no per-sensor readings.
+        multi_count=2,
     ),
     _telemetry_role(
         role_id="environment.substrate_moisture",
@@ -549,6 +592,7 @@ ROLES: tuple[CoverageRole, ...] = (
         control_step=0.1,
         control_initial=0,
         include_vwc=False,
+        include_multi=False,
     ),
     _telemetry_role(
         role_id="irrigation.flow",
@@ -578,6 +622,7 @@ ROLES: tuple[CoverageRole, ...] = (
         control_step=0.01,
         control_initial=0,
         include_vwc=False,
+        include_multi=False,
     ),
     _telemetry_role(
         role_id="irrigation.tank_level",
@@ -608,39 +653,29 @@ ROLES: tuple[CoverageRole, ...] = (
         control_maximum=100,
         control_step=1,
         control_initial=80,
+        include_multi=False,
     ),
-    CoverageRole(
-        "environment.light",
-        "lighting",
-        "Environmental light level",
-        ONE_OR_MORE,
-        (
-            _planned(
-                "telemetry_multi",
-                "sensor.e2e_{slug}_light{ordinal_suffix}",
-                "sensor",
-                18,
-                _setup("light_sensors", "list"),
-                count=2,
-                behavior=Behavior.READ_ONLY,
-            ),
-        ),
-    ),
-    CoverageRole(
-        "simulation.light_input",
-        "internal",
-        "Writable backing value for an environmental light sensor",
-        ONE_OR_MORE,
-        (
-            _planned(
-                "telemetry_multi",
-                "input_number.e2e_{slug}_light_input{ordinal_suffix}",
-                "input_number",
-                18,
-                None,
-                count=2,
-            ),
-        ),
+    _telemetry_role(
+        role_id="environment.light",
+        suffix="light",
+        description="Environmental light level",
+        field_name="light_sensors",
+        shape="list",
+        unit="lx",
+        device_class="illuminance",
+        low=0,
+        high=60000,
+        # A full day per cycle, so the pair reads as a sunrise/sunset curve and
+        # the backend's "numeric light sensor above zero means lights on" rule
+        # sees a plausible photoperiod.
+        period_seconds=86400,
+        multi_count=2,
+        category="lighting",
+        control_minimum=0,
+        control_maximum=100000,
+        control_step=1,
+        include_stage=False,
+        include_vwc=False,
     ),
     CoverageRole(
         "irrigation.irrigation_pump",
@@ -850,6 +885,67 @@ ROLES: tuple[CoverageRole, ...] = (
 )
 
 
+def _mirror_support_roles(roles: Sequence[CoverageRole]) -> tuple[CoverageRole, ...]:
+    """Derive the internal entities every mirrored telemetry sensor needs.
+
+    Declaring these by hand beside each telemetry role would be a second
+    inventory of the first: a category added above would silently render a
+    sensor that reads an ``input_number`` nobody generated. They are derived
+    instead, from the same assignment that declares the mirror.
+    """
+
+    backing: list[CoverageRole] = []
+    gated_profiles: list[str] = []
+    for role in roles:
+        for assignment in role.assignments:
+            if assignment.generator != MIRROR_SENSOR or role.simulation is None:
+                continue
+            if assignment.profile not in gated_profiles:
+                gated_profiles.append(assignment.profile)
+            backing.append(
+                CoverageRole(
+                    f"simulation.{role.simulation.suffix}_input",
+                    "internal",
+                    f"Writable backing value for "
+                    f"{role.description[:1].lower()}{role.description[1:]}",
+                    role.cardinality,
+                    (
+                        Assignment(
+                            assignment.profile,
+                            mirror_backing_entity_id(assignment.entity_id_rule),
+                            "input_number",
+                            Behavior.CONTROLLABLE,
+                            Status.COVERED,
+                            count=assignment.count,
+                            generator="input_number",
+                        ),
+                    ),
+                    role.simulation,
+                )
+            )
+
+    gates = (
+        CoverageRole(
+            MANUAL_GATE_ROLE,
+            "internal",
+            "Pins this profile's mirrored sensors to their backing values",
+            EXACTLY_ONE,
+            tuple(
+                Assignment(
+                    profile,
+                    "input_boolean.sim_e2e_{slug}_manual_telemetry",
+                    "input_boolean",
+                    Behavior.CONTROLLABLE,
+                    Status.COVERED,
+                    generator="input_boolean",
+                )
+                for profile in gated_profiles
+            ),
+        ),
+    )
+    return tuple(backing) + (gates if gated_profiles else ())
+
+
 def _plain_climate_roles() -> tuple[CoverageRole, ...]:
     specs = (
         (
@@ -998,6 +1094,7 @@ def _ac_infinity_roles() -> tuple[CoverageRole, ...]:
     return tuple(roles)
 
 
+ROLES += _mirror_support_roles(ROLES)
 ROLES += _plain_climate_roles()
 ROLES += _ac_infinity_roles()
 ROLES += (
@@ -1087,6 +1184,12 @@ class EntityRecord:
     assignment: Assignment = field(repr=False, compare=False)
 
 
+def _ha_object_id(name: str) -> str:
+    """The object ID Home Assistant derives from an entity's friendly name."""
+
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
 def _profile_map(profiles: Sequence[CapabilityProfile]) -> dict[str, CapabilityProfile]:
     return {profile.id: profile for profile in profiles}
 
@@ -1150,6 +1253,23 @@ def validate_contract(
     for role_id in duplicate_roles:
         errors.append(f"duplicate role id: {role_id}")
 
+    for profile in profiles:
+        for instance in profile.instances:
+            # A growspace's own entities are named after the growspace, its
+            # simulated sensors after this slug. When the two disagree, setup
+            # waits forever for an overview sensor that Home Assistant named
+            # something else — so the name is part of the contract.
+            if instance.plant_stage_field is None:
+                continue
+            expected = f"e2e_{instance.slug}"
+            actual = _ha_object_id(instance.name)
+            if actual != expected:
+                errors.append(
+                    f"profile {profile.id} instance {instance.slug} is named "
+                    f"{instance.name!r}; Home Assistant would name its overview "
+                    f"sensor sensor.{actual}_overview, not sensor.{expected}_overview"
+                )
+
     known_profiles = set(profile_ids)
     for role in roles:
         if not role.assignments:
@@ -1204,6 +1324,29 @@ def validate_contract(
             )
         else:
             seen[record.entity_id] = record
+
+    gated_slugs = {
+        record.slug for record in records if record.role_id == MANUAL_GATE_ROLE
+    }
+    for record in records:
+        if record.generator != MIRROR_SENSOR:
+            continue
+        backing = mirror_backing_entity_id(record.entity_id)
+        if backing not in seen:
+            errors.append(
+                f"mirrored sensor {record.entity_id} reads {backing}, "
+                "which no role generates"
+            )
+        if record.role.simulation is None:
+            errors.append(
+                f"mirrored sensor {record.entity_id} has no simulation metadata "
+                "to render a unit, device class or waveform from"
+            )
+        if record.slug not in gated_slugs:
+            errors.append(
+                f"mirrored sensor {record.entity_id} has no manual-telemetry "
+                f"gate for {record.slug}"
+            )
     return errors
 
 
@@ -1276,18 +1419,34 @@ def build_card_manifest(
         "generated_by": "e2e/entity_coverage.py",
         "version": 1,
         "profiles": profiles,
-        "entities": [
-            {
-                "entity_id": record.entity_id,
-                "role": record.role_id,
-                "profile": record.profile,
-                "slug": record.slug,
-                "domain": record.domain,
-                "behavior": record.behavior.value,
-            }
-            for record in active
-        ],
+        "entities": [_manifest_entity(record) for record in active],
     }
+
+
+def _manifest_entity(record: EntityRecord) -> dict[str, Any]:
+    """One entity row for the card, carrying what a spec must assert about it.
+
+    The unit, device class and state class travel with the entity so a card
+    test can check Home Assistant's live metadata against the contract instead
+    of restating it as a third inventory.
+    """
+
+    entity: dict[str, Any] = {
+        "entity_id": record.entity_id,
+        "role": record.role_id,
+        "profile": record.profile,
+        "slug": record.slug,
+        "domain": record.domain,
+        "behavior": record.behavior.value,
+    }
+    simulation = record.role.simulation
+    if simulation is not None and record.generator in {MIRROR_SENSOR, "waveform"}:
+        entity["unit_of_measurement"] = simulation.unit
+        entity["device_class"] = simulation.device_class
+        entity["state_class"] = simulation.state_class
+    if record.generator == MIRROR_SENSOR:
+        entity["backing_entity_id"] = mirror_backing_entity_id(record.entity_id)
+    return entity
 
 
 def render_card_manifest(records: Sequence[EntityRecord] | None = None) -> str:
@@ -1341,13 +1500,145 @@ def validate_setup_manifest(
     return errors
 
 
-def _sine_state(low: int | float, high: int | float, period: int, phase: int) -> str:
+def _decimals(sim: Simulation) -> int:
+    """Rounding a waveform and its writable twin must agree, or a pinned value
+    would read back different from what the test wrote."""
+
+    if sim.state_class == "total_increasing":
+        return 3
+    return 0 if isinstance(sim.low, int) and isinstance(sim.high, int) else 2
+
+
+def _sine_expression(
+    low: int | float, high: int | float, period: int, phase: int
+) -> str:
     mid, amplitude = (high + low) / 2, (high - low) / 2
     decimals = 0 if isinstance(low, int) and isinstance(high, int) else 2
     return (
-        "{{ (%s + %s * sin( ((as_timestamp(now()) + %d) %% %d) / %d * 2 * pi )) "
-        "| round(%d) }}" % (mid, amplitude, phase, period, period, decimals)
+        "(%s + %s * sin( ((as_timestamp(now()) + %d) %% %d) / %d * 2 * pi )) "
+        "| round(%d)" % (mid, amplitude, phase, period, period, decimals)
     )
+
+
+def _ramp_expression(phase: int) -> str:
+    return (
+        "(((as_timestamp(now()) + %d) %% 86400) / 86400 * 12.0) | round(3)" % phase
+    )
+
+
+def _sine_state(low: int | float, high: int | float, period: int, phase: int) -> str:
+    return "{{ %s }}" % _sine_expression(low, high, period, phase)
+
+
+def _free_running_expression(sim: Simulation, phase: int) -> str:
+    """The value a simulated sensor shows when nothing is pinning it."""
+
+    if sim.state_class == "total_increasing":
+        return _ramp_expression(phase)
+    return _sine_expression(sim.low, sim.high, sim.period_seconds, phase)
+
+
+def _mirror_state(sim: Simulation, backing: str, gate: str, phase: int) -> str:
+    """Render a mirrored sensor's state: the pinned input, or the waveform."""
+
+    return "{{ %s if is_state('%s', 'on') else %s }}" % (
+        "states('%s') | float(0) | round(%d)" % (backing, _decimals(sim)),
+        gate,
+        _free_running_expression(sim, phase),
+    )
+
+
+def _mirror_phase(sim: Simulation, ordinal: int) -> int:
+    """Offset each sensor in a category by a quarter cycle from the previous one.
+
+    Two sensors sharing a waveform would read identically, and an aggregate of
+    identical readings proves nothing about aggregation.
+    """
+
+    return (ordinal - 1) * (sim.period_seconds // 4)
+
+
+def _telemetry_label(record: EntityRecord) -> str:
+    """Friendly name for one simulated telemetry entity.
+
+    Categories with more than one sensor carry the ordinal, so two readings of
+    the same thing stay distinguishable wherever Home Assistant shows names
+    rather than entity IDs.
+    """
+
+    simulation = record.role.simulation
+    assert simulation is not None
+    ordinal = f" {record.ordinal}" if record.assignment.count > 1 else ""
+    return f"e2e {record.slug} {simulation.suffix}{ordinal}"
+
+
+def _template_sensor_lines(record: EntityRecord, name: str) -> list[str]:
+    """Render everything a template sensor declares above its state."""
+
+    sim = record.role.simulation
+    assert sim is not None
+    lines = [
+        f"      - name: {name}",
+        f"        unique_id: {record.entity_id.split('.', 1)[1]}",
+        f'        unit_of_measurement: "{sim.unit}"',
+    ]
+    if sim.device_class:
+        lines.append(f"        device_class: {sim.device_class}")
+    lines += [f"        state_class: {sim.state_class}", "        state: >-"]
+    return lines
+
+
+def _mirror_template_lines(
+    active: Sequence[EntityRecord], by_slug: dict[str, list[EntityRecord]]
+) -> list[str]:
+    """Render one trigger-template block per profile that mirrors its inputs.
+
+    The block re-renders every half minute so an unpinned dashboard keeps
+    moving, and on any write to a backing input or to the gate so a pinned
+    value lands immediately instead of up to 30 s later.
+    """
+
+    gate_by_slug = {
+        record.slug: record.entity_id
+        for record in active
+        if record.role_id == MANUAL_GATE_ROLE
+    }
+    lines: list[str] = []
+    for profile in PROFILES:
+        for instance in profile.instances:
+            mirrors = [
+                record
+                for record in by_slug.get(instance.slug, [])
+                if record.generator == MIRROR_SENSOR
+            ]
+            if not mirrors:
+                continue
+            gate = gate_by_slug[instance.slug]
+            backings = [mirror_backing_entity_id(m.entity_id) for m in mirrors]
+            lines += [
+                "  # ---------------------------------------------------------------",
+                f"  # e2e_{instance.slug} — every reading mirrors a writable input",
+                "  # ---------------------------------------------------------------",
+                "  - trigger:",
+                "      - platform: time_pattern",
+                '        seconds: "/30"',
+                "      - platform: state",
+                "        entity_id:",
+                f"          - {gate}",
+            ]
+            lines += [f"          - {backing}" for backing in backings]
+            lines.append("    sensor:")
+            for record, backing in zip(mirrors, backings, strict=True):
+                sim = record.role.simulation
+                assert sim is not None
+                lines += _template_sensor_lines(record, _telemetry_label(record))
+                lines.append(
+                    "          "
+                    + _mirror_state(
+                        sim, backing, gate, _mirror_phase(sim, record.ordinal)
+                    )
+                )
+    return lines
 
 
 def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
@@ -1390,24 +1681,10 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
         )
         for record in telemetry:
             sim = record.role.simulation
-            unique_id = record.entity_id.split(".", 1)[1]
-            lines += [
-                f"      - name: e2e {instance.slug} {sim.suffix}",
-                f"        unique_id: {unique_id}",
-                f'        unit_of_measurement: "{sim.unit}"',
-            ]
-            if sim.device_class:
-                lines.append(f"        device_class: {sim.device_class}")
-            lines += [f"        state_class: {sim.state_class}", "        state: >-"]
-            if sim.state_class == "total_increasing":
-                lines.append(
-                    "          {{ (((as_timestamp(now()) + %d) %% 86400) / 86400 * 12.0) | round(3) }}"
-                    % phase
-                )
-            else:
-                lines.append(
-                    f"          {_sine_state(sim.low, sim.high, sim.period_seconds, phase)}"
-                )
+            lines += _template_sensor_lines(record, _telemetry_label(record))
+            lines.append(f"          {{{{ {_free_running_expression(sim, phase)} }}}}")
+
+    lines += _mirror_template_lines(active, by_slug)
 
     instance_order = {
         instance.slug: index
@@ -1454,6 +1731,9 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
         for record in active
         if record.generator == "input_boolean"
     }
+    pump_backings = {
+        f"input_boolean.{switch.entity_id.split('.', 1)[1]}" for switch in switches
+    }
     for switch in switches:
         record = backing_by_id[f"input_boolean.{switch.entity_id.split('.', 1)[1]}"]
         object_id = record.entity_id.split(".", 1)[1]
@@ -1461,6 +1741,15 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
         lines += [
             f"  {object_id}:",
             f"    name: sim e2e {record.slug} {kind}",
+            "    initial: false",
+        ]
+    for entity_id, record in backing_by_id.items():
+        if entity_id in pump_backings:
+            continue
+        lines += [
+            f"  {entity_id.split('.', 1)[1]}:",
+            f"    name: sim e2e {record.slug} "
+            f"{record.role_id.split('.', 1)[1].replace('_', ' ')}",
             "    initial: false",
         ]
 
@@ -1496,11 +1785,23 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
                 initial = (
                     sim.control_initial
                     if sim.control_initial is not None
-                    else round((sim.low + sim.high) / 2, 2)
+                    # Spread the starting values across the range so a category's
+                    # sensors differ before a test writes anything. With one
+                    # sensor this is the midpoint.
+                    else round(
+                        sim.low
+                        + (sim.high - sim.low)
+                        * record.ordinal
+                        / (record.assignment.count + 1),
+                        2,
+                    )
                 )
+            label = _telemetry_label(record)
+            if object_id.startswith("sim_"):
+                label = f"sim {label}"
             lines += [
                 f"  {object_id}:",
-                f"    name: e2e {instance.slug} {sim.suffix}",
+                f"    name: {label}",
                 f"    min: {minimum}",
                 f"    max: {maximum}",
                 f"    step: {step}",
