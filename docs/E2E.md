@@ -242,7 +242,9 @@ simply never attempted a shot inside the 90 s window. The same test passes on
 its own (1.7 min, tank starting at 15 %). What differs in the full run is that
 the coordinator's own P1→P2 transition — `Resetting feedback scale factors` —
 lands in the middle of the test, right after the P1 test that precedes it. That
-is a separate cause and still open; do not re-file it as a tank problem.
+is a separate cause, tracked as
+Venosta-web/lovelace-growspace-manager-card#714; do not re-file it as a tank
+problem.
 
 ### Runtime
 
