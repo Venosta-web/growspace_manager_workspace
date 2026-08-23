@@ -58,6 +58,28 @@ case "$CMD" in
   up|down|restart|reload|reset) require_main_checkout ;;
 esac
 
+# Cache-bust the dev instance's Lovelace resources before HA reads them.
+#
+# The card's entry URL never changes shape, and HA serves /local/ with
+# max-age=2678400 behind a service worker Ctrl+Shift+R does not bypass — so a
+# rebuild lands on disk, is served correctly, and stays invisible in the browser.
+# Stamping the registered URL with the bundle's content hash makes the two cache
+# layers miss together. See scripts/stamp-card-resource.cjs.
+#
+# Callers must have the container STOPPED: a running HA holds lovelace_resources
+# in memory and could write its own copy back over ours on shutdown.
+#
+# Only 'dev' needs this. The test instance installs through HACS, which appends
+# its own ?hacstag=<version>.
+stamp_card_resource() {
+  [ "$INSTANCE" = dev ] || return 0
+  if ! command -v node >/dev/null 2>&1; then
+    echo "   stamp: no node — skipping the card cache-bust" >&2
+    return 0
+  fi
+  node "$WS/scripts/stamp-card-resource.cjs" "$SVC"
+}
+
 case "$CMD" in
   up)
     # Fail early and loudly if something else already owns the port —
@@ -68,12 +90,18 @@ case "$CMD" in
       echo "       Free it first (e.g. docker stop $owner) then re-run." >&2
       exit 1
     fi
+    stamp_card_resource
     dc up -d "$SVC"
     echo "→ $INSTANCE starting at http://localhost:$PORT"
     echo "  config on host: $WS/ha-$INSTANCE"
     ;;
   down)     dc stop "$SVC" ;;
   restart)
+    # Stop first, so the resource stamp lands in a .storage no running HA is
+    # holding open. `up --force-recreate` would stop it anyway; making that
+    # explicit is what buys the ordering.
+    dc stop "$SVC" 2>/dev/null || true
+    stamp_card_resource
     # Recreate rather than merely restarting so bind mounts resolve the current
     # host path/inode. Rollup deletes and recreates the card's dist/ directory.
     dc up -d --force-recreate "$SVC"
