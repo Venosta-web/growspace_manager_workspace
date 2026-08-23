@@ -47,9 +47,10 @@ require_main_checkout() {
   echo "       Running it here would repoint the shared :$PORT container at this" >&2
   echo "       worktree's siblings and its empty ha-$INSTANCE/ config." >&2
   echo >&2
-  echo "       To serve this worktree's card bundle, run from the main checkout" >&2
-  echo "       with the dist override — the config and backend mounts stay correct:" >&2
+  echo "       To serve a worktree's own card bundle or integration, run from the" >&2
+  echo "       main checkout with the source overrides — ha-$INSTANCE/ stays correct:" >&2
   echo "         GROWSPACE_CARD_DIST=$WS/../lovelace-growspace-manager-card/dist \\" >&2
+  echo "         GROWSPACE_BACKEND_SRC=<worktree>/custom_components/growspace_manager \\" >&2
   echo "           $main/scripts/ha $INSTANCE restart" >&2
   exit 1
 }

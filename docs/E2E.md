@@ -10,7 +10,7 @@ to exist before it can run, and all three are reproducible from scripts.
 loaded via `homeassistant.packages` in `ha-dev/configuration.yaml`.
 
 The executable contract in `e2e/entity_coverage.py` owns the entity inventory,
-the ten current capability-profile instances, their setup payloads, and the
+the eleven current capability-profile instances, their setup payloads, and the
 roles reserved for the later simulator tickets. The generated package, the card
 setup manifest, and this coverage table are checked against it by
 `./scripts/check-e2e-coverage`.
@@ -22,55 +22,51 @@ setup manifest, and this coverage table are checked against it by
 |---|---|---|---|---|---|---|---|
 | `environment.temperature` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_temperature` | `sensor` | one or more (1) | read-only | covered |
 | `environment.temperature` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_temperature` | `input_number` | one or more (1) | controllable | covered |
-| `environment.temperature` | environment | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_temperature{ordinal_suffix}` | `input_number` | one or more (2) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `environment.temperature` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_temperature{ordinal_suffix}` | `sensor` | one or more (2) | read-only | covered |
 | `environment.humidity` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_humidity` | `sensor` | one or more (1) | read-only | covered |
 | `environment.humidity` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_humidity` | `input_number` | one or more (1) | controllable | covered |
-| `environment.humidity` | environment | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_humidity{ordinal_suffix}` | `input_number` | one or more (2) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `environment.humidity` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_humidity{ordinal_suffix}` | `sensor` | one or more (2) | read-only | covered |
 | `environment.vpd` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_vpd` | `sensor` | one or more (1) | read-only | covered |
 | `environment.vpd` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_vpd` | `input_number` | one or more (1) | controllable | covered |
-| `environment.vpd` | environment | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_vpd{ordinal_suffix}` | `input_number` | one or more (2) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `environment.vpd` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_vpd{ordinal_suffix}` | `sensor` | one or more (2) | read-only | covered |
 | `environment.co2` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_co2` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.co2` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_co2` | `input_number` | exactly one (1) | controllable | covered |
-| `environment.co2` | environment | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_co2{ordinal_suffix}` | `input_number` | exactly one (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `environment.co2` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_co2{ordinal_suffix}` | `sensor` | exactly one (1) | read-only | covered |
 | `irrigation.feed_ec` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_feed_ec` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.feed_ec` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_feed_ec` | `input_number` | one or more (1) | controllable | covered |
-| `irrigation.feed_ec` | irrigation | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_feed_ec{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `irrigation.feed_ec` | irrigation | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_feed_ec{ordinal_suffix}` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.bulk_ec` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_bulk_ec` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.bulk_ec` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_bulk_ec` | `input_number` | one or more (1) | controllable | covered |
-| `irrigation.bulk_ec` | irrigation | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_bulk_ec{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `irrigation.bulk_ec` | irrigation | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_bulk_ec{ordinal_suffix}` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.pore_ec` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_pore_ec` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.pore_ec` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_pore_ec` | `input_number` | one or more (1) | controllable | covered |
-| `irrigation.pore_ec` | irrigation | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_pore_ec{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `irrigation.pore_ec` | irrigation | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_pore_ec{ordinal_suffix}` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.runoff_ec` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_runoff_ec` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.runoff_ec` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_runoff_ec` | `input_number` | one or more (1) | controllable | covered |
-| `irrigation.runoff_ec` | irrigation | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_runoff_ec{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `irrigation.runoff_ec` | irrigation | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_runoff_ec{ordinal_suffix}` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.ph` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_ph` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.ph` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_ph` | `input_number` | one or more (1) | controllable | covered |
-| `irrigation.ph` | irrigation | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_ph{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `irrigation.ph` | irrigation | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_ph{ordinal_suffix}` | `sensor` | one or more (1) | read-only | covered |
 | `environment.substrate_temperature` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_substrate_temperature` | `sensor` | one or more (1) | read-only | covered |
 | `environment.substrate_temperature` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_substrate_temperature` | `input_number` | one or more (1) | controllable | covered |
-| `environment.substrate_temperature` | environment | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_substrate_temperature{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `environment.substrate_temperature` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_substrate_temperature{ordinal_suffix}` | `sensor` | one or more (2) | read-only | covered |
 | `environment.substrate_moisture` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.substrate_moisture` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_substrate_moisture` | `input_number` | exactly one (1) | controllable | covered |
-| `environment.substrate_moisture` | environment | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_substrate_moisture{ordinal_suffix}` | `input_number` | exactly one (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `environment.substrate_moisture` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_substrate_moisture{ordinal_suffix}` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.power` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_power` | `sensor` | one or more (1) | read-only | covered |
 | `environment.power` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_power` | `input_number` | one or more (1) | controllable | covered |
-| `environment.power` | environment | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_power{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `environment.power` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_power{ordinal_suffix}` | `sensor` | one or more (1) | read-only | covered |
 | `environment.energy` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_energy` | `sensor` | one or more (1) | read-only | covered |
 | `environment.energy` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_energy` | `input_number` | one or more (1) | controllable | covered |
-| `environment.energy` | environment | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_energy{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `environment.energy` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_energy{ordinal_suffix}` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.drain_volume` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_drain_volume` | `sensor` | one or more (1) | read-only | covered |
-| `irrigation.drain_volume` | irrigation | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_drain_volume{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
 | `irrigation.drain_volume` | irrigation | `irrigation_monitored` (irrigation_monitored) | `input_number.e2e_{slug}_drain_volume` | `input_number` | one or more (1) | controllable | covered |
 | `irrigation.flow` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_irrigation_flow` | `sensor` | one or more (1) | read-only | covered |
-| `irrigation.flow` | irrigation | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_irrigation_flow{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
 | `irrigation.flow` | irrigation | `irrigation_monitored` (irrigation_monitored) | `input_number.e2e_{slug}_irrigation_flow` | `input_number` | one or more (1) | controllable | covered |
 | `irrigation.tank_level` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_irrigation_tank` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.tank_level` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_irrigation_tank` | `input_number` | one or more (1) | controllable | covered |
-| `irrigation.tank_level` | irrigation | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_irrigation_tank{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
 | `irrigation.tank_level` | irrigation | `irrigation_tanks` (irrigation_tanks) | `input_number.e2e_{slug}_irrigation_tank{ordinal_suffix}` | `input_number` | one or more (2) | controllable | covered |
-| `environment.light` | lighting | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_light{ordinal_suffix}` | `sensor` | one or more (2) | read-only | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
-| `simulation.light_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_light_input{ordinal_suffix}` | `input_number` | one or more (2) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `environment.light` | lighting | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_light{ordinal_suffix}` | `sensor` | one or more (2) | read-only | covered |
 | `irrigation.irrigation_pump` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `switch.sim_e2e_{slug}_irrigation_pump` | `switch` | exactly one (1) | controllable | covered |
 | `irrigation.irrigation_pump` | irrigation | `vwc` (vwc_veg, vwc_flower) | `switch.sim_e2e_{slug}_irrigation_pump` | `switch` | exactly one (1) | controllable | covered |
 | `irrigation.irrigation_pump` | irrigation | `irrigation_monitored` (irrigation_monitored) | `switch.sim_e2e_{slug}_irrigation_pump` | `switch` | exactly one (1) | controllable | covered |
@@ -88,6 +84,21 @@ setup manifest, and this coverage table are checked against it by
 | `lighting.state` | lighting | `lighting` (lighting) | `binary_sensor.e2e_{slug}_light_state` | `binary_sensor` | one or more (1) | read-only | planned in [#19](https://github.com/Venosta-web/growspace_manager_workspace/issues/19) |
 | `lighting.growlight_switch` | lighting | `lighting` (lighting) | `switch.e2e_{slug}_growlight_switch` | `switch` | one or more (1) | controllable | planned in [#19](https://github.com/Venosta-web/growspace_manager_workspace/issues/19) |
 | `lighting.growlight_dimmable` | lighting | `lighting` (lighting) | `light.e2e_{slug}_growlight_dimmable` | `light` | one or more (1) | controllable | planned in [#19](https://github.com/Venosta-web/growspace_manager_workspace/issues/19) |
+| `simulation.temperature_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_temperature{ordinal_suffix}` | `input_number` | one or more (2) | controllable | covered |
+| `simulation.humidity_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_humidity{ordinal_suffix}` | `input_number` | one or more (2) | controllable | covered |
+| `simulation.vpd_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_vpd{ordinal_suffix}` | `input_number` | one or more (2) | controllable | covered |
+| `simulation.co2_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_co2{ordinal_suffix}` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.feed_ec_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_feed_ec{ordinal_suffix}` | `input_number` | one or more (1) | controllable | covered |
+| `simulation.bulk_ec_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_bulk_ec{ordinal_suffix}` | `input_number` | one or more (1) | controllable | covered |
+| `simulation.pore_ec_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_pore_ec{ordinal_suffix}` | `input_number` | one or more (1) | controllable | covered |
+| `simulation.runoff_ec_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_runoff_ec{ordinal_suffix}` | `input_number` | one or more (1) | controllable | covered |
+| `simulation.ph_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_ph{ordinal_suffix}` | `input_number` | one or more (1) | controllable | covered |
+| `simulation.substrate_temperature_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_substrate_temperature{ordinal_suffix}` | `input_number` | one or more (2) | controllable | covered |
+| `simulation.substrate_moisture_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_substrate_moisture{ordinal_suffix}` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.power_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_power{ordinal_suffix}` | `input_number` | one or more (1) | controllable | covered |
+| `simulation.energy_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_energy{ordinal_suffix}` | `input_number` | one or more (1) | controllable | covered |
+| `simulation.light_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_light{ordinal_suffix}` | `input_number` | one or more (2) | controllable | covered |
+| `simulation.manual_telemetry` | internal | `telemetry_multi` (telemetry_multi) | `input_boolean.sim_e2e_{slug}_manual_telemetry` | `input_boolean` | exactly one (1) | controllable | covered |
 | `climate.circulation_percentage` | climate | `climate_plain` (climate_plain) | `fan.e2e_{slug}_circulation_fan_percentage` | `fan` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
 | `climate.circulation_numeric` | climate | `climate_plain` (climate_plain) | `input_number.e2e_{slug}_circulation_fan_speed` | `input_number` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
 | `climate.circulation_binary` | climate | `climate_plain` (climate_plain) | `switch.e2e_{slug}_circulation_fan_switch` | `switch` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
@@ -127,13 +138,45 @@ same clock gives the same reading.
 `energy` is the exception — it is `total_increasing` and must never decrease, so
 it is a daily ramp rather than a sine.
 
-Signals: temperature, humidity, vpd, co2, feed_ec, bulk_ec, pore_ec, runoff_ec,
-ph, substrate_temperature, substrate_moisture, power, energy, drain_volume,
-irrigation_flow, irrigation_tank.
+Signals: temperature, humidity, vpd, co2, light, feed_ec, bulk_ec, pore_ec,
+runoff_ec, ph, substrate_temperature, substrate_moisture, power, energy,
+drain_volume, irrigation_flow, irrigation_tank.
 
 ```bash
 ./scripts/gen-e2e-sensors && ./scripts/ha dev restart
 ```
+
+### Mirrored sensors: driveable and still alive
+
+A waveform cannot be driven and a writable helper does not move on its own, and
+the `telemetry_multi` profile needs both — a test must be able to set a
+representative reading, while the dashboard must keep showing plausible,
+continuously changing data. It also needs real `sensor.*` entities: only those
+carry a device class and a state class, so only those are selectable in Home
+Assistant's entity pickers, recorded as long-term statistics, and formatted by
+the card the way production hardware is.
+
+So every reading in that profile is a **mirrored sensor**: a template
+`sensor.e2e_telemetry_multi_<signal>[_n]` whose state is
+
+```
+the writable input, if the gate is on — otherwise this signal's waveform
+```
+
+with `input_number.sim_e2e_telemetry_multi_<signal>[_n]` as the writable half
+and `input_boolean.sim_e2e_telemetry_multi_manual_telemetry` as the gate. The
+gate is **off** by default, so an untouched instance free-runs. Its template
+block re-renders every 30 s *and* on any write to the gate or to a backing
+input, so a pinned value lands at once instead of up to a tick later.
+
+Paired sensors are offset by a quarter of their period and start at different
+points in their range, so a category configured with two sensors never reads the
+same value twice — an aggregate of two identical readings would prove nothing.
+
+`e2e/entity_coverage.py` derives each backing input and each gate from the
+mirror assignment that declares the sensor, and refuses to generate a mirror
+whose backing input or gate does not exist. Adding a signal to the profile is one
+`_telemetry_role(...)` call.
 
 > Pumps must be declared under the `template:` key. The legacy
 > `switch: - platform: template` form is rejected by current HA:
@@ -142,9 +185,17 @@ irrigation_flow, irrigation_tank.
 
 ## 2. Growspaces
 
-`tests/e2e/fixtures/e2e-setup.ts` creates the 10 growspaces, places an anchor
+`tests/e2e/fixtures/e2e-setup.ts` creates the 11 growspaces, places an anchor
 plant in each, links the sensors above, and writes the resulting IDs back into
-`tests/e2e/.env.test`. It is idempotent.
+`tests/e2e/.env.test`. It is idempotent — every sensor list is set outright, so
+a rerun replaces it rather than growing it.
+
+A growspace's own entities are named after the growspace, its simulated sensors
+after the profile slug, and setup waits for `sensor.e2e_<slug>_overview` to
+appear. The two must therefore agree: an instance named "E2E Multi Telemetry"
+would get `sensor.e2e_multi_telemetry_overview` and setup would hang forever
+waiting for `sensor.e2e_telemetry_multi_overview`. `validate_contract` checks
+the name against the slug so this fails at generation time instead.
 
 The script mixes ESM `import` with CommonJS `__dirname`, so it only runs under a
 CJS transpiler. Neither `ts-node` nor `tsx` is installed; compile it instead:
@@ -168,9 +219,9 @@ state-change subscriptions when the integration's sensor platform starts.
 
 ## 3. Dashboards
 
-Seven of the nine specs navigate to a dashboard and wait for
-`growspace-manager-card` to become visible. `TEST_*_DASHBOARD_PATH` in
-`.env.test` points at these:
+Most specs are pure-API, but the ones that assert on what a grower actually
+sees navigate to a dashboard and wait for `growspace-manager-card` to become
+visible. `TEST_*_DASHBOARD_PATH` in `.env.test` points at these:
 
 ```bash
 node scripts/gen-e2e-dashboards.cjs

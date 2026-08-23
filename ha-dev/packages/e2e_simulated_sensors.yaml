@@ -669,6 +669,161 @@ template:
         state: >-
           {{ (((as_timestamp(now()) + 3000) % 86400) / 86400 * 12.0) | round(3) }}
   # ---------------------------------------------------------------
+  # e2e_telemetry_multi — every reading mirrors a writable input
+  # ---------------------------------------------------------------
+  - trigger:
+      - platform: time_pattern
+        seconds: "/30"
+      - platform: state
+        entity_id:
+          - input_boolean.sim_e2e_telemetry_multi_manual_telemetry
+          - input_number.sim_e2e_telemetry_multi_temperature_1
+          - input_number.sim_e2e_telemetry_multi_temperature_2
+          - input_number.sim_e2e_telemetry_multi_humidity_1
+          - input_number.sim_e2e_telemetry_multi_humidity_2
+          - input_number.sim_e2e_telemetry_multi_vpd_1
+          - input_number.sim_e2e_telemetry_multi_vpd_2
+          - input_number.sim_e2e_telemetry_multi_co2
+          - input_number.sim_e2e_telemetry_multi_feed_ec
+          - input_number.sim_e2e_telemetry_multi_bulk_ec
+          - input_number.sim_e2e_telemetry_multi_pore_ec
+          - input_number.sim_e2e_telemetry_multi_runoff_ec
+          - input_number.sim_e2e_telemetry_multi_ph
+          - input_number.sim_e2e_telemetry_multi_substrate_temperature_1
+          - input_number.sim_e2e_telemetry_multi_substrate_temperature_2
+          - input_number.sim_e2e_telemetry_multi_substrate_moisture
+          - input_number.sim_e2e_telemetry_multi_power
+          - input_number.sim_e2e_telemetry_multi_energy
+          - input_number.sim_e2e_telemetry_multi_light_1
+          - input_number.sim_e2e_telemetry_multi_light_2
+    sensor:
+      - name: e2e telemetry_multi temperature 1
+        unique_id: e2e_telemetry_multi_temperature_1
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_temperature_1') | float(0) | round(2) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (24.0 + 4.0 * sin( ((as_timestamp(now()) + 0) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e telemetry_multi temperature 2
+        unique_id: e2e_telemetry_multi_temperature_2
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_temperature_2') | float(0) | round(2) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (24.0 + 4.0 * sin( ((as_timestamp(now()) + 900) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e telemetry_multi humidity 1
+        unique_id: e2e_telemetry_multi_humidity_1
+        unit_of_measurement: "%"
+        device_class: humidity
+        state_class: measurement
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_humidity_1') | float(0) | round(2) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (57.5 + 12.5 * sin( ((as_timestamp(now()) + 0) % 5400) / 5400 * 2 * pi )) | round(2) }}
+      - name: e2e telemetry_multi humidity 2
+        unique_id: e2e_telemetry_multi_humidity_2
+        unit_of_measurement: "%"
+        device_class: humidity
+        state_class: measurement
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_humidity_2') | float(0) | round(2) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (57.5 + 12.5 * sin( ((as_timestamp(now()) + 1350) % 5400) / 5400 * 2 * pi )) | round(2) }}
+      - name: e2e telemetry_multi vpd 1
+        unique_id: e2e_telemetry_multi_vpd_1
+        unit_of_measurement: "kPa"
+        state_class: measurement
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_vpd_1') | float(0) | round(2) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (1.1 + 0.29999999999999993 * sin( ((as_timestamp(now()) + 0) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e telemetry_multi vpd 2
+        unique_id: e2e_telemetry_multi_vpd_2
+        unit_of_measurement: "kPa"
+        state_class: measurement
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_vpd_2') | float(0) | round(2) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (1.1 + 0.29999999999999993 * sin( ((as_timestamp(now()) + 900) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e telemetry_multi co2
+        unique_id: e2e_telemetry_multi_co2
+        unit_of_measurement: "ppm"
+        device_class: carbon_dioxide
+        state_class: measurement
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_co2') | float(0) | round(0) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (800.0 + 400.0 * sin( ((as_timestamp(now()) + 0) % 1800) / 1800 * 2 * pi )) | round(0) }}
+      - name: e2e telemetry_multi feed_ec
+        unique_id: e2e_telemetry_multi_feed_ec
+        unit_of_measurement: "mS/cm"
+        state_class: measurement
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_feed_ec') | float(0) | round(2) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (2.0 + 0.3999999999999999 * sin( ((as_timestamp(now()) + 0) % 7200) / 7200 * 2 * pi )) | round(2) }}
+      - name: e2e telemetry_multi bulk_ec
+        unique_id: e2e_telemetry_multi_bulk_ec
+        unit_of_measurement: "mS/cm"
+        state_class: measurement
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_bulk_ec') | float(0) | round(2) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (2.0 + 1.0 * sin( ((as_timestamp(now()) + 0) % 7200) / 7200 * 2 * pi )) | round(2) }}
+      - name: e2e telemetry_multi pore_ec
+        unique_id: e2e_telemetry_multi_pore_ec
+        unit_of_measurement: "mS/cm"
+        state_class: measurement
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_pore_ec') | float(0) | round(2) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (2.3 + 1.1 * sin( ((as_timestamp(now()) + 0) % 7200) / 7200 * 2 * pi )) | round(2) }}
+      - name: e2e telemetry_multi runoff_ec
+        unique_id: e2e_telemetry_multi_runoff_ec
+        unit_of_measurement: "mS/cm"
+        state_class: measurement
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_runoff_ec') | float(0) | round(2) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (2.2 + 0.8 * sin( ((as_timestamp(now()) + 0) % 7200) / 7200 * 2 * pi )) | round(2) }}
+      - name: e2e telemetry_multi ph
+        unique_id: e2e_telemetry_multi_ph
+        unit_of_measurement: "pH"
+        state_class: measurement
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_ph') | float(0) | round(2) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (6.0 + 0.40000000000000036 * sin( ((as_timestamp(now()) + 0) % 9000) / 9000 * 2 * pi )) | round(2) }}
+      - name: e2e telemetry_multi substrate_temperature 1
+        unique_id: e2e_telemetry_multi_substrate_temperature_1
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_substrate_temperature_1') | float(0) | round(2) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (21.0 + 3.0 * sin( ((as_timestamp(now()) + 0) % 5400) / 5400 * 2 * pi )) | round(2) }}
+      - name: e2e telemetry_multi substrate_temperature 2
+        unique_id: e2e_telemetry_multi_substrate_temperature_2
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_substrate_temperature_2') | float(0) | round(2) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (21.0 + 3.0 * sin( ((as_timestamp(now()) + 1350) % 5400) / 5400 * 2 * pi )) | round(2) }}
+      - name: e2e telemetry_multi substrate_moisture
+        unique_id: e2e_telemetry_multi_substrate_moisture
+        unit_of_measurement: "%"
+        device_class: moisture
+        state_class: measurement
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_substrate_moisture') | float(0) | round(2) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (52.5 + 17.5 * sin( ((as_timestamp(now()) + 0) % 2700) / 2700 * 2 * pi )) | round(2) }}
+      - name: e2e telemetry_multi power
+        unique_id: e2e_telemetry_multi_power
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_power') | float(0) | round(2) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (320.0 + 280.0 * sin( ((as_timestamp(now()) + 0) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e telemetry_multi energy
+        unique_id: e2e_telemetry_multi_energy
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_energy') | float(0) | round(3) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (((as_timestamp(now()) + 0) % 86400) / 86400 * 12.0) | round(3) }}
+      - name: e2e telemetry_multi light 1
+        unique_id: e2e_telemetry_multi_light_1
+        unit_of_measurement: "lx"
+        device_class: illuminance
+        state_class: measurement
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_light_1') | float(0) | round(0) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (30000.0 + 30000.0 * sin( ((as_timestamp(now()) + 0) % 86400) / 86400 * 2 * pi )) | round(0) }}
+      - name: e2e telemetry_multi light 2
+        unique_id: e2e_telemetry_multi_light_2
+        unit_of_measurement: "lx"
+        device_class: illuminance
+        state_class: measurement
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_light_2') | float(0) | round(0) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (30000.0 + 30000.0 * sin( ((as_timestamp(now()) + 21600) % 86400) / 86400 * 2 * pi )) | round(0) }}
+  # ---------------------------------------------------------------
   # pumps (toggleable, state backed by input_boolean)
   # ---------------------------------------------------------------
   - switch:
@@ -940,6 +1095,9 @@ input_boolean:
   sim_e2e_irrigation_tanks_irrigation_pump:
     name: sim e2e irrigation_tanks irrigation_pump
     initial: false
+  sim_e2e_telemetry_multi_manual_telemetry:
+    name: sim e2e telemetry_multi manual telemetry
+    initial: false
 
 input_number:
   e2e_vwc_veg_temperature:
@@ -1166,6 +1324,158 @@ input_number:
     initial: 5.0
     unit_of_measurement: "kWh"
     mode: box
+  sim_e2e_telemetry_multi_temperature_1:
+    name: sim e2e telemetry_multi temperature 1
+    min: 0
+    max: 56.0
+    step: 0.01
+    initial: 22.67
+    unit_of_measurement: "°C"
+    mode: box
+  sim_e2e_telemetry_multi_temperature_2:
+    name: sim e2e telemetry_multi temperature 2
+    min: 0
+    max: 56.0
+    step: 0.01
+    initial: 25.33
+    unit_of_measurement: "°C"
+    mode: box
+  sim_e2e_telemetry_multi_humidity_1:
+    name: sim e2e telemetry_multi humidity 1
+    min: 0
+    max: 140.0
+    step: 0.01
+    initial: 53.33
+    unit_of_measurement: "%"
+    mode: box
+  sim_e2e_telemetry_multi_humidity_2:
+    name: sim e2e telemetry_multi humidity 2
+    min: 0
+    max: 140.0
+    step: 0.01
+    initial: 61.67
+    unit_of_measurement: "%"
+    mode: box
+  sim_e2e_telemetry_multi_vpd_1:
+    name: sim e2e telemetry_multi vpd 1
+    min: 0
+    max: 2.8
+    step: 0.01
+    initial: 1.0
+    unit_of_measurement: "kPa"
+    mode: box
+  sim_e2e_telemetry_multi_vpd_2:
+    name: sim e2e telemetry_multi vpd 2
+    min: 0
+    max: 2.8
+    step: 0.01
+    initial: 1.2
+    unit_of_measurement: "kPa"
+    mode: box
+  sim_e2e_telemetry_multi_co2:
+    name: sim e2e telemetry_multi co2
+    min: 0
+    max: 2400
+    step: 0.01
+    initial: 800.0
+    unit_of_measurement: "ppm"
+    mode: box
+  sim_e2e_telemetry_multi_feed_ec:
+    name: sim e2e telemetry_multi feed_ec
+    min: 0
+    max: 4.8
+    step: 0.01
+    initial: 2.0
+    unit_of_measurement: "mS/cm"
+    mode: box
+  sim_e2e_telemetry_multi_bulk_ec:
+    name: sim e2e telemetry_multi bulk_ec
+    min: 0
+    max: 6.0
+    step: 0.01
+    initial: 2.0
+    unit_of_measurement: "mS/cm"
+    mode: box
+  sim_e2e_telemetry_multi_pore_ec:
+    name: sim e2e telemetry_multi pore_ec
+    min: 0
+    max: 6.8
+    step: 0.01
+    initial: 2.3
+    unit_of_measurement: "mS/cm"
+    mode: box
+  sim_e2e_telemetry_multi_runoff_ec:
+    name: sim e2e telemetry_multi runoff_ec
+    min: 0
+    max: 6.0
+    step: 0.01
+    initial: 2.2
+    unit_of_measurement: "mS/cm"
+    mode: box
+  sim_e2e_telemetry_multi_ph:
+    name: sim e2e telemetry_multi ph
+    min: 0
+    max: 12.8
+    step: 0.01
+    initial: 6.0
+    unit_of_measurement: "pH"
+    mode: box
+  sim_e2e_telemetry_multi_substrate_temperature_1:
+    name: sim e2e telemetry_multi substrate_temperature 1
+    min: 0
+    max: 48.0
+    step: 0.01
+    initial: 20.0
+    unit_of_measurement: "°C"
+    mode: box
+  sim_e2e_telemetry_multi_substrate_temperature_2:
+    name: sim e2e telemetry_multi substrate_temperature 2
+    min: 0
+    max: 48.0
+    step: 0.01
+    initial: 22.0
+    unit_of_measurement: "°C"
+    mode: box
+  sim_e2e_telemetry_multi_substrate_moisture:
+    name: sim e2e telemetry_multi substrate_moisture
+    min: 0
+    max: 140.0
+    step: 0.01
+    initial: 52.5
+    unit_of_measurement: "%"
+    mode: box
+  sim_e2e_telemetry_multi_power:
+    name: sim e2e telemetry_multi power
+    min: 0
+    max: 1200.0
+    step: 0.01
+    initial: 320.0
+    unit_of_measurement: "W"
+    mode: box
+  sim_e2e_telemetry_multi_light_1:
+    name: sim e2e telemetry_multi light 1
+    min: 0
+    max: 100000
+    step: 1
+    initial: 20000.0
+    unit_of_measurement: "lx"
+    mode: box
+  sim_e2e_telemetry_multi_light_2:
+    name: sim e2e telemetry_multi light 2
+    min: 0
+    max: 100000
+    step: 1
+    initial: 40000.0
+    unit_of_measurement: "lx"
+    mode: box
+  sim_e2e_telemetry_multi_energy:
+    name: sim e2e telemetry_multi energy
+    min: 0
+    max: 100000
+    step: 0.001
+    initial: 5.0
+    unit_of_measurement: "kWh"
+    mode: box
   e2e_irrigation_monitored_drain_volume:
     name: e2e irrigation_monitored drain_volume
     min: 0
@@ -1183,7 +1493,7 @@ input_number:
     unit_of_measurement: "L/min"
     mode: box
   e2e_irrigation_tanks_irrigation_tank_1:
-    name: e2e irrigation_tanks irrigation_tank
+    name: e2e irrigation_tanks irrigation_tank 1
     min: 0
     max: 100
     step: 1
@@ -1191,7 +1501,7 @@ input_number:
     unit_of_measurement: "%"
     mode: box
   e2e_irrigation_tanks_irrigation_tank_2:
-    name: e2e irrigation_tanks irrigation_tank
+    name: e2e irrigation_tanks irrigation_tank 2
     min: 0
     max: 100
     step: 1

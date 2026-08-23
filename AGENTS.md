@@ -52,11 +52,23 @@ the host path instead.
 
 The dev instance mounts:
 
-| Host | Container |
-|---|---|
-| `../growspace_manager/custom_components/growspace_manager` | `/config/custom_components/growspace_manager` |
-| `../lovelace-growspace-manager-card/dist` | `/config/www/community/lovelace-growspace-manager-card` (ro) |
-| `./ha-dev` | `/config` |
+| Host | Container | Override |
+|---|---|---|
+| `../growspace_manager/custom_components/growspace_manager` | `/config/custom_components/growspace_manager` | `GROWSPACE_BACKEND_SRC` |
+| `../lovelace-growspace-manager-card/dist` | `/config/www/community/lovelace-growspace-manager-card` (ro) | `GROWSPACE_CARD_DIST` |
+| `./ha-dev` | `/config` | — |
+
+Both source mounts default to the **main** checkout. A worktree is served by
+setting its override on `./scripts/ha dev restart`, run from the main hub
+checkout — which is the only way to exercise a worktree's own code against
+:8123, since the runtime otherwise keeps serving the main checkout while you
+believe you are testing your branch:
+
+```bash
+GROWSPACE_BACKEND_SRC=~/dev/growspace_manager/.worktrees/<name>/custom_components/growspace_manager \
+GROWSPACE_CARD_DIST=./worktrees/<name>/card/dist \
+  ./scripts/ha dev restart
+```
 
 The card is **code-split**: a thin `growspace-manager-card.js` entry plus ~16
 lazy `growspace-[name]-[hash].js` chunks. The whole `dist/` directory is
@@ -270,4 +282,5 @@ exist. See `docs/CONTRACT.md`.
   the same Compose project and container names — so it does not start a second
   stack the port guard would catch, it recreates the shared one against that
   worktree's unbuilt siblings and empty config. `./scripts/ha` refuses; to serve
-  a worktree's bundle, run it from the main checkout with `GROWSPACE_CARD_DIST`.
+  a worktree's bundle or integration, run it from the main checkout with
+  `GROWSPACE_CARD_DIST` / `GROWSPACE_BACKEND_SRC`.
