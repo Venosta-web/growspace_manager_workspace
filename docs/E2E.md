@@ -190,12 +190,20 @@ Irrigation skipped — tank 'Tank' is low (29.0% < 30.0%)
 ```
 
 A VWC growspace's tank is an `input_number`, not one of the generated sine
-waves, so it holds whatever was last written to it — across specs, runs and
-restarts. The suite's own tank guard test drains it to 15 % and nothing put it
-back, so every pump test that ran afterwards was skipped. Fixed: the spec's
-`beforeEach` now fills the tank and asserts the fill landed, and the pump waits
-re-check the level on every poll, so a low tank fails immediately naming the
-cause instead of after 90 s of nothing.
+waves, so it holds whatever was last written to it. Two things put it under the
+cutoff, and neither is drift:
+
+- `ha-dev/packages/e2e_simulated_sensors.yaml` declares these helpers with
+  `initial: 29.0` — one point under the 30 % `warning_level` the fixtures leave
+  at its default. Every HA restart lands the tank there. That is the exact
+  29.0 % in the log line above.
+- The suite's own tank guard test drains it to 15 % and nothing ever put it
+  back, so every pump test that ran after it was skipped too.
+
+Fixed in the spec rather than the fixture, so it holds whatever the instance has
+been through: `beforeEach` now fills the tank and asserts the fill landed, and
+the pump waits re-check the level on every poll, so a low tank fails immediately
+naming the cause instead of after 90 s of nothing.
 
 **2 — genuine test timeouts.** `add-plant-dialog` (30 s) and
 `plant-watering-round-trip` (45 s) both get *past* dialog-open and die while
@@ -225,6 +233,16 @@ A test that depends on tank state it never establishes passes or fails on
 whatever the instance happens to be holding, which is what made these read as
 flaky rather than broken. `vwc-day-cycle` now sets the tank in `beforeEach` and
 fails fast with the cause when it is low — see the group above.
+
+**One residual failure, and it is not the tank.** Re-run 2026-08-23 with the
+tank fix in place, `--retries=0`, both VWC tanks drained to 12 % beforehand:
+**11 of 12 passed**, the exception being veg `P2 — maintenance shot`, which
+reported `tank at 80%, cutoff 30%` — the fill had landed and the coordinator
+simply never attempted a shot inside the 90 s window. The same test passes on
+its own (1.7 min, tank starting at 15 %). What differs in the full run is that
+the coordinator's own P1→P2 transition — `Resetting feedback scale factors` —
+lands in the middle of the test, right after the P1 test that precedes it. That
+is a separate cause and still open; do not re-file it as a tank problem.
 
 ### Runtime
 
