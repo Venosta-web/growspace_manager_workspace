@@ -669,7 +669,7 @@ template:
         state: >-
           {{ (((as_timestamp(now()) + 3000) % 86400) / 86400 * 12.0) | round(3) }}
   # ---------------------------------------------------------------
-  # pumps (toggleable, state backed by input_boolean)
+  # plain switches (toggleable, state backed by input_boolean)
   # ---------------------------------------------------------------
   - switch:
       - name: sim e2e veg irrigation_pump
@@ -881,64 +881,114 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_irrigation_tanks_irrigation_pump
+      - name: e2e lighting growlight switch
+        unique_id: e2e_lighting_growlight_switch
+        state: "{{ is_state('input_boolean.e2e_lighting_growlight_switch', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.e2e_lighting_growlight_switch
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.e2e_lighting_growlight_switch
+  # ---------------------------------------------------------------
+  # aggregate light-state sensors used by automatic cycle tracking
+  # ---------------------------------------------------------------
+  - binary_sensor:
+      - name: e2e lighting light state
+        unique_id: e2e_lighting_light_state
+        device_class: light
+        state: "{{ is_state('switch.e2e_lighting_growlight_switch', 'on') or is_state('light.e2e_lighting_growlight_dimmable', 'on') }}"
+  # ---------------------------------------------------------------
+  # dimmable lights (state and level backed by helpers)
+  # ---------------------------------------------------------------
+  - light:
+      - name: e2e lighting growlight dimmable
+        unique_id: e2e_lighting_growlight_dimmable
+        state: "{{ is_state('input_boolean.e2e_lighting_growlight_dimmable', 'on') }}"
+        level: "{{ states('input_number.e2e_lighting_growlight_dimmable_brightness') | int(128) }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.e2e_lighting_growlight_dimmable
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.e2e_lighting_growlight_dimmable
+        set_level:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.e2e_lighting_growlight_dimmable_brightness
+            data:
+              value: "{{ brightness }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.e2e_lighting_growlight_dimmable
 
 input_boolean:
   sim_e2e_veg_irrigation_pump:
     name: sim e2e veg irrigation_pump
     initial: false
-  sim_e2e_veg_drain_pump:
-    name: sim e2e veg drain_pump
-    initial: false
   sim_e2e_clone_irrigation_pump:
     name: sim e2e clone irrigation_pump
-    initial: false
-  sim_e2e_clone_drain_pump:
-    name: sim e2e clone drain_pump
     initial: false
   sim_e2e_mother_irrigation_pump:
     name: sim e2e mother irrigation_pump
     initial: false
-  sim_e2e_mother_drain_pump:
-    name: sim e2e mother drain_pump
-    initial: false
   sim_e2e_flower_irrigation_pump:
     name: sim e2e flower irrigation_pump
-    initial: false
-  sim_e2e_flower_drain_pump:
-    name: sim e2e flower drain_pump
     initial: false
   sim_e2e_dry_irrigation_pump:
     name: sim e2e dry irrigation_pump
     initial: false
-  sim_e2e_dry_drain_pump:
-    name: sim e2e dry drain_pump
-    initial: false
   sim_e2e_cure_irrigation_pump:
     name: sim e2e cure irrigation_pump
-    initial: false
-  sim_e2e_cure_drain_pump:
-    name: sim e2e cure drain_pump
     initial: false
   sim_e2e_vwc_veg_irrigation_pump:
     name: sim e2e vwc_veg irrigation_pump
     initial: false
-  sim_e2e_vwc_veg_drain_pump:
-    name: sim e2e vwc_veg drain_pump
-    initial: false
   sim_e2e_vwc_flower_irrigation_pump:
     name: sim e2e vwc_flower irrigation_pump
-    initial: false
-  sim_e2e_vwc_flower_drain_pump:
-    name: sim e2e vwc_flower drain_pump
     initial: false
   sim_e2e_irrigation_monitored_irrigation_pump:
     name: sim e2e irrigation_monitored irrigation_pump
     initial: false
+  sim_e2e_irrigation_tanks_irrigation_pump:
+    name: sim e2e irrigation_tanks irrigation_pump
+    initial: false
+  sim_e2e_veg_drain_pump:
+    name: sim e2e veg drain_pump
+    initial: false
+  sim_e2e_clone_drain_pump:
+    name: sim e2e clone drain_pump
+    initial: false
+  sim_e2e_mother_drain_pump:
+    name: sim e2e mother drain_pump
+    initial: false
+  sim_e2e_flower_drain_pump:
+    name: sim e2e flower drain_pump
+    initial: false
+  sim_e2e_dry_drain_pump:
+    name: sim e2e dry drain_pump
+    initial: false
+  sim_e2e_cure_drain_pump:
+    name: sim e2e cure drain_pump
+    initial: false
+  sim_e2e_vwc_veg_drain_pump:
+    name: sim e2e vwc_veg drain_pump
+    initial: false
+  sim_e2e_vwc_flower_drain_pump:
+    name: sim e2e vwc_flower drain_pump
+    initial: false
   sim_e2e_irrigation_monitored_drain_pump:
     name: sim e2e irrigation_monitored drain_pump
     initial: false
-  sim_e2e_irrigation_tanks_irrigation_pump:
-    name: sim e2e irrigation_tanks irrigation_pump
+  e2e_lighting_growlight_switch:
+    name: e2e lighting growlight switch
+    initial: false
+  e2e_lighting_growlight_dimmable:
+    name: e2e lighting growlight dimmable
     initial: false
 
 input_number:
@@ -1198,3 +1248,10 @@ input_number:
     initial: 80
     unit_of_measurement: "%"
     mode: box
+  e2e_lighting_growlight_dimmable_brightness:
+    name: e2e lighting growlight dimmable brightness
+    min: 0
+    max: 255
+    step: 1
+    initial: 128
+    mode: slider
