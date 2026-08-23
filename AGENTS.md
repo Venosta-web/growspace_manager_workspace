@@ -124,13 +124,32 @@ refers to; it is a side effect of the path, not a separate check.
 `worktrees/<name>/backend` for the paired view. Run backend tests from a
 worktree as `../../.venv/bin/pytest tests/ -q`.
 
-The card has no such constraint — its hooks are `npm run ...` — but its
-worktree gets a read-only-intent `node_modules` symlink so checks run without a
-reinstall only while the main and worktree lockfile hashes match. The setup
-also verifies the shared install with an offline `npm ci --dry-run`; on drift it
-removes the link and requires a private `npm ci`. Writable Vite/test caches are
-checkout-local under `.cache/`. Never run dependency-mutating npm commands
-through the shared link.
+The card has no such constraint — its hooks are `npm run ...` — but how it gets
+`node_modules` depends on who created the worktree. The vocabulary, used
+consistently across both repos:
+
+- **Hub-managed worktree** — created by `scripts/feature` or
+  `scripts/codex-worktree`. Gets a **shared dependency link** by default, subject
+  to the guard below.
+- **Standalone worktree** — created by hand with `git worktree add`. Shares
+  nothing; it needs a **private install**.
+- **Shared dependency link** — the single symlink from a worktree's
+  `node_modules` to the main card checkout's. One link, never a per-file farm.
+- **Private install** — a real `node_modules` directory in the worktree, from its
+  own `npm ci`. Setup validates one it finds and never replaces it with a link.
+
+`scripts/card-node-modules` is the one implementation, and it links only while
+the two `package-lock.json` hashes match **and** an offline `npm ci --dry-run`
+reports a zero add/change/remove plan. On drift it removes the link and requires
+a private `npm ci`. Writable Vite/test caches are checkout-local under `.cache/`,
+never inside the shared tree.
+
+Never run dependency-mutating npm commands through a shared link. `npm ci` and
+`npm install` merely convert the worktree to a private install, but `npm rebuild`,
+`patch-package`, and dependency postinstalls **write through into the main
+checkout's tree**, and no npm hook can catch them. That risk is accepted, not
+guarded — see [`docs/adr/0001-guarded-shared-card-dependencies.md`](docs/adr/0001-guarded-shared-card-dependencies.md)
+for the decision, the measurements, and the hub-heals/card-detects boundary.
 
 `no-commit-to-branch` additionally blocks `main` and `dev` outright.
 
