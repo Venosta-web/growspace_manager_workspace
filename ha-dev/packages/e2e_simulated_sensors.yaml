@@ -102,10 +102,10 @@ template:
           {{ (1.0 + 1.0 * sin( ((as_timestamp(now()) + 0) % 900) / 900 * 2 * pi )) | round(2) }}
       - name: e2e veg irrigation_tank
         unique_id: e2e_veg_irrigation_tank
-        unit_of_measurement: "L"
+        unit_of_measurement: "%"
         state_class: measurement
         state: >-
-          {{ (29.0 + 21.0 * sin( ((as_timestamp(now()) + 0) % 10800) / 10800 * 2 * pi )) | round(2) }}
+          {{ (55.0 + 45.0 * sin( ((as_timestamp(now()) + 0) % 10800) / 10800 * 2 * pi )) | round(2) }}
       - name: e2e veg energy
         unique_id: e2e_veg_energy
         unit_of_measurement: "kWh"
@@ -213,10 +213,10 @@ template:
           {{ (1.0 + 1.0 * sin( ((as_timestamp(now()) + 600) % 900) / 900 * 2 * pi )) | round(2) }}
       - name: e2e clone irrigation_tank
         unique_id: e2e_clone_irrigation_tank
-        unit_of_measurement: "L"
+        unit_of_measurement: "%"
         state_class: measurement
         state: >-
-          {{ (29.0 + 21.0 * sin( ((as_timestamp(now()) + 600) % 10800) / 10800 * 2 * pi )) | round(2) }}
+          {{ (55.0 + 45.0 * sin( ((as_timestamp(now()) + 600) % 10800) / 10800 * 2 * pi )) | round(2) }}
       - name: e2e clone energy
         unique_id: e2e_clone_energy
         unit_of_measurement: "kWh"
@@ -324,10 +324,10 @@ template:
           {{ (1.0 + 1.0 * sin( ((as_timestamp(now()) + 1200) % 900) / 900 * 2 * pi )) | round(2) }}
       - name: e2e mother irrigation_tank
         unique_id: e2e_mother_irrigation_tank
-        unit_of_measurement: "L"
+        unit_of_measurement: "%"
         state_class: measurement
         state: >-
-          {{ (29.0 + 21.0 * sin( ((as_timestamp(now()) + 1200) % 10800) / 10800 * 2 * pi )) | round(2) }}
+          {{ (55.0 + 45.0 * sin( ((as_timestamp(now()) + 1200) % 10800) / 10800 * 2 * pi )) | round(2) }}
       - name: e2e mother energy
         unique_id: e2e_mother_energy
         unit_of_measurement: "kWh"
@@ -435,10 +435,10 @@ template:
           {{ (1.0 + 1.0 * sin( ((as_timestamp(now()) + 1800) % 900) / 900 * 2 * pi )) | round(2) }}
       - name: e2e flower irrigation_tank
         unique_id: e2e_flower_irrigation_tank
-        unit_of_measurement: "L"
+        unit_of_measurement: "%"
         state_class: measurement
         state: >-
-          {{ (29.0 + 21.0 * sin( ((as_timestamp(now()) + 1800) % 10800) / 10800 * 2 * pi )) | round(2) }}
+          {{ (55.0 + 45.0 * sin( ((as_timestamp(now()) + 1800) % 10800) / 10800 * 2 * pi )) | round(2) }}
       - name: e2e flower energy
         unique_id: e2e_flower_energy
         unit_of_measurement: "kWh"
@@ -546,10 +546,10 @@ template:
           {{ (1.0 + 1.0 * sin( ((as_timestamp(now()) + 2400) % 900) / 900 * 2 * pi )) | round(2) }}
       - name: e2e dry irrigation_tank
         unique_id: e2e_dry_irrigation_tank
-        unit_of_measurement: "L"
+        unit_of_measurement: "%"
         state_class: measurement
         state: >-
-          {{ (29.0 + 21.0 * sin( ((as_timestamp(now()) + 2400) % 10800) / 10800 * 2 * pi )) | round(2) }}
+          {{ (55.0 + 45.0 * sin( ((as_timestamp(now()) + 2400) % 10800) / 10800 * 2 * pi )) | round(2) }}
       - name: e2e dry energy
         unique_id: e2e_dry_energy
         unit_of_measurement: "kWh"
@@ -657,10 +657,10 @@ template:
           {{ (1.0 + 1.0 * sin( ((as_timestamp(now()) + 3000) % 900) / 900 * 2 * pi )) | round(2) }}
       - name: e2e cure irrigation_tank
         unique_id: e2e_cure_irrigation_tank
-        unit_of_measurement: "L"
+        unit_of_measurement: "%"
         state_class: measurement
         state: >-
-          {{ (29.0 + 21.0 * sin( ((as_timestamp(now()) + 3000) % 10800) / 10800 * 2 * pi )) | round(2) }}
+          {{ (55.0 + 45.0 * sin( ((as_timestamp(now()) + 3000) % 10800) / 10800 * 2 * pi )) | round(2) }}
       - name: e2e cure energy
         unique_id: e2e_cure_energy
         unit_of_measurement: "kWh"
@@ -848,6 +848,39 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_vwc_flower_drain_pump
+      - name: sim e2e irrigation_monitored irrigation_pump
+        unique_id: sim_e2e_irrigation_monitored_irrigation_pump
+        state: "{{ is_state('input_boolean.sim_e2e_irrigation_monitored_irrigation_pump', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_monitored_irrigation_pump
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_monitored_irrigation_pump
+      - name: sim e2e irrigation_monitored drain_pump
+        unique_id: sim_e2e_irrigation_monitored_drain_pump
+        state: "{{ is_state('input_boolean.sim_e2e_irrigation_monitored_drain_pump', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_monitored_drain_pump
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_monitored_drain_pump
+      - name: sim e2e irrigation_tanks irrigation_pump
+        unique_id: sim_e2e_irrigation_tanks_irrigation_pump
+        state: "{{ is_state('input_boolean.sim_e2e_irrigation_tanks_irrigation_pump', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_tanks_irrigation_pump
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_tanks_irrigation_pump
 
 input_boolean:
   sim_e2e_veg_irrigation_pump:
@@ -897,6 +930,15 @@ input_boolean:
     initial: false
   sim_e2e_vwc_flower_drain_pump:
     name: sim e2e vwc_flower drain_pump
+    initial: false
+  sim_e2e_irrigation_monitored_irrigation_pump:
+    name: sim e2e irrigation_monitored irrigation_pump
+    initial: false
+  sim_e2e_irrigation_monitored_drain_pump:
+    name: sim e2e irrigation_monitored drain_pump
+    initial: false
+  sim_e2e_irrigation_tanks_irrigation_pump:
+    name: sim e2e irrigation_tanks irrigation_pump
     initial: false
 
 input_number:
@@ -996,29 +1038,13 @@ input_number:
     initial: 320.0
     unit_of_measurement: "W"
     mode: box
-  e2e_vwc_veg_drain_volume:
-    name: e2e vwc_veg drain_volume
-    min: 0
-    max: 10.0
-    step: 0.01
-    initial: 2.5
-    unit_of_measurement: "L"
-    mode: box
-  e2e_vwc_veg_irrigation_flow:
-    name: e2e vwc_veg irrigation_flow
-    min: 0
-    max: 4.0
-    step: 0.01
-    initial: 1.0
-    unit_of_measurement: "L/min"
-    mode: box
   e2e_vwc_veg_irrigation_tank:
     name: e2e vwc_veg irrigation_tank
     min: 0
-    max: 100.0
-    step: 0.01
-    initial: 29.0
-    unit_of_measurement: "L"
+    max: 100
+    step: 1
+    initial: 80
+    unit_of_measurement: "%"
     mode: box
   e2e_vwc_veg_energy:
     name: e2e vwc_veg energy
@@ -1124,29 +1150,13 @@ input_number:
     initial: 320.0
     unit_of_measurement: "W"
     mode: box
-  e2e_vwc_flower_drain_volume:
-    name: e2e vwc_flower drain_volume
-    min: 0
-    max: 10.0
-    step: 0.01
-    initial: 2.5
-    unit_of_measurement: "L"
-    mode: box
-  e2e_vwc_flower_irrigation_flow:
-    name: e2e vwc_flower irrigation_flow
-    min: 0
-    max: 4.0
-    step: 0.01
-    initial: 1.0
-    unit_of_measurement: "L/min"
-    mode: box
   e2e_vwc_flower_irrigation_tank:
     name: e2e vwc_flower irrigation_tank
     min: 0
-    max: 100.0
-    step: 0.01
-    initial: 29.0
-    unit_of_measurement: "L"
+    max: 100
+    step: 1
+    initial: 80
+    unit_of_measurement: "%"
     mode: box
   e2e_vwc_flower_energy:
     name: e2e vwc_flower energy
@@ -1155,4 +1165,36 @@ input_number:
     step: 0.001
     initial: 5.0
     unit_of_measurement: "kWh"
+    mode: box
+  e2e_irrigation_monitored_drain_volume:
+    name: e2e irrigation_monitored drain_volume
+    min: 0
+    max: 100
+    step: 0.1
+    initial: 0
+    unit_of_measurement: "L"
+    mode: box
+  e2e_irrigation_monitored_irrigation_flow:
+    name: e2e irrigation_monitored irrigation_flow
+    min: 0
+    max: 10
+    step: 0.01
+    initial: 0
+    unit_of_measurement: "L/min"
+    mode: box
+  e2e_irrigation_tanks_irrigation_tank_1:
+    name: e2e irrigation_tanks irrigation_tank
+    min: 0
+    max: 100
+    step: 1
+    initial: 80
+    unit_of_measurement: "%"
+    mode: box
+  e2e_irrigation_tanks_irrigation_tank_2:
+    name: e2e irrigation_tanks irrigation_tank
+    min: 0
+    max: 100
+    step: 1
+    initial: 80
+    unit_of_measurement: "%"
     mode: box

@@ -23,7 +23,7 @@ from e2e.entity_coverage import (
 
 
 class EntityCoverageContractTest(unittest.TestCase):
-    def test_current_eight_growspaces_and_entity_families_are_preserved(self) -> None:
+    def test_delivered_growspaces_and_entity_families_are_complete(self) -> None:
         records = [
             record for record in expand_entities() if record.status is Status.COVERED
         ]
@@ -33,7 +33,7 @@ class EntityCoverageContractTest(unittest.TestCase):
 
         self.assertEqual(
             counts,
-            {"sensor": 96, "input_number": 32, "switch": 16, "input_boolean": 16},
+            {"sensor": 96, "input_number": 32, "switch": 19, "input_boolean": 19},
         )
         self.assertEqual(
             {profile["slug"] for profile in build_card_manifest()["profiles"]},
@@ -46,6 +46,8 @@ class EntityCoverageContractTest(unittest.TestCase):
                 "cure",
                 "vwc_veg",
                 "vwc_flower",
+                "irrigation_monitored",
+                "irrigation_tanks",
             },
         )
 
@@ -56,7 +58,7 @@ class EntityCoverageContractTest(unittest.TestCase):
             for assignment in role.assignments
             if assignment.status is Status.PLANNED
         }
-        self.assertEqual(planned_tickets, {17, 18, 19, 20, 21, 22, 23})
+        self.assertEqual(planned_tickets, {18, 19, 20, 21, 22, 23})
         self.assertTrue(
             {
                 "environment",
@@ -69,6 +71,67 @@ class EntityCoverageContractTest(unittest.TestCase):
             }
             <= {role.category for role in ROLES}
         )
+
+    def test_irrigation_profiles_expose_distinct_truthful_hardware(self) -> None:
+        profiles = {
+            profile["profile"]: profile
+            for profile in build_card_manifest()["profiles"]
+            if profile["profile"].startswith("irrigation_")
+        }
+
+        monitored = profiles["irrigation_monitored"]["services"]
+        self.assertEqual(
+            set(monitored["configure_environment"]),
+            {"drain_volume_sensors", "irrigation_flow_sensors"},
+        )
+        self.assertEqual(
+            set(monitored["set_irrigation_settings"]),
+            {"irrigation_pump_entity", "drain_pump_entity"},
+        )
+
+        tanks = profiles["irrigation_tanks"]["services"]
+        tank_rows = tanks["configure_environment"]["irrigation_tanks"]
+        self.assertEqual(len(tank_rows), 2)
+        self.assertEqual([row["name"] for row in tank_rows], ["Tank 1", "Tank 2"])
+        self.assertTrue(all(row["volume_liters"] == 50 for row in tank_rows))
+        self.assertNotIn("irrigation_flow_sensors", tanks["configure_environment"])
+        self.assertNotIn("drain_volume_sensors", tanks["configure_environment"])
+        self.assertEqual(
+            set(tanks["set_irrigation_settings"]), {"irrigation_pump_entity"}
+        )
+
+    def test_vwc_profiles_keep_tank_guard_without_direct_water_sensors(self) -> None:
+        vwc_profiles = [
+            profile
+            for profile in build_card_manifest()["profiles"]
+            if profile["profile"] == "vwc"
+        ]
+
+        self.assertEqual(len(vwc_profiles), 2)
+        for profile in vwc_profiles:
+            environment = profile["services"]["configure_environment"]
+            self.assertEqual(len(environment["irrigation_tanks"]), 1)
+            self.assertNotIn("irrigation_flow_sensors", environment)
+            self.assertNotIn("drain_volume_sensors", environment)
+            self.assertIn(
+                "irrigation_pump_entity",
+                profile["services"]["set_irrigation_settings"],
+            )
+
+    def test_controllable_tanks_use_safe_percentage_limits(self) -> None:
+        package = render_ha_package()
+
+        for object_id in (
+            "e2e_vwc_veg_irrigation_tank",
+            "e2e_vwc_flower_irrigation_tank",
+            "e2e_irrigation_tanks_irrigation_tank_1",
+            "e2e_irrigation_tanks_irrigation_tank_2",
+        ):
+            block = package.split(f"  {object_id}:\n", 1)[1].split("  e2e_", 1)[0]
+            self.assertIn("    min: 0\n", block)
+            self.assertIn("    max: 100\n", block)
+            self.assertIn("    initial: 80\n", block)
+            self.assertIn('    unit_of_measurement: "%"\n', block)
 
     def test_duplicate_entity_ids_fail_validation(self) -> None:
         original = ROLES[0]
