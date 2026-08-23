@@ -29,8 +29,16 @@ cd ../lovelace-growspace-manager-card && npm run watch
 
 - **Python change** → `./scripts/ha dev reload` (or `restart` for manifest/imports)
 - **TypeScript change** → rollup rebuilds `dist/` → hard-refresh the browser
+- **Still seeing the old bundle?** → `./scripts/ha dev restart`
 
 Neither path goes through HACS. HACS is verified separately, before release.
+
+That last one is not superstition. HA serves `/local/` with a 31-day
+`Cache-Control` behind a service worker `Ctrl+Shift+R` does not bypass, so a
+rebuild can be correct on disk and invisible in the browser. `up` and `restart`
+stamp the registered card resource with a content hash of the built entry
+(`…/growspace-manager-card.js?v=b57c822473a4`), which misses both caches at once
+and leaves an unchanged bundle alone. See `scripts/stamp-card-resource.cjs`.
 
 ## The runtimes
 
