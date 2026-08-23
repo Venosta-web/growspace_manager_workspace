@@ -21,6 +21,13 @@
 # else — including the main checkout — pytest and mypy hooks fail and every
 # commit is rejected. `.worktrees/` is already gitignored upstream.
 #
+# That same path decides which Python environment the worktree runs: from this
+# layout `../../.venv` is the MAIN checkout's venv, so the sharing is structural
+# and cannot be redirected. scripts/backend-venv verifies it realizes this
+# branch's requirements.txt before the worktree is handed over, and links the
+# worktree's own `.venv` at it so ./scripts/check validates that same
+# environment. See docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md.
+#
 # Base branch: upstream integrates architecture/refactor work on `prerelease`.
 # Override with BASE=main ./scripts/feature new <name>
 set -euo pipefail
@@ -54,6 +61,15 @@ case "${1:-}" in
       BW="$BACKEND/.worktrees/$NAME"
       add_wt "$BACKEND" "$BW" "$BRANCH"
       ln -sfn "$BW" "$ROOT/$NAME/backend"
+      # The environment can only be checked once the branch is checked out, so a
+      # refusal necessarily arrives with the worktree already created. Say so.
+      "$WS/scripts/backend-venv" "$BACKEND" "$BW" || {
+        echo >&2
+        echo "The backend worktree exists at $BW but has no usable environment." >&2
+        echo "Fix the venv above, then re-run; or discard it with:" >&2
+        echo "  ./scripts/feature rm $NAME" >&2
+        exit 1
+      }
     fi
 
     if [ "$SCOPE" != "--backend-only" ]; then
@@ -82,6 +98,7 @@ case "${1:-}" in
   rm)
     NAME="${2:?feature name required}"
     [ -L "$ROOT/$NAME/card/node_modules" ] && unlink "$ROOT/$NAME/card/node_modules"
+    [ -L "$BACKEND/.worktrees/$NAME/.venv" ] && unlink "$BACKEND/.worktrees/$NAME/.venv"
     rm -f "$ROOT/$NAME/backend"
     git -C "$BACKEND" worktree remove --force "$BACKEND/.worktrees/$NAME" 2>/dev/null || true
     git -C "$CARD"    worktree remove --force "$ROOT/$NAME/card"          2>/dev/null || true
