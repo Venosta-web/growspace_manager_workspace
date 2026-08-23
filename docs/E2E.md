@@ -9,14 +9,114 @@ to exist before it can run, and all three are reproducible from scripts.
 `./scripts/gen-e2e-sensors` writes `ha-dev/packages/e2e_simulated_sensors.yaml`,
 loaded via `homeassistant.packages` in `ha-dev/configuration.yaml`.
 
-It covers exactly the entity set `tests/e2e/fixtures/e2e-setup.ts` wires
-(`buildSensors`), for all 8 e2e growspaces:
+The executable contract in `e2e/entity_coverage.py` owns the entity inventory,
+the eight current capability-profile instances, their setup payloads, and the
+roles reserved for the later simulator tickets. The generated package, the card
+setup manifest, and this coverage table are checked against it by
+`./scripts/check-e2e-coverage`.
 
-| | Entities | Notes |
-|---|---|---|
-| Stage growspaces (veg, clone, mother, flower, dry, cure) | 96 `sensor.e2e_<slug>_<signal>` | trigger-based template sensors, recomputed every 30 s |
-| VWC growspaces (vwc_veg, vwc_flower) | 32 `input_number.e2e_vwc_*` | specs set these directly via `input_number.set_value`, so they are **not** simulated |
-| All 8 | 16 `switch.sim_e2e_<slug>_{irrigation,drain}_pump` | template switches backed by `input_boolean`, so specs can toggle them |
+<!-- BEGIN GENERATED E2E ENTITY COVERAGE -->
+<!-- Regenerate with ./scripts/gen-e2e-sensors; do not edit this table. -->
+
+| Role | Category | Capability profile | Entity naming rule | Domain | Cardinality | Behavior | Delivery |
+|---|---|---|---|---|---|---|---|
+| `environment.temperature` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_temperature` | `sensor` | one or more (1) | read-only | covered |
+| `environment.temperature` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_temperature` | `input_number` | one or more (1) | controllable | covered |
+| `environment.temperature` | environment | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_temperature{ordinal_suffix}` | `input_number` | one or more (2) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `environment.humidity` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_humidity` | `sensor` | one or more (1) | read-only | covered |
+| `environment.humidity` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_humidity` | `input_number` | one or more (1) | controllable | covered |
+| `environment.humidity` | environment | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_humidity{ordinal_suffix}` | `input_number` | one or more (2) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `environment.vpd` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_vpd` | `sensor` | one or more (1) | read-only | covered |
+| `environment.vpd` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_vpd` | `input_number` | one or more (1) | controllable | covered |
+| `environment.vpd` | environment | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_vpd{ordinal_suffix}` | `input_number` | one or more (2) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `environment.co2` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_co2` | `sensor` | exactly one (1) | read-only | covered |
+| `environment.co2` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_co2` | `input_number` | exactly one (1) | controllable | covered |
+| `environment.co2` | environment | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_co2{ordinal_suffix}` | `input_number` | exactly one (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `irrigation.feed_ec` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_feed_ec` | `sensor` | one or more (1) | read-only | covered |
+| `irrigation.feed_ec` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_feed_ec` | `input_number` | one or more (1) | controllable | covered |
+| `irrigation.feed_ec` | irrigation | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_feed_ec{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `irrigation.bulk_ec` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_bulk_ec` | `sensor` | one or more (1) | read-only | covered |
+| `irrigation.bulk_ec` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_bulk_ec` | `input_number` | one or more (1) | controllable | covered |
+| `irrigation.bulk_ec` | irrigation | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_bulk_ec{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `irrigation.pore_ec` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_pore_ec` | `sensor` | one or more (1) | read-only | covered |
+| `irrigation.pore_ec` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_pore_ec` | `input_number` | one or more (1) | controllable | covered |
+| `irrigation.pore_ec` | irrigation | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_pore_ec{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `irrigation.runoff_ec` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_runoff_ec` | `sensor` | one or more (1) | read-only | covered |
+| `irrigation.runoff_ec` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_runoff_ec` | `input_number` | one or more (1) | controllable | covered |
+| `irrigation.runoff_ec` | irrigation | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_runoff_ec{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `irrigation.ph` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_ph` | `sensor` | one or more (1) | read-only | covered |
+| `irrigation.ph` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_ph` | `input_number` | one or more (1) | controllable | covered |
+| `irrigation.ph` | irrigation | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_ph{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `environment.substrate_temperature` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_substrate_temperature` | `sensor` | one or more (1) | read-only | covered |
+| `environment.substrate_temperature` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_substrate_temperature` | `input_number` | one or more (1) | controllable | covered |
+| `environment.substrate_temperature` | environment | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_substrate_temperature{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `environment.substrate_moisture` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
+| `environment.substrate_moisture` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_substrate_moisture` | `input_number` | exactly one (1) | controllable | covered |
+| `environment.substrate_moisture` | environment | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_substrate_moisture{ordinal_suffix}` | `input_number` | exactly one (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `environment.power` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_power` | `sensor` | one or more (1) | read-only | covered |
+| `environment.power` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_power` | `input_number` | one or more (1) | controllable | covered |
+| `environment.power` | environment | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_power{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `environment.energy` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_energy` | `sensor` | one or more (1) | read-only | covered |
+| `environment.energy` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_energy` | `input_number` | one or more (1) | controllable | covered |
+| `environment.energy` | environment | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_energy{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `irrigation.drain_volume` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_drain_volume` | `sensor` | one or more (1) | read-only | covered |
+| `irrigation.drain_volume` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_drain_volume` | `input_number` | one or more (1) | controllable | covered |
+| `irrigation.drain_volume` | irrigation | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_drain_volume{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `irrigation.drain_volume` | irrigation | `irrigation_monitored` (irrigation_monitored) | `input_number.e2e_{slug}_drain_volume` | `input_number` | one or more (1) | controllable | planned in [#17](https://github.com/Venosta-web/growspace_manager_workspace/issues/17) |
+| `irrigation.flow` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_irrigation_flow` | `sensor` | one or more (1) | read-only | covered |
+| `irrigation.flow` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_irrigation_flow` | `input_number` | one or more (1) | controllable | covered |
+| `irrigation.flow` | irrigation | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_irrigation_flow{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `irrigation.flow` | irrigation | `irrigation_monitored` (irrigation_monitored) | `input_number.e2e_{slug}_irrigation_flow` | `input_number` | one or more (1) | controllable | planned in [#17](https://github.com/Venosta-web/growspace_manager_workspace/issues/17) |
+| `irrigation.tank_level` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_irrigation_tank` | `sensor` | one or more (1) | read-only | covered |
+| `irrigation.tank_level` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_irrigation_tank` | `input_number` | one or more (1) | controllable | covered |
+| `irrigation.tank_level` | irrigation | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_irrigation_tank{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `irrigation.tank_level` | irrigation | `irrigation_tanks` (irrigation_tanks) | `input_number.e2e_{slug}_irrigation_tank{ordinal_suffix}` | `input_number` | one or more (2) | controllable | planned in [#17](https://github.com/Venosta-web/growspace_manager_workspace/issues/17) |
+| `environment.light` | lighting | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_light{ordinal_suffix}` | `sensor` | one or more (2) | read-only | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `simulation.light_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_light_input{ordinal_suffix}` | `input_number` | one or more (2) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
+| `irrigation.irrigation_pump` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `switch.sim_e2e_{slug}_irrigation_pump` | `switch` | exactly one (1) | controllable | covered |
+| `irrigation.irrigation_pump` | irrigation | `vwc` (vwc_veg, vwc_flower) | `switch.sim_e2e_{slug}_irrigation_pump` | `switch` | exactly one (1) | controllable | covered |
+| `irrigation.irrigation_pump` | irrigation | `irrigation_monitored` (irrigation_monitored) | `switch.sim_e2e_{slug}_irrigation_pump` | `switch` | exactly one (1) | controllable | planned in [#17](https://github.com/Venosta-web/growspace_manager_workspace/issues/17) |
+| `irrigation.irrigation_pump` | irrigation | `irrigation_tanks` (irrigation_tanks) | `switch.sim_e2e_{slug}_irrigation_pump` | `switch` | exactly one (1) | controllable | planned in [#17](https://github.com/Venosta-web/growspace_manager_workspace/issues/17) |
+| `irrigation.drain_pump` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `switch.sim_e2e_{slug}_drain_pump` | `switch` | exactly one (1) | controllable | covered |
+| `irrigation.drain_pump` | irrigation | `vwc` (vwc_veg, vwc_flower) | `switch.sim_e2e_{slug}_drain_pump` | `switch` | exactly one (1) | controllable | covered |
+| `irrigation.drain_pump` | irrigation | `irrigation_monitored` (irrigation_monitored) | `switch.sim_e2e_{slug}_drain_pump` | `switch` | exactly one (1) | controllable | planned in [#17](https://github.com/Venosta-web/growspace_manager_workspace/issues/17) |
+| `simulation.irrigation_pump_state` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_boolean.sim_e2e_{slug}_irrigation_pump` | `input_boolean` | exactly one (1) | controllable | covered |
+| `simulation.irrigation_pump_state` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_irrigation_pump` | `input_boolean` | exactly one (1) | controllable | covered |
+| `simulation.drain_pump_state` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_boolean.sim_e2e_{slug}_drain_pump` | `input_boolean` | exactly one (1) | controllable | covered |
+| `simulation.drain_pump_state` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_drain_pump` | `input_boolean` | exactly one (1) | controllable | covered |
+| `lighting.state` | lighting | `lighting` (lighting) | `binary_sensor.e2e_{slug}_light_state` | `binary_sensor` | one or more (1) | read-only | planned in [#19](https://github.com/Venosta-web/growspace_manager_workspace/issues/19) |
+| `lighting.growlight_switch` | lighting | `lighting` (lighting) | `switch.e2e_{slug}_growlight_switch` | `switch` | one or more (1) | controllable | planned in [#19](https://github.com/Venosta-web/growspace_manager_workspace/issues/19) |
+| `lighting.growlight_dimmable` | lighting | `lighting` (lighting) | `light.e2e_{slug}_growlight_dimmable` | `light` | one or more (1) | controllable | planned in [#19](https://github.com/Venosta-web/growspace_manager_workspace/issues/19) |
+| `climate.circulation_percentage` | climate | `climate_plain` (climate_plain) | `fan.e2e_{slug}_circulation_fan_percentage` | `fan` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
+| `climate.circulation_numeric` | climate | `climate_plain` (climate_plain) | `input_number.e2e_{slug}_circulation_fan_speed` | `input_number` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
+| `climate.circulation_binary` | climate | `climate_plain` (climate_plain) | `switch.e2e_{slug}_circulation_fan_switch` | `switch` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
+| `climate.exhaust_percentage` | climate | `climate_plain` (climate_plain) | `fan.e2e_{slug}_exhaust_fan_percentage` | `fan` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
+| `climate.exhaust_numeric` | climate | `climate_plain` (climate_plain) | `input_number.e2e_{slug}_exhaust_fan_speed` | `input_number` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
+| `climate.exhaust_binary` | climate | `climate_plain` (climate_plain) | `switch.e2e_{slug}_exhaust_fan_switch` | `switch` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
+| `climate.humidifier_native` | climate | `climate_plain` (climate_plain) | `humidifier.e2e_{slug}_humidifier_native` | `humidifier` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
+| `climate.humidifier_switch` | climate | `climate_plain` (climate_plain) | `switch.e2e_{slug}_humidifier_switch` | `switch` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
+| `climate.dehumidifier_native` | climate | `climate_plain` (climate_plain) | `humidifier.e2e_{slug}_dehumidifier_native` | `humidifier` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
+| `climate.dehumidifier_switch` | climate | `climate_plain` (climate_plain) | `switch.e2e_{slug}_dehumidifier_switch` | `switch` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
+| `ac_infinity.circulation.mode_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `select.e2e_{slug}_circulation_active_mode` | `select` | exactly one (1) | controllable | planned in [#20](https://github.com/Venosta-web/growspace_manager_workspace/issues/20) |
+| `ac_infinity.circulation.speed_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `number.e2e_{slug}_circulation_speed` | `number` | exactly one (1) | controllable | planned in [#20](https://github.com/Venosta-web/growspace_manager_workspace/issues/20) |
+| `ac_infinity.exhaust.mode_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `select.e2e_{slug}_exhaust_active_mode` | `select` | exactly one (1) | controllable | planned in [#20](https://github.com/Venosta-web/growspace_manager_workspace/issues/20) |
+| `ac_infinity.exhaust.speed_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `number.e2e_{slug}_exhaust_speed` | `number` | exactly one (1) | controllable | planned in [#20](https://github.com/Venosta-web/growspace_manager_workspace/issues/20) |
+| `ac_infinity.humidifier.mode_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `select.e2e_{slug}_humidifier_active_mode` | `select` | exactly one (1) | controllable | planned in [#20](https://github.com/Venosta-web/growspace_manager_workspace/issues/20) |
+| `ac_infinity.humidifier.speed_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `number.e2e_{slug}_humidifier_speed` | `number` | exactly one (1) | controllable | planned in [#20](https://github.com/Venosta-web/growspace_manager_workspace/issues/20) |
+| `ac_infinity.dehumidifier.mode_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `select.e2e_{slug}_dehumidifier_active_mode` | `select` | exactly one (1) | controllable | planned in [#20](https://github.com/Venosta-web/growspace_manager_workspace/issues/20) |
+| `ac_infinity.dehumidifier.speed_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `number.e2e_{slug}_dehumidifier_speed` | `number` | exactly one (1) | controllable | planned in [#20](https://github.com/Venosta-web/growspace_manager_workspace/issues/20) |
+| `ac_infinity.growlight.mode_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `select.e2e_{slug}_growlight_active_mode` | `select` | exactly one (1) | controllable | planned in [#20](https://github.com/Venosta-web/growspace_manager_workspace/issues/20) |
+| `ac_infinity.growlight.on_time_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `time.e2e_{slug}_growlight_on_time` | `time` | exactly one (1) | controllable | planned in [#20](https://github.com/Venosta-web/growspace_manager_workspace/issues/20) |
+| `ac_infinity.growlight.off_time_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `time.e2e_{slug}_growlight_off_time` | `time` | exactly one (1) | controllable | planned in [#20](https://github.com/Venosta-web/growspace_manager_workspace/issues/20) |
+| `ac_infinity.growlight.power_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `number.e2e_{slug}_growlight_on_power` | `number` | exactly one (1) | controllable | planned in [#20](https://github.com/Venosta-web/growspace_manager_workspace/issues/20) |
+| `ac_infinity.growlight.sunrise_switch_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `switch.e2e_{slug}_growlight_sunrise_enabled` | `switch` | exactly one (1) | controllable | planned in [#20](https://github.com/Venosta-web/growspace_manager_workspace/issues/20) |
+| `ac_infinity.growlight.sunrise_duration_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `number.e2e_{slug}_growlight_sunrise_duration` | `number` | exactly one (1) | controllable | planned in [#20](https://github.com/Venosta-web/growspace_manager_workspace/issues/20) |
+| `source_air.temperature` | source_air | `source_air` (source_air) | `input_number.e2e_{slug}_temperature` | `input_number` | exactly one (1) | controllable | planned in [#23](https://github.com/Venosta-web/growspace_manager_workspace/issues/23) |
+| `source_air.humidity` | source_air | `source_air` (source_air) | `input_number.e2e_{slug}_humidity` | `input_number` | exactly one (1) | controllable | planned in [#23](https://github.com/Venosta-web/growspace_manager_workspace/issues/23) |
+| `source_air.weather` | source_air | `source_air` (source_air) | `weather.e2e_outdoor_conditions` | `weather` | exactly one (1) | read-only | planned in [#23](https://github.com/Venosta-web/growspace_manager_workspace/issues/23) |
+| `vision.camera` | vision | `vision` (vision) | `camera.e2e_{slug}_{ordinal}` | `camera` | one or more (2) | read-only | planned in [#22](https://github.com/Venosta-web/growspace_manager_workspace/issues/22) |
+
+<!-- END GENERATED E2E ENTITY COVERAGE -->
 
 Waveforms are a pure function of `now()` — a sine between a per-signal low/high
 over a per-signal period, with a 10-minute phase offset per growspace so the

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate every adapter derived from the E2E entity coverage contract."""
+"""Fail when an E2E coverage declaration or generated adapter drifts."""
 
 from pathlib import Path
 import sys
@@ -11,4 +11,4 @@ from e2e.entity_coverage import main  # noqa: E402
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(["generate", *sys.argv[1:]]))
+    raise SystemExit(main(["check", *sys.argv[1:]]))
