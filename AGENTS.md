@@ -125,7 +125,12 @@ refers to; it is a side effect of the path, not a separate check.
 worktree as `../../.venv/bin/pytest tests/ -q`.
 
 The card has no such constraint — its hooks are `npm run ...` — but its
-worktree gets a `node_modules` symlink so checks run without a reinstall.
+worktree gets a read-only-intent `node_modules` symlink so checks run without a
+reinstall only while the main and worktree lockfile hashes match. The setup
+also verifies the shared install with an offline `npm ci --dry-run`; on drift it
+removes the link and requires a private `npm ci`. Writable Vite/test caches are
+checkout-local under `.cache/`. Never run dependency-mutating npm commands
+through the shared link.
 
 `no-commit-to-branch` additionally blocks `main` and `dev` outright.
 

@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# Safely prepare dependencies for a card worktree.
+#
+# A real node_modules directory is private and is only validated. An absent
+# directory is linked to the main checkout only when both lockfiles are
+# byte-identical and npm confirms that the shared install needs no changes.
+set -euo pipefail
+
+SOURCE_CHECKOUT="${1:?usage: card-node-modules <source-checkout> <worktree>}"
+WORKTREE="${2:?usage: card-node-modules <source-checkout> <worktree>}"
+SOURCE_LOCK="$SOURCE_CHECKOUT/package-lock.json"
+WORKTREE_LOCK="$WORKTREE/package-lock.json"
+SOURCE_MODULES="$SOURCE_CHECKOUT/node_modules"
+WORKTREE_MODULES="$WORKTREE/node_modules"
+
+die() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+lock_hash() {
+  sha256sum "$1" | cut -d' ' -f1
+}
+
+verify_install() {
+  local checkout="$1" plan counts
+
+  if ! plan="$(
+    cd "$checkout"
+    npm ci --dry-run --ignore-scripts --no-audit --no-fund --offline --json
+  )"; then
+    echo "ERROR: npm could not validate dependencies in $checkout" >&2
+    return 1
+  fi
+
+  if ! counts="$(
+    printf '%s\n' "$plan" \
+      | sed -n '/^{/,$p' \
+      | node -e '
+          let input = "";
+          process.stdin.on("data", chunk => { input += chunk; });
+          process.stdin.on("end", () => {
+            const plan = JSON.parse(input);
+            process.stdout.write(`${plan.added}\t${plan.changed}\t${plan.removed}`);
+          });
+        '
+  )"; then
+    echo "ERROR: npm returned an unreadable dependency plan for $checkout" >&2
+    return 1
+  fi
+
+  if [ "$counts" != $'0\t0\t0' ]; then
+    echo "ERROR: node_modules in $checkout does not match its lockfile (added/changed/removed: $counts); run npm ci there" >&2
+    return 1
+  fi
+}
+
+[ -f "$SOURCE_LOCK" ] || die "missing source lockfile: $SOURCE_LOCK"
+[ -f "$WORKTREE_LOCK" ] || die "missing worktree lockfile: $WORKTREE_LOCK"
+
+if [ -e "$WORKTREE_MODULES" ] && [ ! -L "$WORKTREE_MODULES" ]; then
+  [ -d "$WORKTREE_MODULES" ] || die "node_modules is not a directory in $WORKTREE"
+  # The retired farm also looked like a real directory, but almost every
+  # top-level entry was a write-through symlink. Refuse it instead of blessing
+  # it as a private install.
+  if find "$WORKTREE_MODULES" -mindepth 1 -maxdepth 1 -type l -print -quit | grep -q .; then
+    die "legacy node_modules farm detected in $WORKTREE; remove it and rerun setup"
+  fi
+  verify_install "$WORKTREE" || exit 1
+  printf '→ using private card dependencies in %s\n' "$WORKTREE_MODULES"
+  exit 0
+fi
+
+if [ -L "$WORKTREE_MODULES" ]; then
+  linked_target="$(readlink -f "$WORKTREE_MODULES" || true)"
+  source_target="$(readlink -f "$SOURCE_MODULES" || true)"
+  [ "$linked_target" = "$source_target" ] \
+    || die "refusing to replace unexpected node_modules link in $WORKTREE"
+fi
+
+source_hash="$(lock_hash "$SOURCE_LOCK")"
+worktree_hash="$(lock_hash "$WORKTREE_LOCK")"
+if [ "$source_hash" != "$worktree_hash" ]; then
+  [ -L "$WORKTREE_MODULES" ] && unlink "$WORKTREE_MODULES"
+  die "card lockfiles differ (${source_hash:0:12} != ${worktree_hash:0:12}); run npm ci in $WORKTREE for private dependencies"
+fi
+
+[ -d "$SOURCE_MODULES" ] || die "shared card dependencies missing at $SOURCE_MODULES; run npm ci in $SOURCE_CHECKOUT"
+ln -sfn "$SOURCE_MODULES" "$WORKTREE_MODULES"
+
+if ! verify_install "$WORKTREE"; then
+  unlink "$WORKTREE_MODULES"
+  exit 1
+fi
+
+printf '→ sharing card dependencies (lock %s)\n' "${worktree_hash:0:12}"

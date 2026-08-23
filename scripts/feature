@@ -58,10 +58,7 @@ case "${1:-}" in
 
     if [ "$SCOPE" != "--backend-only" ]; then
       add_wt "$CARD" "$ROOT/$NAME/card" "$BRANCH"
-      # Card worktree has no node_modules; share the main checkout's so lint,
-      # typecheck and the browser tests run without a reinstall.
-      [ -e "$ROOT/$NAME/card/node_modules" ] \
-        || ln -s "$CARD/node_modules" "$ROOT/$NAME/card/node_modules"
+      "$WS/scripts/card-node-modules" "$CARD" "$ROOT/$NAME/card"
     fi
 
     echo
@@ -84,7 +81,8 @@ case "${1:-}" in
 
   rm)
     NAME="${2:?feature name required}"
-    rm -f "$ROOT/$NAME/card/node_modules" "$ROOT/$NAME/backend"
+    [ -L "$ROOT/$NAME/card/node_modules" ] && unlink "$ROOT/$NAME/card/node_modules"
+    rm -f "$ROOT/$NAME/backend"
     git -C "$BACKEND" worktree remove --force "$BACKEND/.worktrees/$NAME" 2>/dev/null || true
     git -C "$CARD"    worktree remove --force "$ROOT/$NAME/card"          2>/dev/null || true
     rmdir "$ROOT/$NAME" 2>/dev/null || true
