@@ -83,6 +83,35 @@ So: edit Python → `./scripts/ha dev reload`. Edit TypeScript → `npm run watc
 in the card repo → hard-refresh the browser. **Neither needs HACS.** HACS is the
 release test at :8124, not the dev loop.
 
+### The browser is the other stale layer
+
+A hard refresh is not enough on its own. HA serves `/local/` with
+`Cache-Control: public, max-age=2678400`, and its **service worker** answers from
+its own Cache Storage — which `Ctrl+Shift+R` does *not* bypass. The card's entry
+URL never changes shape, so a rebuild can land on disk, be served correctly by
+HA, and still be invisible in the browser. Restarting cannot help; the staleness
+is not in the bind mount. HACS installs escape this only because HACS appends
+`?hacstag=<version>`.
+
+`./scripts/ha dev up|restart` therefore stamps the registered resources in
+`ha-dev/.storage/lovelace_resources` with a short content hash of the file each
+one resolves to — `…/growspace-manager-card.js?v=b57c822473a4` — writing that
+plain host file while the container is stopped, so HA loads the new value and
+cannot flush its own copy back over it. A changed URL misses both cache layers at
+once; an unchanged bundle keeps its hash and stays cached.
+
+`scripts/stamp-card-resource.cjs` is the one implementation. It resolves every
+`/local/` resource through the container's own bind mounts (so
+`GROWSPACE_CARD_DIST` is honoured and nothing is assumed about paths), stamps the
+entry only because the ~16 lazy chunks already carry their hash in the filename,
+and never fails a start — an absent `dist/`, an unregistered resource or a
+missing `docker` is a printed no-op. `ha test` (:8124) is untouched.
+
+> **`npm run watch` does not re-stamp.** Rollup rewrites `dist/` without going
+> through `scripts/ha`, so the URL keeps the previous build's hash. When a
+> refresh shows stale code during a watch session, `./scripts/ha dev restart` —
+> that is the only thing that re-reads the resource list.
+
 ## Validation
 
 ```bash
