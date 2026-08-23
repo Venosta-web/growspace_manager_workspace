@@ -114,6 +114,10 @@ class Simulation:
     low: int | float
     high: int | float
     period_seconds: int
+    control_minimum: int | float | None = None
+    control_maximum: int | float | None = None
+    control_step: int | float | None = None
+    control_initial: int | float | None = None
 
 
 @dataclass(frozen=True)
@@ -184,13 +188,11 @@ PROFILES: tuple[CapabilityProfile, ...] = (
                 "irrigation_monitored", "E2E Irrigation Monitored", "veg_start"
             ),
         ),
-        17,
     ),
     CapabilityProfile(
         "irrigation_tanks",
         "Tank-derived water tracking with multiple tanks",
         (ProfileInstance("irrigation_tanks", "E2E Irrigation Tanks", "veg_start"),),
-        17,
     ),
     CapabilityProfile(
         "lighting",
@@ -234,9 +236,9 @@ def _setup(
 
 
 def _covered_telemetry_assignments(
-    suffix: str, field_name: str, shape: str
+    suffix: str, field_name: str, shape: str, *, include_vwc: bool = True
 ) -> tuple[Assignment, ...]:
-    return (
+    assignments = (
         Assignment(
             "stage",
             f"sensor.e2e_{{slug}}_{suffix}",
@@ -246,16 +248,20 @@ def _covered_telemetry_assignments(
             generator="waveform",
             setup=_setup(field_name, shape),
         ),
-        Assignment(
-            "vwc",
-            f"input_number.e2e_{{slug}}_{suffix}",
-            "input_number",
-            Behavior.CONTROLLABLE,
-            Status.COVERED,
-            generator="input_number",
-            setup=_setup(field_name, shape),
-        ),
     )
+    if include_vwc:
+        assignments += (
+            Assignment(
+                "vwc",
+                f"input_number.e2e_{{slug}}_{suffix}",
+                "input_number",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="input_number",
+                setup=_setup(field_name, shape),
+            ),
+        )
+    return assignments
 
 
 def _telemetry_role(
@@ -275,9 +281,16 @@ def _telemetry_role(
     category: str = "environment",
     extra_assignments: tuple[Assignment, ...] = (),
     cardinality: Cardinality | None = None,
+    control_minimum: int | float | None = None,
+    control_maximum: int | float | None = None,
+    control_step: int | float | None = None,
+    control_initial: int | float | None = None,
+    include_vwc: bool = True,
 ) -> CoverageRole:
     assignments = (
-        _covered_telemetry_assignments(suffix, field_name, shape)
+        _covered_telemetry_assignments(
+            suffix, field_name, shape, include_vwc=include_vwc
+        )
         + (
             Assignment(
                 "telemetry_multi",
@@ -312,6 +325,10 @@ def _telemetry_role(
             low,
             high,
             period_seconds,
+            control_minimum,
+            control_maximum,
+            control_step,
+            control_initial,
         ),
     )
 
@@ -517,14 +534,21 @@ ROLES: tuple[CoverageRole, ...] = (
         period_seconds=1800,
         category="irrigation",
         extra_assignments=(
-            _planned(
+            Assignment(
                 "irrigation_monitored",
                 "input_number.e2e_{slug}_drain_volume",
                 "input_number",
-                17,
-                _setup("drain_volume_sensors", "list"),
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="input_number",
+                setup=_setup("drain_volume_sensors", "list"),
             ),
         ),
+        control_minimum=0,
+        control_maximum=100,
+        control_step=0.1,
+        control_initial=0,
+        include_vwc=False,
     ),
     _telemetry_role(
         role_id="irrigation.flow",
@@ -539,14 +563,21 @@ ROLES: tuple[CoverageRole, ...] = (
         period_seconds=900,
         category="irrigation",
         extra_assignments=(
-            _planned(
+            Assignment(
                 "irrigation_monitored",
                 "input_number.e2e_{slug}_irrigation_flow",
                 "input_number",
-                17,
-                _setup("irrigation_flow_sensors", "list"),
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="input_number",
+                setup=_setup("irrigation_flow_sensors", "list"),
             ),
         ),
+        control_minimum=0,
+        control_maximum=10,
+        control_step=0.01,
+        control_initial=0,
+        include_vwc=False,
     ),
     _telemetry_role(
         role_id="irrigation.tank_level",
@@ -554,23 +585,29 @@ ROLES: tuple[CoverageRole, ...] = (
         description="Irrigation tank level",
         field_name="irrigation_tanks",
         shape="tank_list",
-        unit="L",
+        unit="%",
         device_class=None,
-        low=8.0,
-        high=50.0,
+        low=10.0,
+        high=100.0,
         period_seconds=10800,
         category="irrigation",
         cardinality=ONE_OR_MORE,
         extra_assignments=(
-            _planned(
+            Assignment(
                 "irrigation_tanks",
                 "input_number.e2e_{slug}_irrigation_tank{ordinal_suffix}",
                 "input_number",
-                17,
-                _setup("irrigation_tanks", "tank_list"),
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
                 count=2,
+                generator="input_number",
+                setup=_setup("irrigation_tanks", "tank_list", volume_liters=50),
             ),
         ),
+        control_minimum=0,
+        control_maximum=100,
+        control_step=1,
+        control_initial=80,
     ),
     CoverageRole(
         "environment.light",
@@ -633,19 +670,27 @@ ROLES: tuple[CoverageRole, ...] = (
                     "set_irrigation_settings", "irrigation_pump_entity"
                 ),
             ),
-            _planned(
+            Assignment(
                 "irrigation_monitored",
                 "switch.sim_e2e_{slug}_irrigation_pump",
                 "switch",
-                17,
-                SetupReference("set_irrigation_settings", "irrigation_pump_entity"),
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="template_switch",
+                setup=SetupReference(
+                    "set_irrigation_settings", "irrigation_pump_entity"
+                ),
             ),
-            _planned(
+            Assignment(
                 "irrigation_tanks",
                 "switch.sim_e2e_{slug}_irrigation_pump",
                 "switch",
-                17,
-                SetupReference("set_irrigation_settings", "irrigation_pump_entity"),
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="template_switch",
+                setup=SetupReference(
+                    "set_irrigation_settings", "irrigation_pump_entity"
+                ),
             ),
         ),
     ),
@@ -673,12 +718,14 @@ ROLES: tuple[CoverageRole, ...] = (
                 generator="template_switch",
                 setup=SetupReference("set_irrigation_settings", "drain_pump_entity"),
             ),
-            _planned(
+            Assignment(
                 "irrigation_monitored",
                 "switch.sim_e2e_{slug}_drain_pump",
                 "switch",
-                17,
-                SetupReference("set_irrigation_settings", "drain_pump_entity"),
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="template_switch",
+                setup=SetupReference("set_irrigation_settings", "drain_pump_entity"),
             ),
         ),
     ),
@@ -704,6 +751,22 @@ ROLES: tuple[CoverageRole, ...] = (
                 Status.COVERED,
                 generator="input_boolean",
             ),
+            Assignment(
+                "irrigation_monitored",
+                "input_boolean.sim_e2e_{slug}_irrigation_pump",
+                "input_boolean",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="input_boolean",
+            ),
+            Assignment(
+                "irrigation_tanks",
+                "input_boolean.sim_e2e_{slug}_irrigation_pump",
+                "input_boolean",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="input_boolean",
+            ),
         ),
     ),
     CoverageRole(
@@ -722,6 +785,14 @@ ROLES: tuple[CoverageRole, ...] = (
             ),
             Assignment(
                 "vwc",
+                "input_boolean.sim_e2e_{slug}_drain_pump",
+                "input_boolean",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="input_boolean",
+            ),
+            Assignment(
+                "irrigation_monitored",
                 "input_boolean.sim_e2e_{slug}_drain_pump",
                 "input_boolean",
                 Behavior.CONTROLLABLE,
@@ -1152,6 +1223,7 @@ def _assign_setup_value(target: dict[str, Any], record: EntityRecord) -> None:
     elif setup.shape == "tank_list":
         service.setdefault(setup.field, []).append(
             {
+                "name": f"Tank {record.ordinal}",
                 "sensor_entity": record.entity_id,
                 "volume_liters": setup.volume_liters or 50,
             }
@@ -1337,31 +1409,18 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
                     f"          {_sine_state(sim.low, sim.high, sim.period_seconds, phase)}"
                 )
 
-    switches_by_slug = {
-        slug: [
-            record
-            for record in records_for_slug
-            if record.generator == "template_switch"
-        ]
-        for slug, records_for_slug in by_slug.items()
+    instance_order = {
+        instance.slug: index
+        for index, instance in enumerate(
+            instance for profile in PROFILES for instance in profile.instances
+        )
     }
     switches = [
-        record
-        for profile_id in ("stage", "vwc")
-        for instance in next(
-            profile for profile in PROFILES if profile.id == profile_id
-        ).instances
-        for record in switches_by_slug[instance.slug]
+        record for record in active if record.generator == "template_switch"
     ]
     switches.sort(
         key=lambda record: (
-            [
-                instance.slug
-                for profile_id in ("stage", "vwc")
-                for instance in next(
-                    profile for profile in PROFILES if profile.id == profile_id
-                ).instances
-            ].index(record.slug),
+            instance_order[record.slug],
             record.role_id == "irrigation.drain_pump",
         )
     )
@@ -1406,11 +1465,12 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
         ]
 
     lines += ["", "input_number:"]
-    vwc = next(profile for profile in PROFILES if profile.id == "vwc")
-    for instance in vwc.instances:
+    for instance in (
+        instance for profile in PROFILES for instance in profile.instances
+    ):
         telemetry = [
             record
-            for record in by_slug[instance.slug]
+            for record in by_slug.get(instance.slug, [])
             if record.generator == "input_number" and record.role.simulation is not None
         ]
         telemetry.sort(
@@ -1422,10 +1482,22 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
             if sim.state_class == "total_increasing":
                 minimum, maximum, step, initial = 0, 100000, 0.001, 5.0
             else:
-                minimum = min(0, sim.low)
-                maximum = sim.high * 2
-                step = 0.01
-                initial = round((sim.low + sim.high) / 2, 2)
+                minimum = (
+                    sim.control_minimum
+                    if sim.control_minimum is not None
+                    else min(0, sim.low)
+                )
+                maximum = (
+                    sim.control_maximum
+                    if sim.control_maximum is not None
+                    else sim.high * 2
+                )
+                step = sim.control_step if sim.control_step is not None else 0.01
+                initial = (
+                    sim.control_initial
+                    if sim.control_initial is not None
+                    else round((sim.low + sim.high) / 2, 2)
+                )
             lines += [
                 f"  {object_id}:",
                 f"    name: e2e {instance.slug} {sim.suffix}",
