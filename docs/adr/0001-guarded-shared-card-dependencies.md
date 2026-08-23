@@ -126,17 +126,18 @@ worktree's guard then re-validates against on its next setup run.
 
 Named here because they are open, not enforced:
 
-- **The guard runs once, at worktree setup.** Nothing re-checks afterwards.
+- **The full guard runs once, at worktree setup**, and nothing re-runs it.
   Adding a dependency in the main checkout and running `npm ci` there, or a
   worktree branch changing its own lockfile, leaves that worktree testing green
   against a dependency plan matching nobody's lockfile.
   `./scripts/codex-worktree check` is incidentally covered because it re-runs
-  setup before delegating; `scripts/feature` worktrees and a bare `npm test` are
-  not. Tracked by
-  [card#727](https://github.com/Venosta-web/lovelace-growspace-manager-card/issues/727)
-  (a card worktree refuses to test against a mismatched tree) and
-  [hub#11](https://github.com/Venosta-web/growspace_manager_workspace/issues/11)
-  (`./scripts/check card` guards the tree it is about to validate).
+  setup before delegating. `./scripts/check card` now repeats the **cheap half**
+  — the lockfile hash comparison — against whatever checkout it resolves, and
+  refuses rather than re-links (hub#11, landed). The dry-run half still runs only
+  at setup, so an install that stopped realizing an otherwise matching lockfile
+  is caught there and nowhere else. A bare `npm test` remains uncovered; tracked
+  by [card#727](https://github.com/Venosta-web/lovelace-growspace-manager-card/issues/727)
+  (a card worktree refuses to test against a mismatched tree).
 - **The backend `.venv` has no equivalent guard.** The same reasoning applies to
   the single shared venv, which this decision never covered. Tracked by
   [hub#12](https://github.com/Venosta-web/growspace_manager_workspace/issues/12).

@@ -14,6 +14,13 @@ set -uo pipefail
 WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND="${GROWSPACE_BACKEND:-$WS/../growspace_manager}"
 CARD="${GROWSPACE_CARD:-$WS/../lovelace-growspace-manager-card}"
+# Normalize both, so every path this script prints or compares is the one a
+# reader would recognize. The defaults are `$WS/../<repo>`, which never equals
+# the same directory's real path as a string — and the checkout comparison below
+# is a string comparison. A missing tree keeps its raw value for the report.
+abspath() { (cd "$1" 2>/dev/null && pwd) || printf '%s\n' "$1"; }
+BACKEND="$(abspath "$BACKEND")"
+CARD="$(abspath "$CARD")"
 PY="$BACKEND/.venv/bin/python"
 
 TARGET="${1:-all}"
@@ -21,6 +28,12 @@ LEVEL="${2:-fast}"
 RC=0
 
 hdr() { printf '\n\033[1;36m━━ %s\033[0m\n' "$*"; }
+refuse() {
+  printf '\n\033[1;31m✗ %s\033[0m\n' "$1" >&2
+  shift
+  local line
+  for line in "$@"; do printf '  %s\n' "$line" >&2; done
+}
 run() {
   hdr "$1"; shift
   "$@" || { RC=1; printf '\033[1;31m✗ FAILED: %s\033[0m\n' "$*"; }
@@ -59,6 +72,68 @@ check_card() {
   fi
 }
 
+# The dependency tree a card check is about to validate is not necessarily the
+# one this checkout installed. A hub-managed worktree's node_modules is a single
+# symlink into the main checkout's tree, and that sharing is only valid while
+# both checkouts agree on their dependencies — an agreement established once, at
+# worktree setup, and never re-checked afterwards. See
+# docs/adr/0001-guarded-shared-card-dependencies.md.
+#
+# So re-run the cheap half of the setup guard here: the lockfile hash comparison
+# costs milliseconds and catches drift in both directions (the worktree branch
+# changed its lockfile; the main checkout reinstalled a different one). The
+# offline `npm ci --dry-run` is the expensive half and stays at setup, where it
+# has something new to say.
+#
+# This refuses; it never repairs. The hub heals in its setup paths, but deciding
+# that one checkout's dependencies may back another is a property of how the
+# pair was created, and a validation command has no standing to re-establish it.
+guard_card_deps() {
+  local modules="$CARD/node_modules" target lender ours theirs lock
+
+  # A real directory is a private install: it answers only to its own lockfile,
+  # and there is no second checkout for it to disagree with. Test the link first
+  # — `-e` follows a symlink, so a dangling one reads as absent.
+  if [ ! -L "$modules" ]; then
+    [ -d "$modules" ] && return 0
+    refuse "no card dependencies at $modules" \
+           "run: (cd $CARD && npm ci)"
+    return 1
+  fi
+
+  target="$(readlink -f "$modules" 2>/dev/null || true)"
+  if [ -z "$target" ] || [ ! -d "$target" ]; then
+    refuse "dangling card dependency link in $CARD" \
+           "node_modules points at $(readlink "$modules"), which is gone" \
+           "run: (cd $CARD && rm node_modules && npm ci)"
+    return 1
+  fi
+
+  lender="$(dirname "$target")"
+  for lock in "$CARD/package-lock.json" "$lender/package-lock.json"; do
+    [ -f "$lock" ] || {
+      refuse "cannot compare card dependencies: missing $lock" \
+             "$CARD borrows its node_modules from $lender" \
+             "run: (cd $CARD && rm node_modules && npm ci)"
+      return 1
+    }
+  done
+
+  ours="$(sha256sum "$CARD/package-lock.json" | cut -d" " -f1)"
+  theirs="$(sha256sum "$lender/package-lock.json" | cut -d" " -f1)"
+  if [ "$ours" != "$theirs" ]; then
+    refuse "card dependency drift — refusing to validate $CARD" \
+           "its node_modules is shared from $lender" \
+           "lockfiles differ: ${ours:0:12} (this checkout) != ${theirs:0:12} (shared from)" \
+           "the shared tree realizes the other lockfile, so green here would mean nothing" \
+           "run: (cd $CARD && rm node_modules && npm ci)   # private install" \
+           "  or: (cd $lender && npm ci)                   # if the shared tree is the stale one"
+    return 1
+  fi
+
+  printf '   %-9s shared from %s (lock %s)\n' "deps:" "$lender" "${ours:0:12}"
+}
+
 case "$TARGET" in
   backend|card|all) ;;
   *) echo "usage: $0 {backend|card|all} {fast|full}" >&2; exit 2 ;;
@@ -79,9 +154,44 @@ show_tree() {
   fi
 }
 
+# The same trap without the environment variable: an agent working in a
+# `scripts/feature` worktree runs `./scripts/check card`, the fallback resolves
+# to the MAIN checkout, and the run reports green about a tree they never
+# touched. We cannot guess which one they meant — checking main from a worktree
+# is legitimate — so make the mismatch impossible to miss and print the
+# invocation that would validate theirs instead.
+CALLER="$PWD"
+warn_foreign_checkout() {
+  local label="$1" resolved="$2" var="$3" here here_repo resolved_repo
+  [ -z "${!var:-}" ] || return 0
+  here="$(git -C "$CALLER" rev-parse --show-toplevel 2>/dev/null)" || return 0
+  # rev-parse reports a physical path; compare like for like so a symlinked
+  # checkout path does not read as a different tree.
+  [ -n "$here" ] && [ "$here" != "$(readlink -f "$resolved")" ] || return 0
+  here_repo="$(git -C "$here" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 0
+  resolved_repo="$(git -C "$resolved" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 0
+  [ "$here_repo" = "$resolved_repo" ] || return 0
+  printf '   \033[1;33m%-9s you are standing in %s\033[0m\n' "!" "$here"
+  printf '   %-9s a different %s checkout of the same repo — it is NOT being checked\n' "" "$label"
+  printf '   %-9s to check that one:  %s=%s %s %s %s\n' "" "$var" "$here" "$0" "$TARGET" "$LEVEL"
+}
+
 printf '\033[1;36m━━ checking\033[0m %s / %s\n' "$TARGET" "$LEVEL"
-[ "$TARGET" = card ]    || show_tree backend: "$BACKEND" GROWSPACE_BACKEND
-[ "$TARGET" = backend ] || show_tree card:    "$CARD"    GROWSPACE_CARD
+if [ "$TARGET" != card ]; then
+  show_tree backend: "$BACKEND" GROWSPACE_BACKEND
+  warn_foreign_checkout backend "$BACKEND" GROWSPACE_BACKEND
+fi
+if [ "$TARGET" != backend ]; then
+  show_tree card: "$CARD" GROWSPACE_CARD
+  warn_foreign_checkout card "$CARD" GROWSPACE_CARD
+fi
+
+# Before any stage runs — including the backend half of `all`, which would
+# otherwise spend a whole pytest suite on its way to a card refusal.
+if [ "$TARGET" != backend ] && ! guard_card_deps; then
+  printf '\n\033[1;31m✗ %s / %s — refusing to run\033[0m\n' "$TARGET" "$LEVEL"
+  exit 1
+fi
 
 case "$TARGET" in
   backend) check_backend ;;

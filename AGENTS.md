@@ -93,6 +93,23 @@ release test at :8124, not the dev loop.
 
 These are the exact commands to run — do not improvise venv paths or test flags.
 
+`check` prints the two checkouts it resolved before it runs anything, because it
+is not necessarily validating the tree you are sitting in. It takes
+`GROWSPACE_BACKEND` / `GROWSPACE_CARD` when set — `codex-worktree check` sets
+both — and otherwise falls back to the **main** checkouts. Run `./scripts/check
+card` from a `scripts/feature` worktree and, without that variable, it reports
+green about the main checkout; it now says so in the header and prints the
+invocation that would check yours instead.
+
+A card check also refuses, before any stage, if the checkout it resolved has a
+**shared dependency link** whose `package-lock.json` no longer matches the
+checkout it borrows from. That agreement is established at worktree setup and
+nothing else re-checks it, so a drifted worktree would otherwise test green
+against a dependency tree matching nobody's lockfile. The fix it prints is
+`rm node_modules && npm ci` — the check refuses and never re-links, because
+whether one checkout may back another is hub setup's decision, not a validation
+command's.
+
 ## Parallel agents — and why you cannot commit from the main checkout
 
 Never run two agents in the same checkout. Create a matched worktree pair:
