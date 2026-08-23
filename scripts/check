@@ -254,6 +254,9 @@ fi
 # Before any stage runs — including the backend half of `all`, which would
 # otherwise spend a whole pytest suite on its way to a card refusal.
 GUARDED=0
+[ "$TARGET" = backend ] || {
+  "$WS/scripts/check-e2e-coverage" --card-root "$CARD" || GUARDED=1
+}
 [ "$TARGET" != card ] && { guard_backend_venv || GUARDED=1; }
 [ "$TARGET" != backend ] && { guard_card_deps || GUARDED=1; }
 if [ "$GUARDED" -ne 0 ]; then
