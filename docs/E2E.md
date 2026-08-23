@@ -10,7 +10,7 @@ to exist before it can run, and all three are reproducible from scripts.
 loaded via `homeassistant.packages` in `ha-dev/configuration.yaml`.
 
 The executable contract in `e2e/entity_coverage.py` owns the entity inventory,
-the eight current capability-profile instances, their setup payloads, and the
+the ten current capability-profile instances, their setup payloads, and the
 roles reserved for the later simulator tickets. The generated package, the card
 setup manifest, and this coverage table are checked against it by
 `./scripts/check-e2e-coverage`.
@@ -60,30 +60,31 @@ setup manifest, and this coverage table are checked against it by
 | `environment.energy` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_energy` | `input_number` | one or more (1) | controllable | covered |
 | `environment.energy` | environment | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_energy{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
 | `irrigation.drain_volume` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_drain_volume` | `sensor` | one or more (1) | read-only | covered |
-| `irrigation.drain_volume` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_drain_volume` | `input_number` | one or more (1) | controllable | covered |
 | `irrigation.drain_volume` | irrigation | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_drain_volume{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
-| `irrigation.drain_volume` | irrigation | `irrigation_monitored` (irrigation_monitored) | `input_number.e2e_{slug}_drain_volume` | `input_number` | one or more (1) | controllable | planned in [#17](https://github.com/Venosta-web/growspace_manager_workspace/issues/17) |
+| `irrigation.drain_volume` | irrigation | `irrigation_monitored` (irrigation_monitored) | `input_number.e2e_{slug}_drain_volume` | `input_number` | one or more (1) | controllable | covered |
 | `irrigation.flow` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_irrigation_flow` | `sensor` | one or more (1) | read-only | covered |
-| `irrigation.flow` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_irrigation_flow` | `input_number` | one or more (1) | controllable | covered |
 | `irrigation.flow` | irrigation | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_irrigation_flow{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
-| `irrigation.flow` | irrigation | `irrigation_monitored` (irrigation_monitored) | `input_number.e2e_{slug}_irrigation_flow` | `input_number` | one or more (1) | controllable | planned in [#17](https://github.com/Venosta-web/growspace_manager_workspace/issues/17) |
+| `irrigation.flow` | irrigation | `irrigation_monitored` (irrigation_monitored) | `input_number.e2e_{slug}_irrigation_flow` | `input_number` | one or more (1) | controllable | covered |
 | `irrigation.tank_level` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_irrigation_tank` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.tank_level` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_irrigation_tank` | `input_number` | one or more (1) | controllable | covered |
 | `irrigation.tank_level` | irrigation | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_irrigation_tank{ordinal_suffix}` | `input_number` | one or more (1) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
-| `irrigation.tank_level` | irrigation | `irrigation_tanks` (irrigation_tanks) | `input_number.e2e_{slug}_irrigation_tank{ordinal_suffix}` | `input_number` | one or more (2) | controllable | planned in [#17](https://github.com/Venosta-web/growspace_manager_workspace/issues/17) |
+| `irrigation.tank_level` | irrigation | `irrigation_tanks` (irrigation_tanks) | `input_number.e2e_{slug}_irrigation_tank{ordinal_suffix}` | `input_number` | one or more (2) | controllable | covered |
 | `environment.light` | lighting | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_light{ordinal_suffix}` | `sensor` | one or more (2) | read-only | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
 | `simulation.light_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.e2e_{slug}_light_input{ordinal_suffix}` | `input_number` | one or more (2) | controllable | planned in [#18](https://github.com/Venosta-web/growspace_manager_workspace/issues/18) |
 | `irrigation.irrigation_pump` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `switch.sim_e2e_{slug}_irrigation_pump` | `switch` | exactly one (1) | controllable | covered |
 | `irrigation.irrigation_pump` | irrigation | `vwc` (vwc_veg, vwc_flower) | `switch.sim_e2e_{slug}_irrigation_pump` | `switch` | exactly one (1) | controllable | covered |
-| `irrigation.irrigation_pump` | irrigation | `irrigation_monitored` (irrigation_monitored) | `switch.sim_e2e_{slug}_irrigation_pump` | `switch` | exactly one (1) | controllable | planned in [#17](https://github.com/Venosta-web/growspace_manager_workspace/issues/17) |
-| `irrigation.irrigation_pump` | irrigation | `irrigation_tanks` (irrigation_tanks) | `switch.sim_e2e_{slug}_irrigation_pump` | `switch` | exactly one (1) | controllable | planned in [#17](https://github.com/Venosta-web/growspace_manager_workspace/issues/17) |
+| `irrigation.irrigation_pump` | irrigation | `irrigation_monitored` (irrigation_monitored) | `switch.sim_e2e_{slug}_irrigation_pump` | `switch` | exactly one (1) | controllable | covered |
+| `irrigation.irrigation_pump` | irrigation | `irrigation_tanks` (irrigation_tanks) | `switch.sim_e2e_{slug}_irrigation_pump` | `switch` | exactly one (1) | controllable | covered |
 | `irrigation.drain_pump` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `switch.sim_e2e_{slug}_drain_pump` | `switch` | exactly one (1) | controllable | covered |
 | `irrigation.drain_pump` | irrigation | `vwc` (vwc_veg, vwc_flower) | `switch.sim_e2e_{slug}_drain_pump` | `switch` | exactly one (1) | controllable | covered |
-| `irrigation.drain_pump` | irrigation | `irrigation_monitored` (irrigation_monitored) | `switch.sim_e2e_{slug}_drain_pump` | `switch` | exactly one (1) | controllable | planned in [#17](https://github.com/Venosta-web/growspace_manager_workspace/issues/17) |
+| `irrigation.drain_pump` | irrigation | `irrigation_monitored` (irrigation_monitored) | `switch.sim_e2e_{slug}_drain_pump` | `switch` | exactly one (1) | controllable | covered |
 | `simulation.irrigation_pump_state` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_boolean.sim_e2e_{slug}_irrigation_pump` | `input_boolean` | exactly one (1) | controllable | covered |
 | `simulation.irrigation_pump_state` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_irrigation_pump` | `input_boolean` | exactly one (1) | controllable | covered |
+| `simulation.irrigation_pump_state` | internal | `irrigation_monitored` (irrigation_monitored) | `input_boolean.sim_e2e_{slug}_irrigation_pump` | `input_boolean` | exactly one (1) | controllable | covered |
+| `simulation.irrigation_pump_state` | internal | `irrigation_tanks` (irrigation_tanks) | `input_boolean.sim_e2e_{slug}_irrigation_pump` | `input_boolean` | exactly one (1) | controllable | covered |
 | `simulation.drain_pump_state` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_boolean.sim_e2e_{slug}_drain_pump` | `input_boolean` | exactly one (1) | controllable | covered |
 | `simulation.drain_pump_state` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_drain_pump` | `input_boolean` | exactly one (1) | controllable | covered |
+| `simulation.drain_pump_state` | internal | `irrigation_monitored` (irrigation_monitored) | `input_boolean.sim_e2e_{slug}_drain_pump` | `input_boolean` | exactly one (1) | controllable | covered |
 | `lighting.state` | lighting | `lighting` (lighting) | `binary_sensor.e2e_{slug}_light_state` | `binary_sensor` | one or more (1) | read-only | planned in [#19](https://github.com/Venosta-web/growspace_manager_workspace/issues/19) |
 | `lighting.growlight_switch` | lighting | `lighting` (lighting) | `switch.e2e_{slug}_growlight_switch` | `switch` | one or more (1) | controllable | planned in [#19](https://github.com/Venosta-web/growspace_manager_workspace/issues/19) |
 | `lighting.growlight_dimmable` | lighting | `lighting` (lighting) | `light.e2e_{slug}_growlight_dimmable` | `light` | one or more (1) | controllable | planned in [#19](https://github.com/Venosta-web/growspace_manager_workspace/issues/19) |
@@ -141,7 +142,7 @@ irrigation_flow, irrigation_tank.
 
 ## 2. Growspaces
 
-`tests/e2e/fixtures/e2e-setup.ts` creates the 8 growspaces, places an anchor
+`tests/e2e/fixtures/e2e-setup.ts` creates the 10 growspaces, places an anchor
 plant in each, links the sensors above, and writes the resulting IDs back into
 `tests/e2e/.env.test`. It is idempotent.
 
@@ -151,14 +152,19 @@ CJS transpiler. Neither `ts-node` nor `tsx` is installed; compile it instead:
 ```bash
 cd ~/dev/lovelace-growspace-manager-card
 npx --no-install tsc tests/e2e/fixtures/e2e-setup.ts --ignoreConfig \
-  --module commonjs --target es2022 --esModuleInterop --skipLibCheck --outDir /tmp/e2e-build
+  --module commonjs --target es2022 --esModuleInterop --skipLibCheck \
+  --types node --outDir /tmp/e2e-build
 cp /tmp/e2e-build/e2e-setup.js tests/e2e/fixtures/.e2e-setup.run.cjs
 node tests/e2e/fixtures/.e2e-setup.run.cjs
 rm tests/e2e/fixtures/.e2e-setup.run.cjs
+cd ~/dev/growspace_manager_workspace
+./scripts/ha dev restart
 ```
 
 It must be copied back beside the original because it resolves `.env.test`
-relative to `__dirname`.
+relative to `__dirname`. The restart is required after adding or changing tank
+profiles: Home Assistant creates the tank-derived accounting sensors and their
+state-change subscriptions when the integration's sensor platform starts.
 
 ## 3. Dashboards
 
@@ -186,6 +192,7 @@ cd ~/dev/growspace_manager_workspace
 ./scripts/ha dev token                       # once
 ./scripts/gen-e2e-sensors && ./scripts/ha dev restart
 # then the e2e-setup compile-and-run above
+# restart HA once more so profile-dependent sensor entities are registered
 node scripts/gen-e2e-dashboards.cjs
 cd ../lovelace-growspace-manager-card && npm run test:e2e
 ```
@@ -294,20 +301,19 @@ Irrigation skipped — tank 'Tank' is low (29.0% < 30.0%)
 ```
 
 A VWC growspace's tank is an `input_number`, not one of the generated sine
-waves, so it holds whatever was last written to it. Two things put it under the
-cutoff, and neither is drift:
+waves, so it holds whatever was last written to it. The regression had two
+causes:
 
-- `ha-dev/packages/e2e_simulated_sensors.yaml` declares these helpers with
-  `initial: 29.0` — one point under the 30 % `warning_level` the fixtures leave
-  at its default. Every HA restart lands the tank there. That is the exact
-  29.0 % in the log line above.
+- The generated helpers used to start at 29 %, one point below the default
+  30 % warning threshold. They now use realistic 0–100 % limits and start at
+  80 %, so a clean HA restart is immediately safe for Crop Steering.
 - The suite's own tank guard test drains it to 15 % and nothing ever put it
   back, so every pump test that ran after it was skipped too.
 
-Fixed in the spec rather than the fixture, so it holds whatever the instance has
-been through: `beforeEach` now fills the tank and asserts the fill landed, and
-the pump waits re-check the level on every poll, so a low tank fails immediately
-naming the cause instead of after 90 s of nothing.
+The generated default and the spec now reinforce each other: `beforeEach` fills
+the tank and asserts the fill landed, and the pump waits re-check the level on
+every poll, so a low tank fails immediately naming the cause instead of after
+90 s of nothing.
 
 **2 — genuine test timeouts.** `add-plant-dialog` (30 s) and
 `plant-watering-round-trip` (45 s) both get *past* dialog-open and die while
