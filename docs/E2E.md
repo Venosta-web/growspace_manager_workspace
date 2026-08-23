@@ -99,7 +99,7 @@ Verified 2026-08-22 against the generated environment:
 
 | Spec | Result |
 |---|---|
-| `vwc-day-cycle` (pure-API, 12 tests) | **10 passed, 2 flaky** in 21.8 min |
+| `vwc-day-cycle` (pure-API, 12 tests) | **12 passed** in ~19 min, `--retries=0` (2026-08-23, twice) |
 | `vwc-strategy` (dashboard, 3 tests) | card renders correctly; 3 fail on dialog interaction |
 
 Before the generators existed, all of these failed at setup — the sensors,
@@ -238,15 +238,30 @@ whatever the instance happens to be holding, which is what made these read as
 flaky rather than broken. `vwc-day-cycle` now sets the tank in `beforeEach` and
 fails fast with the cause when it is low — see the group above.
 
-**One residual failure, and it is not the tank.** Re-run 2026-08-23 with the
-tank fix in place, `--retries=0`, both VWC tanks drained to 12 % beforehand:
-**11 of 12 passed**, the exception being veg `P2 — maintenance shot`, which
-reported `tank at 80%, cutoff 30%` — the fill had landed and the coordinator
-simply never attempted a shot inside the 90 s window. The same test passes on
-its own (1.7 min, tank starting at 15 %). What differs in the full run is that
-the coordinator's own P1→P2 transition — `Resetting feedback scale factors` —
-lands in the middle of the test, right after the P1 test that precedes it. That
-is a separate cause and still open; do not re-file it as a tank problem.
+**The second cause: the shot window was too short.** With the tank fix alone,
+veg `P2 — maintenance shot` still failed in a full run and still passed on its
+own. Not the tank — the failure said `tank at 80%, cutoff 30%`. A P2 maintenance
+shot is **three ticks** away from "VWC is at target", and 90 s covers two:
+
+```
+10:20:42  reached target VWC 65.0%. Switching to P2      no shot — by design
+10:21:42  VWC (61.0%) dropped below maintenance trigger  shot withheld
+          transitioned from P1 to P2
+10:22:42  same decision                                  shot fires
+```
+
+The middle tick is withheld by the [[Infiltration Gate]] —
+`sensor.e2e_<slug>_crop_steering_score` reports `suppressed_by: "infiltrating"`.
+The spec manufactures that signal itself: it raises VWC ~20 points within
+seconds of the preceding P1 test's shot, which is indistinguishable from the
+substrate still absorbing it. The gate is behaving correctly. It also explains
+the isolation pass — the coordinator skips both the cooldown and the gate when
+there is no previous shot to measure against.
+
+Fixed in Venosta-web/lovelace-growspace-manager-card#714: the window is now four
+ticks (the ceiling implied by `INFILTRATION_BACKSTOP_INTERVALS = 3`) and pump
+failures carry the coordinator's own account of itself — phase, `suppressed_by`,
+infiltration state, last shot.
 
 ### Runtime
 
