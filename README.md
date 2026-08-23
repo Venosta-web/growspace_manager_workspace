@@ -71,7 +71,7 @@ Codex worktree task. Its setup creates an isolated matched pair on the same
 `codex/codex-<id>` branch, using `prerelease` for the backend and `dev` for the
 card. The pair and its mutable caches stay under `worktrees/codex-<id>/`; the
 existing backend venv and card `node_modules` are reused through links rather
-than copied or reinstalled.
+than copied or reinstalled when their lockfiles agree.
 
 The environment actions run the normal checks against the matched pair. From a
 terminal, the equivalent commands are:
@@ -92,23 +92,25 @@ worktree explicitly before running the E2E action.
 
 ### How the paired card worktree gets `node_modules`
 
-By default it is a **single symlink** to the main checkout's `node_modules` —
-the same thing `scripts/feature` does. Lint, typecheck and the Vitest suite all
-run against it unchanged.
+Both `scripts/feature` and `scripts/codex-worktree` use one policy:
 
-`card-e2e` switches to a **farm**: every package file symlinked individually,
-with `.cache`, `.vite` and `.vite-temp` as real local directories. Vite's
-dep-optimiser writes into `node_modules/.vite`, so under a plain symlink two
-trees building at once contend for the main checkout's cache. The farm exists
-for those local cache directories and nothing else.
+- A card worktree with no dependencies shares the main checkout's
+  `node_modules` only when the two `package-lock.json` SHA-256 hashes match.
+- An offline `npm ci --dry-run` must also report zero added, changed, or removed
+  packages. This catches a stale main install even when the lockfiles agree.
+- A lockfile mismatch removes the shared link and fails with instructions to
+  run `npm ci` in the worktree. A real, matching `node_modules` is then kept
+  private on later setup runs.
 
-Override with `GROWSPACE_NODE_MODULES=symlink|farm`.
+The card keeps Vite's optimiser cache and browser-test reports in its local
+`.cache/`, so browser and E2E runs need no package farm. The farm mode was
+removed: its ~24k symlinked files were write-through paths into the main
+checkout and therefore were not a safe isolation mechanism.
 
-> Prefer `symlink`. In the farm, a symlinked *file* is a write-through:
-> anything that rewrites a file in place inside the worktree's `node_modules`
-> — `patch-package`, a postinstall, `npm rebuild` — edits the **main
-> checkout's** dependencies. The farm also costs ~24k symlinks per worktree
-> against the symlink's one.
+Treat the one-link shared tree as read-only. Do not run `npm ci`, `npm install`,
+`npm rebuild`, `patch-package`, or dependency postinstall tooling in a linked
+worktree. Unlink `node_modules` and run `npm ci` locally before changing
+dependencies.
 
 ## First-time setup
 
