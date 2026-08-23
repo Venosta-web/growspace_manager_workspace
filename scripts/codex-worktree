@@ -65,13 +65,25 @@ link_node_modules() {
   "$HUB_WORKTREE/scripts/card-node-modules" "$CARD_REPO" "$CARD_WORKTREE"
 }
 
+# This pair owns the path upstream's hooks resolve — `../../.venv` from
+# $BACKEND_WORKTREE is $BACKEND_CONTAINER/.venv — so it gets a real private
+# venv rather than a link into the main checkout. uv hardlinks from its cache,
+# so that costs ~7.9 MiB and ~0.4 s warm, and it is the only way to contain
+# `uv venv --clear`, which through a link destroys the lender's venv instead.
+# See docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md.
+prepare_backend_venv() {
+  "$HUB_WORKTREE/scripts/backend-venv" "$BACKEND_REPO" "$BACKEND_WORKTREE"
+}
+
 setup_pair() {
   local backend_base card_base
 
   require_repo "$BACKEND_REPO"
   require_repo "$CARD_REPO"
+  # Not because this pair runs it — it builds its own — but because that venv
+  # is where the uv binary and the hub's documented setup live.
   [ -x "$BACKEND_REPO/.venv/bin/python" ] || {
-    echo "ERROR: shared backend venv missing at $BACKEND_REPO/.venv" >&2
+    echo "ERROR: main backend venv missing at $BACKEND_REPO/.venv" >&2
     exit 1
   }
   [ -d "$CARD_REPO/node_modules" ] || {
@@ -83,11 +95,10 @@ setup_pair() {
   card_base="$(resolve_base "$CARD_REPO" "${CODEX_CARD_BASE:-dev}")"
 
   mkdir -p "$BACKEND_CONTAINER" "$PAIR_ROOT/.cache"
-  ln -sfn "$BACKEND_REPO/.venv" "$BACKEND_CONTAINER/.venv"
   add_worktree "$BACKEND_REPO" "$BACKEND_WORKTREE" "$backend_base"
   add_worktree "$CARD_REPO" "$CARD_WORKTREE" "$card_base"
   ln -sfn "$BACKEND_WORKTREE" "$PAIR_ROOT/backend"
-  [ -e "$BACKEND_WORKTREE/.venv" ] || ln -s "$BACKEND_REPO/.venv" "$BACKEND_WORKTREE/.venv"
+  prepare_backend_venv
   link_node_modules
 
   printf 'Matched Codex worktrees ready on %s\n' "$BRANCH"

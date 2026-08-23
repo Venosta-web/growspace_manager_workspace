@@ -1,0 +1,199 @@
+#!/usr/bin/env bash
+# Safely prepare the Python environment for a backend worktree.
+#
+# The counterpart to scripts/card-node-modules, and deliberately NOT the same
+# policy — see docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md.
+# uv installs from a hardlinked content-addressed cache, so a private venv costs
+# ~7.9 MiB and ~0.4 s warm. Sharing therefore buys nothing here, and costs a
+# destructive write-through class npm's link does not have.
+#
+#   backend-venv <main-checkout> <worktree>
+#
+# The environment a backend worktree actually runs is fixed by upstream's
+# pre-commit hooks, declared as `entry: ../../.venv/bin/pytest`. That path is
+# relative to the worktree, so where the worktree sits decides who owns it:
+#
+#   growspace_manager/.worktrees/<name>       -> growspace_manager/.venv
+#                                                the MAIN checkout's venv;
+#                                                structurally shared. Verify it.
+#   <pair>/growspace_manager/.worktrees/backend -> <pair>/growspace_manager/.venv
+#                                                a hub-owned path. Make it a
+#                                                real, private venv.
+#
+# Either way the worktree gets a `.venv` entry pointing at that one environment,
+# so `./scripts/check backend` and the hooks agree about what is being run.
+set -euo pipefail
+
+MAIN="${1:?usage: backend-venv <main-checkout> <worktree>}"
+WORKTREE="${2:?usage: backend-venv <main-checkout> <worktree>}"
+
+MAIN="$(cd "$MAIN" && pwd)"
+WORKTREE="$(cd "$WORKTREE" && pwd)"
+MAIN_VENV="$MAIN/.venv"
+# Where `../../.venv` lands when pre-commit runs a hook from $WORKTREE.
+HOOK_DIR="$(cd "$WORKTREE/../.." && pwd)"
+HOOK_VENV="$HOOK_DIR/.venv"
+REQUIREMENTS="$WORKTREE/requirements.txt"
+
+die() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+# requirements.txt does not declare uv — it arrives as a transitive Home
+# Assistant dependency, so it is present but not guaranteed to be. Borrow
+# whichever binary exists; it only ever acts on the interpreter named by
+# --python, so which one is irrelevant.
+uv_bin() {
+  local candidate
+  for candidate in "$MAIN_VENV/bin/uv" "$HOOK_VENV/bin/uv"; do
+    [ -x "$candidate" ] && { printf '%s\n' "$candidate"; return; }
+  done
+  command -v uv 2>/dev/null && return
+  return 1
+}
+
+# Does this environment realize the requirements this branch declares?
+#
+# `uv pip install --dry-run --offline` is the backend's answer to npm's
+# `npm ci --dry-run --offline`, and a better one: it reports whether the
+# INSTALLED versions satisfy the declared requirements, so loosening a pin
+# passes and changing one fails. That is the question worth asking, and it
+# costs ~0.1 s. There is no lockfile here to compare byte-for-byte, and after
+# this check there would be no point to one.
+verify_env() { # venv, quiet
+  local venv="$1" quiet="${2:-}" py uv constraints plan
+  py="$venv/bin/python"
+
+  [ -x "$py" ] || { [ -n "$quiet" ] || echo "ERROR: no interpreter at $py" >&2; return 1; }
+  [ -f "$REQUIREMENTS" ] || { echo "ERROR: missing $REQUIREMENTS" >&2; return 1; }
+  uv="$(uv_bin)" || { echo "ERROR: no uv binary to validate $venv with" >&2; return 1; }
+
+  # The venv is built in two phases against Home Assistant's own constraints
+  # (see the backend's CLAUDE.md), so verify against them too — otherwise the
+  # check asks a looser question than the install answered. An unimportable
+  # homeassistant is itself drift.
+  constraints="$(
+    "$py" -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")' 2>/dev/null
+  )" || {
+    [ -n "$quiet" ] || echo "ERROR: homeassistant is not importable from $venv" >&2
+    return 1
+  }
+
+  if ! plan="$("$uv" pip install --python "$py" --dry-run --offline \
+      -r "$REQUIREMENTS" -c "$constraints" 2>&1)"; then
+    [ -n "$quiet" ] || printf '%s\n' "$plan" >&2
+    return 1
+  fi
+  # A cache hit lets uv exit 0 while still planning an install, so the exit code
+  # alone is not the answer — the phrase is.
+  case "$plan" in
+    *"Would make no changes"*) return 0 ;;
+    *) [ -n "$quiet" ] || printf '%s\n' "$plan" >&2; return 1 ;;
+  esac
+}
+
+python_series() {
+  local series
+  series="$(sed -n 's/^requires-python *= *"[^0-9]*\([0-9]\+\.[0-9]\+\).*/\1/p' "$WORKTREE/pyproject.toml" 2>/dev/null | head -1)"
+  printf '%s\n' "${series:-3.14}"
+}
+
+# uv reports installs on stderr, and a full backend environment is ~180 lines of
+# it. Keep that for the failure case and say nothing on success.
+quietly() {
+  local log rc
+  log="$(mktemp)"
+  "$@" >"$log" 2>&1
+  rc=$?
+  [ "$rc" -eq 0 ] || cat "$log" >&2
+  rm -f "$log"
+  return "$rc"
+}
+
+build_private_venv() { # destination
+  local dest="$1" uv series constraints
+  uv="$(uv_bin)" || die "no uv binary available to build $dest"
+  series="$(python_series)"
+
+  # Never --clear an existing path: through a symlink that clears the LENDER's
+  # venv, not this one. Remove our own entry first, then create.
+  [ -L "$dest" ] && unlink "$dest"
+  [ -e "$dest" ] && rm -rf "$dest"
+
+  printf '→ building private backend venv (python %s) in %s\n' "$series" "$dest"
+  quietly "$uv" venv --python "$series" "$dest" \
+    || die "could not create a venv at $dest"
+
+  # Two-phase, exactly as the backend's CLAUDE.md documents: homeassistant
+  # first, then everything else under the constraints it ships. One
+  # unconstrained pass is what let hassil float past the pinned HA release.
+  quietly "$uv" pip install --python "$dest/bin/python" \
+    "$(grep '^homeassistant==' "$REQUIREMENTS")" \
+    || die "could not install homeassistant into $dest"
+  constraints="$(
+    "$dest/bin/python" -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")'
+  )"
+  quietly "$uv" pip install --python "$dest/bin/python" -r "$REQUIREMENTS" -c "$constraints" \
+    || die "could not install $REQUIREMENTS into $dest"
+}
+
+# Point the worktree's own `.venv` at the environment its hooks will use, so
+# `./scripts/check backend` cannot validate a different one.
+link_worktree_venv() { # target
+  local target="$1"
+  [ "$WORKTREE" = "$HOOK_DIR" ] && return 0
+  if [ -e "$WORKTREE/.venv" ] && [ ! -L "$WORKTREE/.venv" ]; then
+    die "$WORKTREE/.venv is a real directory; the hooks will use $target instead — remove it"
+  fi
+  ln -sfn "$target" "$WORKTREE/.venv"
+}
+
+[ -f "$REQUIREMENTS" ] || die "missing worktree requirements: $REQUIREMENTS"
+
+if [ "$HOOK_DIR" = "$MAIN" ]; then
+  # scripts/feature layout. `../../.venv` IS the main checkout's venv; there is
+  # no link to redirect and a private venv here would be a decoy nothing reads.
+  # So verify, and refuse rather than repair — rebuilding the shared venv from
+  # one branch's pins is a decision about every other worktree too.
+  [ -x "$MAIN_VENV/bin/python" ] || die "shared backend venv missing at $MAIN_VENV; see the backend's CLAUDE.md"
+  if ! verify_env "$MAIN_VENV"; then
+    cat >&2 <<MSG
+ERROR: the shared backend venv does not realize $REQUIREMENTS
+
+  $WORKTREE runs against $MAIN_VENV — upstream's hooks are
+  entry: ../../.venv/bin/pytest, which from this layout is the main checkout's
+  venv. A private venv in the worktree would not be read.
+
+  Either refresh the shared venv from this branch's pins (it then has to satisfy
+  every other worktree too, which their own guard re-checks):
+
+    cd $MAIN && uv pip install --python .venv/bin/python -r requirements.txt -c "\$(
+      .venv/bin/python -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")'
+    )"
+
+  or take the dependency change on a Codex-managed pair, which owns its venv.
+MSG
+    exit 1
+  fi
+  link_worktree_venv "$MAIN_VENV"
+  printf '→ sharing the main backend venv at %s (verified against this branch)\n' "$MAIN_VENV"
+  exit 0
+fi
+
+# Hub-owned layout. The hub owns $HOOK_VENV, so it can hold a real private venv
+# — which is both nearly free and the only way to contain `uv venv --clear`,
+# measured to destroy the lender's venv when run through a symlink.
+if [ -L "$HOOK_VENV" ]; then
+  printf '→ replacing the shared venv link in %s with a private venv\n' "$HOOK_DIR"
+  build_private_venv "$HOOK_VENV"
+elif [ ! -x "$HOOK_VENV/bin/python" ]; then
+  build_private_venv "$HOOK_VENV"
+elif ! verify_env "$HOOK_VENV" quiet; then
+  printf '→ private backend venv in %s no longer realizes requirements.txt; rebuilding\n' "$HOOK_DIR"
+  build_private_venv "$HOOK_VENV"
+fi
+
+verify_env "$HOOK_VENV" || die "the private venv at $HOOK_VENV still does not realize $REQUIREMENTS"
+link_worktree_venv "$HOOK_VENV"
+printf '→ private backend venv at %s\n' "$HOOK_VENV"

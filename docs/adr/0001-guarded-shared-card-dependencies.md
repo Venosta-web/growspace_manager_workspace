@@ -138,9 +138,17 @@ Named here because they are open, not enforced:
   is caught there and nowhere else. A bare `npm test` remains uncovered; tracked
   by [card#727](https://github.com/Venosta-web/lovelace-growspace-manager-card/issues/727)
   (a card worktree refuses to test against a mismatched tree).
-- **The backend `.venv` has no equivalent guard.** The same reasoning applies to
-  the single shared venv, which this decision never covered. Tracked by
-  [hub#12](https://github.com/Venosta-web/growspace_manager_workspace/issues/12).
+- ~~**The backend `.venv` has no equivalent guard.**~~ Closed by
+  [ADR 0002](0002-private-backend-venvs-for-hub-managed-worktrees.md)
+  ([hub#12](https://github.com/Venosta-web/growspace_manager_workspace/issues/12)),
+  which reached the opposite conclusion on measurement: uv installs by
+  hardlinking from a content-addressed cache, so a private backend venv costs
+  ~7.9 MiB and ~0.4 s rather than the card's 465 MB, and a symlinked venv adds a
+  destructive write-through class this one does not have — `uv venv --clear`
+  through a link wipes the lender's environment where `npm ci` merely deletes
+  the link. Hub-managed backend worktrees therefore get a private venv wherever
+  the hub owns upstream's `../../.venv` hook path, and a verified shared one
+  where it does not.
 - **Write-through has no ticket** and will not get one; see the section above.
 
 ## Considered options
