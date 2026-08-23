@@ -181,16 +181,21 @@ a 404 and times out waiting for the card: `smoke` (4), `setup-dialogs` (4),
 `plant-actions` (3), `insights-dialogs` (3). Either point that variable at
 `e2e-veg`, or migrate those specs to a stage-specific path.
 
-**2 — the simulated tank drains below the irrigation threshold.**
-`vwc-day-cycle` veg P1/P2 wait 90 s for a pump that never fires, because the
-coordinator refuses to run:
+**2 — the tank sits under the irrigation cutoff.** `vwc-day-cycle` veg P1/P2
+waited 90 s for a pump that never fired, because the coordinator was refusing to
+run it:
 
 ```
 Irrigation skipped — tank 'Tank' is low (29.0% < 30.0%)
 ```
 
-This is state drift across a long-lived dev instance, not the simulation feeding
-bad values. Reset the tank level before the VWC specs.
+A VWC growspace's tank is an `input_number`, not one of the generated sine
+waves, so it holds whatever was last written to it — across specs, runs and
+restarts. The suite's own tank guard test drains it to 15 % and nothing put it
+back, so every pump test that ran afterwards was skipped. Fixed: the spec's
+`beforeEach` now fills the tank and asserts the fill landed, and the pump waits
+re-check the level on every poll, so a low tank fails immediately naming the
+cause instead of after 90 s of nothing.
 
 **2 — genuine test timeouts.** `add-plant-dialog` (30 s) and
 `plant-watering-round-trip` (45 s) both get *past* dialog-open and die while
@@ -199,21 +204,27 @@ filling a field or clicking a button, so they are slow rather than blocked.
 `vwc-day-cycle` is pure-API — it never navigates a browser — so none of its
 results are affected by the service-worker change.
 
-### The two flaky tests
+### The two "flaky" tests
 
-`P2 — maintenance shot fires after target reached` (veg and flower) fails on the
-first attempt and passes on retry:
+`P2 — maintenance shot fires after target reached` (veg and flower) failed on
+the first attempt and passed on retry:
 
 ```
 Entity switch.sim_e2e_vwc_flower_irrigation_pump expected "on" but got "off" after 90000ms
 ```
 
-This is **not** caused by the simulation. VWC growspaces use `input_number`
-helpers for every signal, which the spec sets directly — none of their values
-come from the generated sine waves. The test waits up to 90 s for the
-coordinator to schedule a maintenance shot, and that window appears to be
-marginal relative to the coordinator's polling interval. Worth raising the
-timeout or triggering a coordinator refresh explicitly rather than waiting.
+This was first written up as a marginal timeout — the 90 s window being tight
+against the coordinator's polling interval — with "raise the timeout" as the
+fix. That diagnosis was wrong. The pump is not late; the coordinator is
+declining to run it, for the low-tank reason above. No timeout is long enough
+for a shot that is being skipped. It is not the simulation either: VWC
+growspaces read `input_number` helpers the spec sets directly, so none of their
+values come from the generated sine waves.
+
+A test that depends on tank state it never establishes passes or fails on
+whatever the instance happens to be holding, which is what made these read as
+flaky rather than broken. `vwc-day-cycle` now sets the tank in `beforeEach` and
+fails fast with the cause when it is low — see the group above.
 
 ### Runtime
 
