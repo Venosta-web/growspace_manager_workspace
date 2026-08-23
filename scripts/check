@@ -134,6 +134,71 @@ guard_card_deps() {
   printf '   %-9s shared from %s (lock %s)\n' "deps:" "$lender" "${ours:0:12}"
 }
 
+# The Python environment a backend check is about to run is not necessarily the
+# one this branch declares. Every backend worktree runs `../../.venv` — that is
+# upstream's pre-commit hook path — and whether that venv still realizes the
+# worktree's own requirements.txt is an agreement made once, at worktree setup.
+# See docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md.
+#
+# Unlike the card, there is no lockfile to compare byte-for-byte and no reason to
+# want one: `uv pip install --dry-run --offline` answers the better question —
+# do the INSTALLED versions satisfy the declared requirements — in ~0.1 s. So the
+# full guard runs here, not a cheap half of it.
+#
+# This refuses; it never repairs. Rebuilding a venv is a decision about every
+# worktree that shares it, which a validation command has no standing to make.
+guard_backend_venv() {
+  local venv="$BACKEND/.venv" py uv requirements constraints plan candidate
+
+  py="$venv/bin/python"
+  requirements="$BACKEND/requirements.txt"
+
+  if [ ! -x "$py" ]; then
+    refuse "no backend venv at $venv" \
+           "see the backend repo's CLAUDE.md for the two-phase install"
+    return 1
+  fi
+  [ -f "$requirements" ] || { refuse "missing $requirements"; return 1; }
+
+  # uv is not a declared requirement — it arrives transitively via Home
+  # Assistant — so do not assume this venv has one. Any binary will do; it only
+  # acts on the interpreter named by --python.
+  uv=""
+  for candidate in "$venv/bin/uv" "$WS/../growspace_manager/.venv/bin/uv" "$(command -v uv 2>/dev/null || true)"; do
+    [ -n "$candidate" ] && [ -x "$candidate" ] && { uv="$candidate"; break; }
+  done
+  if [ -z "$uv" ]; then
+    printf '   %-9s no uv binary — skipping the environment guard\n' "!"
+    return 0
+  fi
+
+  # Verify against Home Assistant's own constraints, the way the venv was built;
+  # an unimportable homeassistant is itself the drift worth reporting.
+  if ! constraints="$("$py" -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")' 2>/dev/null)"; then
+    refuse "homeassistant is not importable from $venv" \
+           "the venv does not realize $requirements at all" \
+           "rebuild it — see the backend repo's CLAUDE.md"
+    return 1
+  fi
+
+  if plan="$("$uv" pip install --python "$py" --dry-run --offline \
+        -r "$requirements" -c "$constraints" 2>&1)" \
+     && [ "${plan#*Would make no changes}" != "$plan" ]; then
+    printf '   %-9s %s\n' "venv:" "$(readlink -f "$venv")"
+    return 0
+  fi
+
+  refuse "backend environment drift — refusing to validate $BACKEND" \
+         "$venv does not realize $requirements" \
+         "green here would describe a dependency set this branch does not declare" \
+         "if this venv is shared, rebuilding it affects every worktree that runs it" \
+         "rebuild — see the backend repo's CLAUDE.md, or re-run the hub setup that created this worktree"
+  # uv already says exactly which requirement is unmet; relay it verbatim rather
+  # than paraphrasing, but drop the interpreter preamble that is not the news.
+  printf '%s\n' "$plan" | grep -v '^Using Python' | sed 's/^/  │ /' >&2
+  return 1
+}
+
 case "$TARGET" in
   backend|card|all) ;;
   *) echo "usage: $0 {backend|card|all} {fast|full}" >&2; exit 2 ;;
@@ -188,7 +253,10 @@ fi
 
 # Before any stage runs — including the backend half of `all`, which would
 # otherwise spend a whole pytest suite on its way to a card refusal.
-if [ "$TARGET" != backend ] && ! guard_card_deps; then
+GUARDED=0
+[ "$TARGET" != card ] && { guard_backend_venv || GUARDED=1; }
+[ "$TARGET" != backend ] && { guard_card_deps || GUARDED=1; }
+if [ "$GUARDED" -ne 0 ]; then
   printf '\n\033[1;31m✗ %s / %s — refusing to run\033[0m\n' "$TARGET" "$LEVEL"
   exit 1
 fi

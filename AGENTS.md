@@ -101,7 +101,17 @@ card` from a `scripts/feature` worktree and, without that variable, it reports
 green about the main checkout; it now says so in the header and prints the
 invocation that would check yours instead.
 
-A card check also refuses, before any stage, if the checkout it resolved has a
+Both halves refuse before any stage runs if the checkout they resolved would be
+validated against the wrong dependencies.
+
+A backend check refuses if `<checkout>/.venv` does not realize that checkout's
+`requirements.txt` — asked as an offline `uv pip install --dry-run` against
+Home Assistant's own constraints, which costs about 0.1 s and names the
+requirement that is unmet. This catches a worktree whose branch moved its pins,
+a shared venv nobody rebuilt after the pins moved on `prerelease`, and an
+environment that has drifted out from under both.
+
+A card check also refuses if the checkout it resolved has a
 **shared dependency link** whose `package-lock.json` no longer matches the
 checkout it borrows from. That agreement is established at worktree setup and
 nothing else re-checks it, so a drifted worktree would otherwise test green
@@ -140,6 +150,35 @@ refers to; it is a side effect of the path, not a separate check.
 `./scripts/feature` creates it in the right place and symlinks it to
 `worktrees/<name>/backend` for the paired view. Run backend tests from a
 worktree as `../../.venv/bin/pytest tests/ -q`.
+
+That same `../../.venv` decides which Python environment the worktree runs, and
+where the worktree sits decides who owns it — which is why the two setup paths
+behave differently:
+
+| layout | `../../.venv` is | what setup does |
+|---|---|---|
+| `growspace_manager/.worktrees/<name>` (`scripts/feature`) | the main checkout's venv | **verifies** it realizes the branch's `requirements.txt`, and refuses if not |
+| `<pair>/growspace_manager/.worktrees/backend` (`scripts/codex-worktree`) | a hub-owned path | builds a **private venv** there |
+
+`scripts/backend-venv` is the one implementation; both paths call it, and both
+then point the worktree's own `.venv` at whichever environment the hooks will
+use, so `./scripts/check backend` cannot validate a different one.
+
+Backend worktrees do **not** share a venv the way card worktrees share
+`node_modules`, and the reversal is measured rather than stylistic: `uv` installs
+by hardlinking from a content-addressed cache, so a private venv costs ~7.9 MiB
+of unique disk and ~0.4 s warm, against the card's 465 MB. Sharing buys nothing
+and costs a footgun npm does not have — `uv venv --clear` through a symlinked
+`.venv` does not convert the worktree to a private environment the way `npm ci`
+does, it **destroys the lender's**, and so does every other install verb, because
+pip and uv follow the symlink to the real `sys.prefix`. See
+[`docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md`](docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md).
+
+A `scripts/feature` pair therefore cannot carry a backend dependency change:
+its hook path *is* the main checkout's venv, so there is nothing to redirect and
+a private venv in the worktree would be read by nothing. Take pin changes on a
+Codex-managed pair, or rebuild the shared venv deliberately — every other
+worktree's guard re-checks it on the next run.
 
 The card has no such constraint — its hooks are `npm run ...` — but how it gets
 `node_modules` depends on who created the worktree. The vocabulary, used
