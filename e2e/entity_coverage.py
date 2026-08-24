@@ -161,6 +161,59 @@ LIGHTING_SERVICE_DEFAULTS: dict[str, dict[str, Any]] = {
     },
 }
 
+CLIMATE_SERVICE_DEFAULTS: dict[str, dict[str, Any]] = {
+    "configure_environment": {
+        "control_humidifier": True,
+        "humidifier_thresholds": {
+            "flower_early": {
+                "day": {"on": 1.3, "off": 1.1},
+                "night": {"on": 1.3, "off": 1.1},
+            }
+        },
+        "control_dehumidifier": True,
+        "dehumidifier_thresholds": {
+            "flower_early": {
+                "day": {"on": 0.8, "off": 1.0},
+                "night": {"on": 0.8, "off": 1.0},
+            }
+        },
+    },
+    "configure_circulation_fan": {
+        "enabled": True,
+        "regulation_mode": "vpd",
+        "min_speed": 20,
+        "max_speed": 80,
+        "vpd_target": 1.1,
+        "vpd_tolerance": 0.1,
+        "humidity_target": 60,
+        "humidity_tolerance": 5,
+        "temperature_target": 25,
+        "temperature_tolerance": 2,
+        "critical_temp_low": None,
+        "critical_temp_high": None,
+        "critical_temp_hysteresis": 1,
+        "wind_enabled": False,
+        "wind_period_seconds": 60,
+        "wind_amplitude_pct": 10,
+    },
+    "configure_exhaust_fan": {
+        "enabled": True,
+        "min_speed": 20,
+        "max_speed": 80,
+        "temperature_target": 25,
+        "temperature_tolerance": 2,
+        "humidity_target": 60,
+        "humidity_tolerance": 5,
+        "vpd_target": 1.1,
+        "vpd_tolerance": 0.1,
+        "critical_temp_low": None,
+        "critical_temp_high": None,
+        "critical_temp_hysteresis": 1,
+    },
+    "set_humidifier_control": {"enabled": True},
+    "set_dehumidifier_control": {"enabled": True},
+}
+
 VISION_SERVICE_DEFAULTS: dict[str, dict[str, Any]] = {
     "configure_environment": {"snapshot_interval_hours": 6},
     "update_vision_checkup_config": {
@@ -239,7 +292,14 @@ PROFILES: tuple[CapabilityProfile, ...] = (
     CapabilityProfile(
         "climate_plain",
         "Plain Home Assistant climate actuator forms",
-        (ProfileInstance("climate_plain", "E2E Climate Plain", "flower_start"),),
+        (
+            ProfileInstance(
+                "climate_plain",
+                "E2E Climate Plain",
+                "flower_start",
+                service_defaults=CLIMATE_SERVICE_DEFAULTS,
+            ),
+        ),
         21,
     ),
     CapabilityProfile(
@@ -450,6 +510,17 @@ ROLES: tuple[CoverageRole, ...] = (
         high=28.0,
         period_seconds=3600,
         multi_count=2,
+        extra_assignments=(
+            Assignment(
+                "climate_plain",
+                "input_number.e2e_{slug}_temperature",
+                "input_number",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="input_number",
+                setup=_setup("temperature_sensors", "list"),
+            ),
+        ),
     ),
     _telemetry_role(
         role_id="environment.humidity",
@@ -463,6 +534,17 @@ ROLES: tuple[CoverageRole, ...] = (
         high=70.0,
         period_seconds=5400,
         multi_count=2,
+        extra_assignments=(
+            Assignment(
+                "climate_plain",
+                "input_number.e2e_{slug}_humidity",
+                "input_number",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="input_number",
+                setup=_setup("humidity_sensors", "list"),
+            ),
+        ),
     ),
     _telemetry_role(
         role_id="environment.vpd",
@@ -476,6 +558,17 @@ ROLES: tuple[CoverageRole, ...] = (
         high=1.4,
         period_seconds=3600,
         multi_count=2,
+        extra_assignments=(
+            Assignment(
+                "climate_plain",
+                "input_number.e2e_{slug}_vpd",
+                "input_number",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="input_number",
+                setup=_setup("vpd_sensors", "list"),
+            ),
+        ),
     ),
     _telemetry_role(
         role_id="environment.co2",
@@ -1049,60 +1142,70 @@ def _plain_climate_roles() -> tuple[CoverageRole, ...]:
             "fan",
             "circulation_fan_entities",
             "circulation_fan_percentage",
+            "template_fan",
         ),
         (
             "climate.circulation_numeric",
             "input_number",
             "circulation_fan_entities",
             "circulation_fan_speed",
+            "fan_speed_input",
         ),
         (
             "climate.circulation_binary",
             "switch",
             "circulation_fan_entities",
             "circulation_fan_switch",
+            "template_switch",
         ),
         (
             "climate.exhaust_percentage",
             "fan",
             "exhaust_fan_entities",
             "exhaust_fan_percentage",
+            "template_fan",
         ),
         (
             "climate.exhaust_numeric",
             "input_number",
             "exhaust_fan_entities",
             "exhaust_fan_speed",
+            "fan_speed_input",
         ),
         (
             "climate.exhaust_binary",
             "switch",
             "exhaust_fan_entities",
             "exhaust_fan_switch",
+            "template_switch",
         ),
         (
             "climate.humidifier_native",
             "humidifier",
             "humidifier_entities",
             "humidifier_native",
+            "generic_hygrostat",
         ),
         (
             "climate.humidifier_switch",
             "switch",
             "humidifier_entities",
             "humidifier_switch",
+            "template_switch",
         ),
         (
             "climate.dehumidifier_native",
             "humidifier",
             "dehumidifier_entities",
             "dehumidifier_native",
+            "generic_hygrostat",
         ),
         (
             "climate.dehumidifier_switch",
             "switch",
             "dehumidifier_entities",
             "dehumidifier_switch",
+            "template_switch",
         ),
     )
     return tuple(
@@ -1112,16 +1215,75 @@ def _plain_climate_roles() -> tuple[CoverageRole, ...]:
             f"Plain Home Assistant {suffix.replace('_', ' ')} form",
             ONE_OR_MORE,
             (
-                _planned(
+                Assignment(
                     "climate_plain",
                     f"{domain}.e2e_{{slug}}_{suffix}",
                     domain,
-                    21,
-                    _setup(field_name, "list"),
+                    Behavior.CONTROLLABLE,
+                    Status.COVERED,
+                    generator=generator,
+                    setup=_setup(field_name, "list"),
                 ),
             ),
         )
-        for role_id, domain, field_name, suffix in specs
+        for role_id, domain, field_name, suffix, generator in specs
+    )
+
+
+def _plain_climate_support_roles() -> tuple[CoverageRole, ...]:
+    """Declare every helper that gives a climate actuator persistent state."""
+
+    boolean_specs = (
+        ("circulation_percentage_state", "circulation_fan_percentage"),
+        ("circulation_binary_state", "circulation_fan_switch"),
+        ("exhaust_percentage_state", "exhaust_fan_percentage"),
+        ("exhaust_binary_state", "exhaust_fan_switch"),
+        ("humidifier_native_state", "humidifier_native"),
+        ("humidifier_switch_state", "humidifier_switch"),
+        ("dehumidifier_native_state", "dehumidifier_native"),
+        ("dehumidifier_switch_state", "dehumidifier_switch"),
+    )
+    roles = tuple(
+        CoverageRole(
+            f"simulation.{role_suffix}",
+            "internal",
+            f"Persistent state for {entity_suffix.replace('_', ' ')}",
+            EXACTLY_ONE,
+            (
+                Assignment(
+                    "climate_plain",
+                    f"input_boolean.e2e_{{slug}}_{entity_suffix}",
+                    "input_boolean",
+                    Behavior.CONTROLLABLE,
+                    Status.COVERED,
+                    generator="input_boolean",
+                ),
+            ),
+        )
+        for role_suffix, entity_suffix in boolean_specs
+    )
+    percentage_specs = (
+        ("circulation_percentage_value", "circulation_fan_percentage"),
+        ("exhaust_percentage_value", "exhaust_fan_percentage"),
+    )
+    return roles + tuple(
+        CoverageRole(
+            f"simulation.{role_suffix}",
+            "internal",
+            f"Persistent percentage for {entity_suffix.replace('_', ' ')}",
+            EXACTLY_ONE,
+            (
+                Assignment(
+                    "climate_plain",
+                    f"input_number.e2e_{{slug}}_{entity_suffix}_value",
+                    "input_number",
+                    Behavior.CONTROLLABLE,
+                    Status.COVERED,
+                    generator="fan_percentage_input",
+                ),
+            ),
+        )
+        for role_suffix, entity_suffix in percentage_specs
     )
 
 
@@ -1192,6 +1354,7 @@ def _ac_infinity_roles() -> tuple[CoverageRole, ...]:
 
 ROLES += _mirror_support_roles(ROLES)
 ROLES += _plain_climate_roles()
+ROLES += _plain_climate_support_roles()
 ROLES += _ac_infinity_roles()
 ROLES += (
     CoverageRole(
@@ -1880,6 +2043,56 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
             f"            entity_id: {backing}",
         ]
 
+    percentage_fans = [
+        record for record in active if record.generator == "template_fan"
+    ]
+    if percentage_fans:
+        lines += [
+            "  # ---------------------------------------------------------------",
+            "  # percentage fans (state and percentage backed by helpers)",
+            "  # ---------------------------------------------------------------",
+            "  - fan:",
+        ]
+    for record in percentage_fans:
+        unique_id = record.entity_id.split(".", 1)[1]
+        state_backing = f"input_boolean.{unique_id}"
+        percentage_backing = f"input_number.{unique_id}_value"
+        lines += [
+            f"      - name: {unique_id.replace('_', ' ')}",
+            f"        unique_id: {unique_id}",
+            f"        state: \"{{{{ is_state('{state_backing}', 'on') }}}}\"",
+            f"        percentage: \"{{{{ states('{percentage_backing}') | int(0) }}}}\"",
+            "        turn_on:",
+            "          action: input_boolean.turn_on",
+            "          target:",
+            f"            entity_id: {state_backing}",
+            "        turn_off:",
+            "          - action: input_boolean.turn_off",
+            "            target:",
+            f"              entity_id: {state_backing}",
+            "          - action: input_number.set_value",
+            "            target:",
+            f"              entity_id: {percentage_backing}",
+            "            data:",
+            "              value: 0",
+            "        set_percentage:",
+            "          - action: input_number.set_value",
+            "            target:",
+            f"              entity_id: {percentage_backing}",
+            "            data:",
+            '              value: "{{ percentage }}"',
+            "          - choose:",
+            '              - conditions: "{{ percentage | int(0) > 0 }}"',
+            "                sequence:",
+            "                  - action: input_boolean.turn_on",
+            "                    target:",
+            f"                      entity_id: {state_backing}",
+            "            default:",
+            "              - action: input_boolean.turn_off",
+            "                target:",
+            f"                  entity_id: {state_backing}",
+        ]
+
     binary_light_sensors = [
         record for record in active if record.generator == "aggregate_light_sensor"
     ]
@@ -2033,6 +2246,42 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
             "    initial: 128",
             "    mode: slider",
         ]
+    for record in active:
+        if record.generator not in {"fan_speed_input", "fan_percentage_input"}:
+            continue
+        object_id = record.entity_id.split(".", 1)[1]
+        maximum = 10 if record.generator == "fan_speed_input" else 100
+        lines += [
+            f"  {object_id}:",
+            f"    name: {object_id.replace('_', ' ')}",
+            "    min: 0",
+            f"    max: {maximum}",
+            "    step: 1",
+            "    initial: 0",
+            "    mode: slider",
+        ]
+    hygrostats = [
+        record for record in active if record.generator == "generic_hygrostat"
+    ]
+    if hygrostats:
+        lines += ["", "generic_hygrostat:"]
+    for record in hygrostats:
+        object_id = record.entity_id.split(".", 1)[1]
+        device_class = (
+            "dehumidifier" if "dehumidifier" in record.role_id else "humidifier"
+        )
+        target = 60 if device_class == "dehumidifier" else 50
+        lines += [
+            f"  - name: {object_id.replace('_', ' ')}",
+            f"    unique_id: {object_id}",
+            f"    humidifier: input_boolean.{object_id}",
+            f"    target_sensor: input_number.e2e_{record.slug}_humidity",
+            f"    device_class: {device_class}",
+            f"    target_humidity: {target}",
+            "    dry_tolerance: 0.5",
+            "    wet_tolerance: 0.5",
+            "    initial_state: false",
+        ]
     fixture_entities = [
         record.entity_id for record in active if record.generator == LOCAL_FILE_CAMERA
     ]
@@ -2065,7 +2314,7 @@ def extract_generated_entity_ids(package_text: str) -> list[str]:
         if section == "template":
             if stripped == "sensor:":
                 template_domain = "sensor"
-            elif stripped in {"- switch:", "- binary_sensor:", "- light:"}:
+            elif stripped in {"- switch:", "- binary_sensor:", "- light:", "- fan:"}:
                 template_domain = stripped.removeprefix("- ").removesuffix(":")
             elif stripped.startswith("unique_id:") and template_domain:
                 ids.append(f"{template_domain}.{stripped.split(':', 1)[1].strip()}")
@@ -2073,6 +2322,9 @@ def extract_generated_entity_ids(package_text: str) -> list[str]:
             match = re.fullmatch(r"  ([a-z0-9_]+):", line)
             if match:
                 ids.append(f"{section}.{match.group(1)}")
+        elif section == "generic_hygrostat" and stripped.startswith("- name:"):
+            name = stripped.split(":", 1)[1].strip()
+            ids.append(f"humidifier.{_ha_object_id(name)}")
     return ids
 
 
