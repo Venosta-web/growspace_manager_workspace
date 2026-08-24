@@ -29,6 +29,7 @@ const STAGES = [
   ['e2e-vwc-flower', 'TEST_VWC_FLOWER_GROWSPACE_ID', 'E2E VWC Flower'],
   ['e2e-telemetry-multi', 'TEST_TELEMETRY_MULTI_GROWSPACE_ID', 'E2E Multi Telemetry'],
   ['e2e-climate-plain', 'TEST_CLIMATE_PLAIN_GROWSPACE_ID', 'E2E Climate Plain'],
+  ['e2e-ac-infinity', 'TEST_AC_INFINITY_GROWSPACE_ID', 'E2E AC Infinity'],
   ['e2e-vision',     'TEST_VISION_GROWSPACE_ID',     'E2E Vision'],
 ];
 
