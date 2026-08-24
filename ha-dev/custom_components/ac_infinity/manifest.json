@@ -1,0 +1,9 @@
+{
+  "domain": "ac_infinity",
+  "name": "E2E AC Infinity Simulator",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://github.com/Venosta-web/growspace_manager_workspace/issues/20",
+  "iot_class": "local_push",
+  "version": "0.1.0"
+}

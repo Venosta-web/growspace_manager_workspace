@@ -1,0 +1,18 @@
+{
+  "entity": {
+    "number": {
+      "on_power": { "name": "On Power" },
+      "sunrise_timer_minutes": { "name": "Sunrise/Sunset Minutes" }
+    },
+    "select": {
+      "active_mode": { "name": "Active Mode" }
+    },
+    "switch": {
+      "sunrise_timer_enabled": { "name": "Sunrise/Sunset Enabled" }
+    },
+    "time": {
+      "schedule_mode_on_time": { "name": "Scheduled On-Time" },
+      "schedule_mode_off_time": { "name": "Scheduled Off-Time" }
+    }
+  }
+}
