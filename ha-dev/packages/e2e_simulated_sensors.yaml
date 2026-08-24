@@ -824,6 +824,16 @@ template:
         state: >-
           {{ states('input_number.sim_e2e_telemetry_multi_light_2') | float(0) | round(0) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (30000.0 + 30000.0 * sin( ((as_timestamp(now()) + 21600) % 86400) / 86400 * 2 * pi )) | round(0) }}
   # ---------------------------------------------------------------
+  # fixed outdoor conditions (modern template-weather schema)
+  # ---------------------------------------------------------------
+  - weather:
+      - name: e2e outdoor conditions
+        unique_id: e2e_outdoor_conditions
+        condition: "cloudy"
+        temperature: "{{ 12 }}"
+        temperature_unit: "°C"
+        humidity: "{{ 85 }}"
+  # ---------------------------------------------------------------
   # plain switches (toggleable, state backed by input_boolean)
   # ---------------------------------------------------------------
   - switch:
@@ -1744,6 +1754,22 @@ input_number:
     initial: 1.1
     unit_of_measurement: "kPa"
     mode: box
+  e2e_source_air_temperature:
+    name: e2e source_air temperature
+    min: 5
+    max: 45
+    step: 0.5
+    initial: 24
+    unit_of_measurement: "°C"
+    mode: box
+  e2e_source_air_humidity:
+    name: e2e source_air humidity
+    min: 0
+    max: 100
+    step: 1
+    initial: 60
+    unit_of_measurement: "%"
+    mode: box
   e2e_lighting_growlight_dimmable_brightness:
     name: e2e lighting growlight dimmable brightness
     min: 0
@@ -1858,6 +1884,23 @@ ac_infinity:
       translation_key: sunrise_timer_minutes
       device_key: e2e_ac_infinity_growlight
       device_name: E2E AC Infinity Grow Light Port
+
+script:
+  e2e_reset_source_air:
+    alias: E2E Reset Source Air
+    description: Restore the documented neutral lung-room baseline
+    sequence:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.e2e_source_air_temperature
+        data:
+          value: 24
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.e2e_source_air_humidity
+        data:
+          value: 60
+    mode: restart
 
 # Config-entry fixtures provisioned by the card's e2e-setup.ts:
 # e2e_fixture_entity: camera.e2e_vision_1
