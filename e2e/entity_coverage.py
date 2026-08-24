@@ -28,6 +28,12 @@ CARD_MANIFEST = Path("tests/e2e/fixtures/e2e-entity-coverage.generated.json")
 HA_PACKAGE = Path("ha-dev/packages/e2e_simulated_sensors.yaml")
 DOCS_FILE = Path("docs/E2E.md")
 LOCAL_FILE_CAMERA = "local_file_camera"
+TEMPLATE_WEATHER = "template_weather"
+
+SOURCE_AIR_NEUTRAL_TEMPERATURE = 24
+SOURCE_AIR_NEUTRAL_HUMIDITY = 60
+OUTDOOR_NEUTRAL_TEMPERATURE = 12
+OUTDOOR_NEUTRAL_HUMIDITY = 85
 
 
 class Status(StrEnum):
@@ -218,7 +224,8 @@ CLIMATE_SERVICE_DEFAULTS: dict[str, dict[str, Any]] = {
         "vpd_target": 1.1,
         "vpd_tolerance": 0.1,
         "critical_temp_low": None,
-        "critical_temp_high": None,
+        # Gives the E2E source-air scenarios a real safety override to exercise.
+        "critical_temp_high": 32,
         "critical_temp_hysteresis": 1,
     },
     "set_humidifier_control": {"enabled": True},
@@ -1453,13 +1460,28 @@ ROLES += (
         "Install-wide lung-room temperature",
         EXACTLY_ONE,
         (
-            _planned(
+            Assignment(
                 "source_air",
                 "input_number.e2e_{slug}_temperature",
                 "input_number",
-                23,
-                SetupReference("global_settings", "lung_room_temp_sensor"),
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="input_number",
+                setup=SetupReference("global_settings", "lung_room_temp_sensor"),
             ),
+        ),
+        Simulation(
+            "temperature",
+            "°C",
+            "temperature",
+            "measurement",
+            10,
+            35,
+            3600,
+            control_minimum=5,
+            control_maximum=45,
+            control_step=0.5,
+            control_initial=SOURCE_AIR_NEUTRAL_TEMPERATURE,
         ),
     ),
     CoverageRole(
@@ -1468,13 +1490,28 @@ ROLES += (
         "Install-wide lung-room humidity",
         EXACTLY_ONE,
         (
-            _planned(
+            Assignment(
                 "source_air",
                 "input_number.e2e_{slug}_humidity",
                 "input_number",
-                23,
-                SetupReference("global_settings", "lung_room_humidity_sensor"),
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="input_number",
+                setup=SetupReference("global_settings", "lung_room_humidity_sensor"),
             ),
+        ),
+        Simulation(
+            "humidity",
+            "%",
+            "humidity",
+            "measurement",
+            20,
+            100,
+            3600,
+            control_minimum=0,
+            control_maximum=100,
+            control_step=1,
+            control_initial=SOURCE_AIR_NEUTRAL_HUMIDITY,
         ),
     ),
     CoverageRole(
@@ -1483,13 +1520,14 @@ ROLES += (
         "Deterministic outdoor weather conditions",
         EXACTLY_ONE,
         (
-            _planned(
+            Assignment(
                 "source_air",
                 "weather.e2e_outdoor_conditions",
                 "weather",
-                23,
-                SetupReference("global_settings", "weather_entity"),
-                behavior=Behavior.READ_ONLY,
+                Behavior.READ_ONLY,
+                Status.COVERED,
+                generator=TEMPLATE_WEATHER,
+                setup=SetupReference("global_settings", "weather_entity"),
             ),
         ),
     ),
@@ -1757,6 +1795,7 @@ def build_card_manifest(
         _assign_setup_value(target, record)
 
     profiles: list[dict[str, Any]] = []
+    global_settings: dict[str, Any] = {}
     for profile in PROFILES:
         for instance in profile.instances:
             services = {
@@ -1764,6 +1803,7 @@ def build_card_manifest(
                 for service, payload in (instance.service_defaults or {}).items()
             }
             generated_services = setup_by_instance.get((profile.id, instance.slug), {})
+            global_settings.update(generated_services.pop("global_settings", {}))
             for service, payload in generated_services.items():
                 services.setdefault(service, {}).update(payload)
             if not services:
@@ -1782,7 +1822,8 @@ def build_card_manifest(
 
     return {
         "generated_by": "e2e/entity_coverage.py",
-        "version": 1,
+        "version": 2,
+        "global_settings": global_settings,
         "profiles": profiles,
         "entities": [_manifest_entity(record) for record in active],
     }
@@ -1828,6 +1869,12 @@ def _manifest_entity(record: EntityRecord) -> dict[str, Any]:
                 "device_name": registry.device_name,
             }
         )
+    if record.generator == TEMPLATE_WEATHER:
+        entity["attributes"] = {
+            "condition": "cloudy",
+            "temperature": OUTDOOR_NEUTRAL_TEMPERATURE,
+            "humidity": OUTDOOR_NEUTRAL_HUMIDITY,
+        }
     return entity
 
 
@@ -2097,6 +2144,27 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
             lines.append(f"          {{{{ {_free_running_expression(sim, phase)} }}}}")
 
     lines += _mirror_template_lines(active, by_slug)
+
+    weather_entities = [
+        record for record in active if record.generator == TEMPLATE_WEATHER
+    ]
+    if weather_entities:
+        lines += [
+            "  # ---------------------------------------------------------------",
+            "  # fixed outdoor conditions (modern template-weather schema)",
+            "  # ---------------------------------------------------------------",
+            "  - weather:",
+        ]
+    for record in weather_entities:
+        unique_id = record.entity_id.split(".", 1)[1]
+        lines += [
+            f"      - name: {unique_id.replace('_', ' ')}",
+            f"        unique_id: {unique_id}",
+            '        condition: "cloudy"',
+            f'        temperature: "{{{{ {OUTDOOR_NEUTRAL_TEMPERATURE} }}}}"',
+            '        temperature_unit: "°C"',
+            f'        humidity: "{{{{ {OUTDOOR_NEUTRAL_HUMIDITY} }}}}"',
+        ]
 
     instance_order = {
         instance.slug: index
@@ -2390,6 +2458,34 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
             f"      device_key: {registry.device_key_rule.format(slug=record.slug)}",
             f"      device_name: {registry.device_name}",
         ]
+    source_air = {
+        record.role_id: record.entity_id
+        for record in active
+        if record.profile == "source_air"
+    }
+    if {
+        "source_air.temperature",
+        "source_air.humidity",
+    } <= source_air.keys():
+        lines += [
+            "",
+            "script:",
+            "  e2e_reset_source_air:",
+            "    alias: E2E Reset Source Air",
+            "    description: Restore the documented neutral lung-room baseline",
+            "    sequence:",
+            "      - action: input_number.set_value",
+            "        target:",
+            f"          entity_id: {source_air['source_air.temperature']}",
+            "        data:",
+            f"          value: {SOURCE_AIR_NEUTRAL_TEMPERATURE}",
+            "      - action: input_number.set_value",
+            "        target:",
+            f"          entity_id: {source_air['source_air.humidity']}",
+            "        data:",
+            f"          value: {SOURCE_AIR_NEUTRAL_HUMIDITY}",
+            "    mode: restart",
+        ]
     fixture_entities = [
         record.entity_id for record in active if record.generator == LOCAL_FILE_CAMERA
     ]
@@ -2422,7 +2518,13 @@ def extract_generated_entity_ids(package_text: str) -> list[str]:
         if section == "template":
             if stripped == "sensor:":
                 template_domain = "sensor"
-            elif stripped in {"- switch:", "- binary_sensor:", "- light:", "- fan:"}:
+            elif stripped in {
+                "- switch:",
+                "- binary_sensor:",
+                "- light:",
+                "- fan:",
+                "- weather:",
+            }:
                 template_domain = stripped.removeprefix("- ").removesuffix(":")
             elif stripped.startswith("unique_id:") and template_domain:
                 ids.append(f"{template_domain}.{stripped.split(':', 1)[1].strip()}")
