@@ -27,6 +27,7 @@ DOCS_END = "<!-- END GENERATED E2E ENTITY COVERAGE -->"
 CARD_MANIFEST = Path("tests/e2e/fixtures/e2e-entity-coverage.generated.json")
 HA_PACKAGE = Path("ha-dev/packages/e2e_simulated_sensors.yaml")
 DOCS_FILE = Path("docs/E2E.md")
+LOCAL_FILE_CAMERA = "local_file_camera"
 
 
 class Status(StrEnum):
@@ -160,6 +161,16 @@ LIGHTING_SERVICE_DEFAULTS: dict[str, dict[str, Any]] = {
     },
 }
 
+VISION_SERVICE_DEFAULTS: dict[str, dict[str, Any]] = {
+    "configure_environment": {"snapshot_interval_hours": 6},
+    "update_vision_checkup_config": {
+        "enabled": True,
+        "early_check_offset_minutes": 45,
+        "mid_check_hours": 6,
+        "late_check_offset_minutes": 45,
+    },
+}
+
 PROFILES: tuple[CapabilityProfile, ...] = (
     CapabilityProfile(
         "stage",
@@ -240,7 +251,14 @@ PROFILES: tuple[CapabilityProfile, ...] = (
     CapabilityProfile(
         "vision",
         "Multi-camera snapshots and Vision Checkup scheduling",
-        (ProfileInstance("vision", "E2E Vision", "flower_start"),),
+        (
+            ProfileInstance(
+                "vision",
+                "E2E Vision",
+                "flower_start",
+                service_defaults=VISION_SERVICE_DEFAULTS,
+            ),
+        ),
         22,
     ),
     CapabilityProfile(
@@ -1228,14 +1246,15 @@ ROLES += (
         "Stable camera image source",
         ONE_OR_MORE,
         (
-            _planned(
+            Assignment(
                 "vision",
                 "camera.e2e_{slug}_{ordinal}",
                 "camera",
-                22,
-                _setup("camera_entities", "list"),
+                Behavior.READ_ONLY,
+                Status.COVERED,
                 count=2,
-                behavior=Behavior.READ_ONLY,
+                generator=LOCAL_FILE_CAMERA,
+                setup=_setup("camera_entities", "list"),
             ),
         ),
     ),
@@ -1425,6 +1444,15 @@ def validate_contract(
                 f"mirrored sensor {record.entity_id} has no manual-telemetry "
                 f"gate for {record.slug}"
             )
+    for record in records:
+        if record.generator != LOCAL_FILE_CAMERA:
+            continue
+        fixture_name = record.entity_id.split(".", 1)[1].replace("_", " ").title()
+        if _ha_object_id(fixture_name) != record.entity_id.split(".", 1)[1]:
+            errors.append(
+                f"local-file camera name {fixture_name!r} does not generate "
+                f"{record.entity_id}"
+            )
     return errors
 
 
@@ -1530,6 +1558,13 @@ def _manifest_entity(record: EntityRecord) -> dict[str, Any]:
         entity["state_class"] = simulation.state_class
     if record.generator == MIRROR_SENSOR:
         entity["backing_entity_id"] = mirror_backing_entity_id(record.entity_id)
+    if record.generator == LOCAL_FILE_CAMERA:
+        object_id = record.entity_id.split(".", 1)[1]
+        entity["fixture"] = {
+            "handler": "local_file",
+            "name": object_id.replace("_", " ").title(),
+            "file_path": f"/config/www/e2e-camera-assets/{object_id}.jpg",
+        }
     return entity
 
 
@@ -1581,6 +1616,38 @@ def validate_setup_manifest(
 
     for index, profile in enumerate(manifest.get("profiles", [])):
         visit(profile.get("services", {}), f"profiles[{index}].services")
+    return errors
+
+
+def validate_fixture_assets(manifest: dict[str, Any], config_root: Path) -> list[str]:
+    """Validate config-entry fixture files against the host-mounted HA config."""
+
+    errors: list[str] = []
+    asset_contents: dict[str, bytes] = {}
+    for entity in manifest.get("entities", []):
+        fixture = entity.get("fixture")
+        if fixture is None:
+            continue
+        entity_id = entity.get("entity_id", "<unknown>")
+        if fixture.get("handler") != "local_file":
+            errors.append(f"unsupported fixture handler for {entity_id}")
+            continue
+        file_path = fixture.get("file_path")
+        if not isinstance(file_path, str) or not file_path.startswith("/config/"):
+            errors.append(f"fixture path for {entity_id} is not under /config")
+            continue
+        host_path = config_root / file_path.removeprefix("/config/")
+        if not host_path.is_file():
+            errors.append(f"fixture asset for {entity_id} is missing: {host_path}")
+            continue
+        contents = host_path.read_bytes()
+        if not contents:
+            errors.append(f"fixture asset for {entity_id} is empty: {host_path}")
+            continue
+        asset_contents[entity_id] = contents
+
+    if len(asset_contents) != len(set(asset_contents.values())):
+        errors.append("local-file camera fixture assets must be distinguishable")
     return errors
 
 
@@ -1966,6 +2033,17 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
             "    initial: 128",
             "    mode: slider",
         ]
+    fixture_entities = [
+        record.entity_id for record in active if record.generator == LOCAL_FILE_CAMERA
+    ]
+    if fixture_entities:
+        lines += [
+            "",
+            "# Config-entry fixtures provisioned by the card's e2e-setup.ts:",
+        ]
+        lines += [
+            f"# e2e_fixture_entity: {entity_id}" for entity_id in fixture_entities
+        ]
     return "\n".join(lines) + "\n"
 
 
@@ -1981,6 +2059,9 @@ def extract_generated_entity_ids(package_text: str) -> list[str]:
             template_domain = None
             continue
         stripped = line.strip()
+        if stripped.startswith("# e2e_fixture_entity:"):
+            ids.append(stripped.split(":", 1)[1].strip())
+            continue
         if section == "template":
             if stripped == "sensor:":
                 template_domain = "sensor"
@@ -2121,6 +2202,7 @@ def validate_outputs(workspace: Path, card_root: Path) -> list[str]:
             errors.append(f"invalid generated setup manifest {manifest_path}: {err}")
         else:
             errors.extend(validate_setup_manifest(manifest, generated_ids))
+            errors.extend(validate_fixture_assets(manifest, workspace / "ha-dev"))
     return errors
 
 
