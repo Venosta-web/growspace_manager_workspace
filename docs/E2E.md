@@ -81,9 +81,12 @@ setup manifest, and this coverage table are checked against it by
 | `simulation.drain_pump_state` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_boolean.sim_e2e_{slug}_drain_pump` | `input_boolean` | exactly one (1) | controllable | covered |
 | `simulation.drain_pump_state` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_drain_pump` | `input_boolean` | exactly one (1) | controllable | covered |
 | `simulation.drain_pump_state` | internal | `irrigation_monitored` (irrigation_monitored) | `input_boolean.sim_e2e_{slug}_drain_pump` | `input_boolean` | exactly one (1) | controllable | covered |
-| `lighting.state` | lighting | `lighting` (lighting) | `binary_sensor.e2e_{slug}_light_state` | `binary_sensor` | one or more (1) | read-only | planned in [#19](https://github.com/Venosta-web/growspace_manager_workspace/issues/19) |
-| `lighting.growlight_switch` | lighting | `lighting` (lighting) | `switch.e2e_{slug}_growlight_switch` | `switch` | one or more (1) | controllable | planned in [#19](https://github.com/Venosta-web/growspace_manager_workspace/issues/19) |
-| `lighting.growlight_dimmable` | lighting | `lighting` (lighting) | `light.e2e_{slug}_growlight_dimmable` | `light` | one or more (1) | controllable | planned in [#19](https://github.com/Venosta-web/growspace_manager_workspace/issues/19) |
+| `lighting.state` | lighting | `lighting` (lighting) | `binary_sensor.e2e_{slug}_light_state` | `binary_sensor` | one or more (1) | read-only | covered |
+| `lighting.growlight_switch` | lighting | `lighting` (lighting) | `switch.e2e_{slug}_growlight_switch` | `switch` | one or more (1) | controllable | covered |
+| `lighting.growlight_dimmable` | lighting | `lighting` (lighting) | `light.e2e_{slug}_growlight_dimmable` | `light` | one or more (1) | controllable | covered |
+| `simulation.growlight_switch_state` | internal | `lighting` (lighting) | `input_boolean.e2e_{slug}_growlight_switch` | `input_boolean` | exactly one (1) | controllable | covered |
+| `simulation.growlight_dimmable_state` | internal | `lighting` (lighting) | `input_boolean.e2e_{slug}_growlight_dimmable` | `input_boolean` | exactly one (1) | controllable | covered |
+| `simulation.growlight_dimmable_brightness` | internal | `lighting` (lighting) | `input_number.e2e_{slug}_growlight_dimmable_brightness` | `input_number` | exactly one (1) | controllable | covered |
 | `simulation.temperature_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_temperature{ordinal_suffix}` | `input_number` | one or more (2) | controllable | covered |
 | `simulation.humidity_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_humidity{ordinal_suffix}` | `input_number` | one or more (2) | controllable | covered |
 | `simulation.vpd_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_vpd{ordinal_suffix}` | `input_number` | one or more (2) | controllable | covered |
