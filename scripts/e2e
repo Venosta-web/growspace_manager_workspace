@@ -1,0 +1,183 @@
+#!/usr/bin/env bash
+# Reproducible Growspace Manager Home Assistant E2E environment workflow.
+#
+#   ./scripts/e2e provision  generate, build, restart, configure, dashboard, preflight
+#   ./scripts/e2e preflight  verify the existing environment without reconfiguring it
+#   ./scripts/e2e smoke      run the focused capability-profile Playwright specs
+#   ./scripts/e2e full       run every existing Playwright E2E spec
+set -euo pipefail
+
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CARD="${GROWSPACE_CARD:-$WS/../lovelace-growspace-manager-card}"
+BACKEND="${GROWSPACE_BACKEND:-$WS/../growspace_manager}"
+BASE_URL="${HA_BASE_URL:-http://127.0.0.1:8123}"
+ENV_FILE="${E2E_ENV_FILE:-$CARD/tests/e2e/.env.test}"
+TOKEN_FILE="${E2E_TOKEN_FILE:-$WS/.ha-token}"
+LOG_FILE="${E2E_HA_LOG:-$WS/ha-dev/home-assistant.log}"
+COMMAND="${1:-provision}"
+
+abspath() { (cd "$1" 2>/dev/null && pwd) || printf '%s\n' "$1"; }
+CARD="$(abspath "$CARD")"
+BACKEND="$(abspath "$BACKEND")"
+
+heading() { printf '\n\033[1;36m━━ %s\033[0m\n' "$*"; }
+
+require_inputs() {
+  [ -d "$CARD/tests/e2e" ] || { echo "ERROR: card checkout not found at $CARD" >&2; exit 1; }
+  [ -d "$BACKEND/custom_components/growspace_manager" ] || { echo "ERROR: backend checkout not found at $BACKEND" >&2; exit 1; }
+  if [ -n "${HA_ACCESS_TOKEN:-}" ]; then
+    E2E_ACCESS_TOKEN="$HA_ACCESS_TOKEN"
+  elif [ -f "$TOKEN_FILE" ]; then
+    E2E_ACCESS_TOKEN="$(< "$TOKEN_FILE")"
+  else
+    echo "ERROR: set HA_ACCESS_TOKEN or create $TOKEN_FILE with './scripts/ha dev token'" >&2
+    exit 1
+  fi
+  export HA_ACCESS_TOKEN="$E2E_ACCESS_TOKEN" HA_BASE_URL="$BASE_URL"
+}
+
+require_main_checkout() {
+  local common main
+  common="$(git -C "$WS" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+  [ -z "$common" ] && return 0
+  main="$(dirname "$common")"
+  if [ "$main" != "$WS" ]; then
+    echo "ERROR: provision must run from the main workspace checkout." >&2
+    echo "       here: $WS" >&2
+    echo "       main: $main" >&2
+    echo "       Use GROWSPACE_CARD/GROWSPACE_BACKEND there to serve worktree code." >&2
+    exit 1
+  fi
+}
+
+ensure_env_file() {
+  [ -f "$ENV_FILE" ] && return 0
+  cp "$CARD/tests/e2e/.env.test.example" "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
+  echo "  created $ENV_FILE from the checked-in example"
+}
+
+wait_for_home_assistant() {
+  local attempt code
+  for attempt in $(seq 1 120); do
+    code="$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $E2E_ACCESS_TOKEN" "$BASE_URL/api/" || true)"
+    if [ "$code" = 200 ]; then
+      echo "  Home Assistant API ready after ${attempt}s"
+      return 0
+    fi
+    sleep 1
+  done
+  echo "ERROR: Home Assistant did not become ready at $BASE_URL within 120s" >&2
+  exit 1
+}
+
+wait_for_integration() {
+  local attempt
+  for attempt in $(seq 1 30); do
+    if curl -sf -H "Authorization: Bearer $E2E_ACCESS_TOKEN" "$BASE_URL/api/services" \
+      | python3 -c 'import json,sys; raise SystemExit(0 if any(row.get("domain") == "growspace_manager" for row in json.load(sys.stdin)) else 1)' \
+      2>/dev/null; then
+      echo "  Growspace Manager services ready"
+      return 0
+    fi
+    sleep 1
+  done
+  echo "ERROR: Growspace Manager services did not become ready within 30s" >&2
+  exit 1
+}
+
+run_typescript_setup() {
+  local fixture fixture_dir fixture_url
+  fixture="$CARD/tests/e2e/fixtures/e2e-setup.ts"
+  fixture_dir="$(dirname "$fixture")"
+  fixture_url="file://$fixture"
+  # Node 24 strips erasable TypeScript syntax. e2e-setup predates ESM and reads
+  # __dirname, so provide the same directory explicitly before importing it.
+  node --experimental-strip-types --input-type=module \
+    -e 'globalThis.__dirname=process.argv[1]; await import(process.argv[2])' \
+    "$fixture_dir" "$fixture_url"
+}
+
+run_preflight() {
+  node "$WS/scripts/e2e-preflight.cjs" \
+    --card-root "$CARD" \
+    --env-file "$ENV_FILE" \
+    --token-file "$TOKEN_FILE" \
+    --base-url "$BASE_URL" \
+    --storage-file "$WS/ha-dev/.storage/core.config_entries" \
+    --log-file "$LOG_FILE"
+}
+
+provision() {
+  require_main_checkout
+  require_inputs
+  ensure_env_file
+
+  heading "generate the coverage-contract adapters"
+  "$WS/scripts/gen-e2e-sensors" --card-root "$CARD"
+
+  heading "build the card bundle"
+  npm --prefix "$CARD" run --silent build
+
+  heading "recreate Home Assistant with the selected backend and card"
+  GROWSPACE_BACKEND_SRC="$BACKEND/custom_components/growspace_manager" \
+  GROWSPACE_CARD_DIST="$CARD/dist" \
+    "$WS/scripts/ha" dev restart
+  wait_for_home_assistant
+
+  heading "ensure the Growspace Manager integration entry"
+  node "$WS/scripts/e2e-ensure-integration.cjs" \
+    --card-root "$CARD" \
+    --env-file "$ENV_FILE" \
+    --token-file "$TOKEN_FILE" \
+    --base-url "$BASE_URL"
+  wait_for_integration
+
+  heading "configure global settings and every capability profile"
+  run_typescript_setup
+
+  heading "create or update every profile dashboard"
+  node "$WS/scripts/gen-e2e-dashboards.cjs" \
+    --card-root "$CARD" \
+    --env-file "$ENV_FILE" \
+    --token-file "$TOKEN_FILE" \
+    --base-url "$BASE_URL"
+
+  heading "self-verify the live environment"
+  run_preflight
+}
+
+run_specs() {
+  require_inputs
+  ensure_env_file
+  local specs=("$@")
+  npm --prefix "$CARD/tests/e2e" test -- "${specs[@]}"
+}
+
+case "$COMMAND" in
+  provision)
+    provision
+    ;;
+  preflight)
+    require_inputs
+    ensure_env_file
+    run_preflight
+    ;;
+  smoke)
+    run_specs \
+      specs/multi-sensor-telemetry.spec.ts \
+      specs/irrigation-hardware-profiles.spec.ts \
+      specs/plain-climate-actuators.spec.ts \
+      specs/lighting-hardware-profile.spec.ts \
+      specs/ac-infinity-ports.spec.ts \
+      specs/vision-camera-profile.spec.ts \
+      specs/source-air-conditions.spec.ts
+    ;;
+  full)
+    run_specs
+    ;;
+  *)
+    echo "usage: $0 {provision|preflight|smoke|full}" >&2
+    exit 2
+    ;;
+esac
