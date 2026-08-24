@@ -18,6 +18,7 @@ const EXPECTED_DASHBOARDS = [
   'e2e-vwc-flower',
   'e2e-telemetry-multi',
   'e2e-climate-plain',
+  'e2e-ac-infinity',
   'e2e-vision',
 ];
 

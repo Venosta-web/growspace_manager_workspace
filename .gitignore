@@ -16,7 +16,9 @@ ha-dev/blueprints/
 # NOTE: ha-dev/packages/ is generated but TRACKED — see scripts/gen-e2e-sensors
 ha-dev/image/
 ha-dev/www/community/
-ha-dev/custom_components/
+ha-dev/custom_components/*
+!ha-dev/custom_components/ac_infinity/
+!ha-dev/custom_components/ac_infinity/**
 
 ha-test/.storage/
 ha-test/.cloud/

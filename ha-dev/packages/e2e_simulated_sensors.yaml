@@ -1720,6 +1720,30 @@ input_number:
     initial: 1.1
     unit_of_measurement: "kPa"
     mode: box
+  e2e_ac_infinity_temperature:
+    name: e2e ac_infinity temperature
+    min: 0
+    max: 56.0
+    step: 0.01
+    initial: 24.0
+    unit_of_measurement: "°C"
+    mode: box
+  e2e_ac_infinity_humidity:
+    name: e2e ac_infinity humidity
+    min: 0
+    max: 140.0
+    step: 0.01
+    initial: 57.5
+    unit_of_measurement: "%"
+    mode: box
+  e2e_ac_infinity_vpd:
+    name: e2e ac_infinity vpd
+    min: 0
+    max: 2.8
+    step: 0.01
+    initial: 1.1
+    unit_of_measurement: "kPa"
+    mode: box
   e2e_lighting_growlight_dimmable_brightness:
     name: e2e lighting growlight dimmable brightness
     min: 0
@@ -1775,6 +1799,65 @@ generic_hygrostat:
     dry_tolerance: 0.5
     wet_tolerance: 0.5
     initial_state: false
+
+ac_infinity:
+  entities:
+    - entity_id: select.e2e_ac_infinity_circulation_active_mode
+      translation_key: active_mode
+      device_key: e2e_ac_infinity_circulation
+      device_name: E2E AC Infinity Circulation Port
+    - entity_id: number.e2e_ac_infinity_circulation_speed
+      translation_key: on_power
+      device_key: e2e_ac_infinity_circulation
+      device_name: E2E AC Infinity Circulation Port
+    - entity_id: select.e2e_ac_infinity_exhaust_active_mode
+      translation_key: active_mode
+      device_key: e2e_ac_infinity_exhaust
+      device_name: E2E AC Infinity Exhaust Port
+    - entity_id: number.e2e_ac_infinity_exhaust_speed
+      translation_key: on_power
+      device_key: e2e_ac_infinity_exhaust
+      device_name: E2E AC Infinity Exhaust Port
+    - entity_id: select.e2e_ac_infinity_humidifier_active_mode
+      translation_key: active_mode
+      device_key: e2e_ac_infinity_humidifier
+      device_name: E2E AC Infinity Humidifier Port
+    - entity_id: number.e2e_ac_infinity_humidifier_speed
+      translation_key: on_power
+      device_key: e2e_ac_infinity_humidifier
+      device_name: E2E AC Infinity Humidifier Port
+    - entity_id: select.e2e_ac_infinity_dehumidifier_active_mode
+      translation_key: active_mode
+      device_key: e2e_ac_infinity_dehumidifier
+      device_name: E2E AC Infinity Dehumidifier Port
+    - entity_id: number.e2e_ac_infinity_dehumidifier_speed
+      translation_key: on_power
+      device_key: e2e_ac_infinity_dehumidifier
+      device_name: E2E AC Infinity Dehumidifier Port
+    - entity_id: select.e2e_ac_infinity_growlight_active_mode
+      translation_key: active_mode
+      device_key: e2e_ac_infinity_growlight
+      device_name: E2E AC Infinity Grow Light Port
+    - entity_id: time.e2e_ac_infinity_growlight_on_time
+      translation_key: schedule_mode_on_time
+      device_key: e2e_ac_infinity_growlight
+      device_name: E2E AC Infinity Grow Light Port
+    - entity_id: time.e2e_ac_infinity_growlight_off_time
+      translation_key: schedule_mode_off_time
+      device_key: e2e_ac_infinity_growlight
+      device_name: E2E AC Infinity Grow Light Port
+    - entity_id: number.e2e_ac_infinity_growlight_on_power
+      translation_key: on_power
+      device_key: e2e_ac_infinity_growlight
+      device_name: E2E AC Infinity Grow Light Port
+    - entity_id: switch.e2e_ac_infinity_growlight_sunrise_enabled
+      translation_key: sunrise_timer_enabled
+      device_key: e2e_ac_infinity_growlight
+      device_name: E2E AC Infinity Grow Light Port
+    - entity_id: number.e2e_ac_infinity_growlight_sunrise_duration
+      translation_key: sunrise_timer_minutes
+      device_key: e2e_ac_infinity_growlight
+      device_name: E2E AC Infinity Grow Light Port
 
 # Config-entry fixtures provisioned by the card's e2e-setup.ts:
 # e2e_fixture_entity: camera.e2e_vision_1
