@@ -91,6 +91,16 @@ class SetupReference:
 
 
 @dataclass(frozen=True)
+class RegistryMetadata:
+    """Frontend entity/device-registry identity required by a simulated role."""
+
+    platform: str
+    translation_key: str
+    device_key_rule: str
+    device_name: str
+
+
+@dataclass(frozen=True)
 class Assignment:
     """A role's concrete simulated entity family in one capability profile."""
 
@@ -103,6 +113,7 @@ class Assignment:
     delivery_ticket: int | None = None
     generator: str | None = None
     setup: SetupReference | None = None
+    registry: RegistryMetadata | None = None
 
 
 @dataclass(frozen=True)
@@ -224,6 +235,15 @@ VISION_SERVICE_DEFAULTS: dict[str, dict[str, Any]] = {
     },
 }
 
+AC_INFINITY_SERVICE_DEFAULTS: dict[str, dict[str, Any]] = {
+    **CLIMATE_SERVICE_DEFAULTS,
+    **LIGHTING_SERVICE_DEFAULTS,
+    "configure_environment": {
+        **CLIMATE_SERVICE_DEFAULTS["configure_environment"],
+        **LIGHTING_SERVICE_DEFAULTS["configure_environment"],
+    },
+}
+
 PROFILES: tuple[CapabilityProfile, ...] = (
     CapabilityProfile(
         "stage",
@@ -305,7 +325,14 @@ PROFILES: tuple[CapabilityProfile, ...] = (
     CapabilityProfile(
         "ac_infinity",
         "Faithful AC Infinity actuator and grow-light port bundles",
-        (ProfileInstance("ac_infinity", "E2E AC Infinity", "flower_start"),),
+        (
+            ProfileInstance(
+                "ac_infinity",
+                "E2E AC Infinity",
+                "flower_start",
+                service_defaults=AC_INFINITY_SERVICE_DEFAULTS,
+            ),
+        ),
         20,
     ),
     CapabilityProfile(
@@ -520,6 +547,15 @@ ROLES: tuple[CoverageRole, ...] = (
                 generator="input_number",
                 setup=_setup("temperature_sensors", "list"),
             ),
+            Assignment(
+                "ac_infinity",
+                "input_number.e2e_{slug}_temperature",
+                "input_number",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="input_number",
+                setup=_setup("temperature_sensors", "list"),
+            ),
         ),
     ),
     _telemetry_role(
@@ -544,6 +580,15 @@ ROLES: tuple[CoverageRole, ...] = (
                 generator="input_number",
                 setup=_setup("humidity_sensors", "list"),
             ),
+            Assignment(
+                "ac_infinity",
+                "input_number.e2e_{slug}_humidity",
+                "input_number",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="input_number",
+                setup=_setup("humidity_sensors", "list"),
+            ),
         ),
     ),
     _telemetry_role(
@@ -561,6 +606,15 @@ ROLES: tuple[CoverageRole, ...] = (
         extra_assignments=(
             Assignment(
                 "climate_plain",
+                "input_number.e2e_{slug}_vpd",
+                "input_number",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="input_number",
+                setup=_setup("vpd_sensors", "list"),
+            ),
+            Assignment(
+                "ac_infinity",
                 "input_number.e2e_{slug}_vpd",
                 "input_number",
                 Behavior.CONTROLLABLE,
@@ -1289,15 +1343,25 @@ def _plain_climate_support_roles() -> tuple[CoverageRole, ...]:
 
 def _ac_infinity_roles() -> tuple[CoverageRole, ...]:
     roles: list[CoverageRole] = []
+
+    def registry(device_role: str, translation_key: str) -> RegistryMetadata:
+        label = "Grow Light" if device_role == "growlight" else device_role.title()
+        return RegistryMetadata(
+            platform="ac_infinity",
+            translation_key=translation_key,
+            device_key_rule=f"e2e_{{slug}}_{device_role}",
+            device_name=f"E2E AC Infinity {label} Port",
+        )
+
     for device_role, field_name in (
         ("circulation", "circulation_fan_ac_infinity_devices"),
         ("exhaust", "exhaust_fan_ac_infinity_devices"),
         ("humidifier", "humidifier_ac_infinity_devices"),
         ("dehumidifier", "dehumidifier_ac_infinity_devices"),
     ):
-        for member, domain, suffix in (
-            ("mode_entity", "select", "active_mode"),
-            ("speed_entity", "number", "speed"),
+        for member, domain, suffix, translation_key in (
+            ("mode_entity", "select", "active_mode", "active_mode"),
+            ("speed_entity", "number", "speed", "on_power"),
         ):
             roles.append(
                 CoverageRole(
@@ -1306,26 +1370,49 @@ def _ac_infinity_roles() -> tuple[CoverageRole, ...]:
                     f"AC Infinity {device_role} port {member.replace('_', ' ')}",
                     EXACTLY_ONE,
                     (
-                        _planned(
+                        Assignment(
                             "ac_infinity",
                             f"{domain}.e2e_{{slug}}_{device_role}_{suffix}",
                             domain,
-                            20,
-                            SetupReference(
+                            Behavior.CONTROLLABLE,
+                            Status.COVERED,
+                            generator="ac_infinity",
+                            setup=SetupReference(
                                 "configure_environment", field_name, "bundle", member
                             ),
+                            registry=registry(device_role, translation_key),
                         ),
                     ),
                 )
             )
 
-    for member, domain, suffix in (
-        ("mode_entity", "select", "growlight_active_mode"),
-        ("on_time_entity", "time", "growlight_on_time"),
-        ("off_time_entity", "time", "growlight_off_time"),
-        ("power_entity", "number", "growlight_on_power"),
-        ("sunrise_switch_entity", "switch", "growlight_sunrise_enabled"),
-        ("sunrise_duration_entity", "number", "growlight_sunrise_duration"),
+    for member, domain, suffix, translation_key in (
+        ("mode_entity", "select", "growlight_active_mode", "active_mode"),
+        (
+            "on_time_entity",
+            "time",
+            "growlight_on_time",
+            "schedule_mode_on_time",
+        ),
+        (
+            "off_time_entity",
+            "time",
+            "growlight_off_time",
+            "schedule_mode_off_time",
+        ),
+        ("power_entity", "number", "growlight_on_power", "on_power"),
+        (
+            "sunrise_switch_entity",
+            "switch",
+            "growlight_sunrise_enabled",
+            "sunrise_timer_enabled",
+        ),
+        (
+            "sunrise_duration_entity",
+            "number",
+            "growlight_sunrise_duration",
+            "sunrise_timer_minutes",
+        ),
     ):
         roles.append(
             CoverageRole(
@@ -1334,17 +1421,20 @@ def _ac_infinity_roles() -> tuple[CoverageRole, ...]:
                 f"AC Infinity grow-light {member.replace('_', ' ')}",
                 EXACTLY_ONE,
                 (
-                    _planned(
+                    Assignment(
                         "ac_infinity",
                         f"{domain}.e2e_{{slug}}_{suffix}",
                         domain,
-                        20,
-                        SetupReference(
+                        Behavior.CONTROLLABLE,
+                        Status.COVERED,
+                        generator="ac_infinity",
+                        setup=SetupReference(
                             "configure_environment",
                             "growlight_ac_infinity_devices",
                             "bundle",
                             member,
                         ),
+                        registry=registry("growlight", translation_key),
                     ),
                 ),
             )
@@ -1728,6 +1818,16 @@ def _manifest_entity(record: EntityRecord) -> dict[str, Any]:
             "name": object_id.replace("_", " ").title(),
             "file_path": f"/config/www/e2e-camera-assets/{object_id}.jpg",
         }
+    if record.assignment.registry is not None:
+        registry = record.assignment.registry
+        entity.update(
+            {
+                "platform": registry.platform,
+                "translation_key": registry.translation_key,
+                "device_key": registry.device_key_rule.format(slug=record.slug),
+                "device_name": registry.device_name,
+            }
+        )
     return entity
 
 
@@ -1835,9 +1935,7 @@ def _sine_expression(
 
 
 def _ramp_expression(phase: int) -> str:
-    return (
-        "(((as_timestamp(now()) + %d) %% 86400) / 86400 * 12.0) | round(3)" % phase
-    )
+    return "(((as_timestamp(now()) + %d) %% 86400) / 86400 * 12.0) | round(3)" % phase
 
 
 def _sine_state(low: int | float, high: int | float, period: int, phase: int) -> str:
@@ -2006,9 +2104,7 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
             instance for profile in PROFILES for instance in profile.instances
         )
     }
-    switches = [
-        record for record in active if record.generator == "template_switch"
-    ]
+    switches = [record for record in active if record.generator == "template_switch"]
     switches.sort(
         key=lambda record: (
             instance_order[record.slug],
@@ -2111,9 +2207,7 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
             if candidate.role_id
             in {"lighting.growlight_switch", "lighting.growlight_dimmable"}
         ]
-        state = " or ".join(
-            f"is_state('{entity_id}', 'on')" for entity_id in actuators
-        )
+        state = " or ".join(f"is_state('{entity_id}', 'on')" for entity_id in actuators)
         lines += [
             f"      - name: {unique_id.replace('_', ' ')}",
             f"        unique_id: {unique_id}",
@@ -2282,6 +2376,20 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
             "    wet_tolerance: 0.5",
             "    initial_state: false",
         ]
+    ac_infinity_entities = [
+        record for record in active if record.generator == "ac_infinity"
+    ]
+    if ac_infinity_entities:
+        lines += ["", "ac_infinity:", "  entities:"]
+    for record in ac_infinity_entities:
+        registry = record.assignment.registry
+        assert registry is not None
+        lines += [
+            f"    - entity_id: {record.entity_id}",
+            f"      translation_key: {registry.translation_key}",
+            f"      device_key: {registry.device_key_rule.format(slug=record.slug)}",
+            f"      device_name: {registry.device_name}",
+        ]
     fixture_entities = [
         record.entity_id for record in active if record.generator == LOCAL_FILE_CAMERA
     ]
@@ -2325,6 +2433,8 @@ def extract_generated_entity_ids(package_text: str) -> list[str]:
         elif section == "generic_hygrostat" and stripped.startswith("- name:"):
             name = stripped.split(":", 1)[1].strip()
             ids.append(f"humidifier.{_ha_object_id(name)}")
+        elif section == "ac_infinity" and stripped.startswith("- entity_id:"):
+            ids.append(stripped.split(":", 1)[1].strip())
     return ids
 
 

@@ -35,14 +35,17 @@ class EntityCoverageContractTest(unittest.TestCase):
             counts,
             {
                 "sensor": 115,
-                "input_number": 59,
-                "switch": 24,
+                "input_number": 62,
                 "input_boolean": 30,
                 "binary_sensor": 1,
                 "light": 1,
                 "fan": 2,
                 "humidifier": 2,
                 "camera": 2,
+                "select": 5,
+                "number": 6,
+                "time": 2,
+                "switch": 25,
             },
         )
         self.assertEqual(
@@ -62,6 +65,7 @@ class EntityCoverageContractTest(unittest.TestCase):
                 "lighting",
                 "climate_plain",
                 "vision",
+                "ac_infinity",
             },
         )
 
@@ -72,7 +76,7 @@ class EntityCoverageContractTest(unittest.TestCase):
             for assignment in role.assignments
             if assignment.status is Status.PLANNED
         }
-        self.assertEqual(planned_tickets, {20, 23})
+        self.assertEqual(planned_tickets, {23})
         self.assertTrue(
             {
                 "environment",
@@ -268,7 +272,9 @@ class EntityCoverageContractTest(unittest.TestCase):
         renamed = replace(
             temperature,
             assignments=(
-                replace(mirror, entity_id_rule="sensor.e2e_{slug}_temp{ordinal_suffix}"),
+                replace(
+                    mirror, entity_id_rule="sensor.e2e_{slug}_temp{ordinal_suffix}"
+                ),
             ),
         )
 
@@ -347,7 +353,10 @@ class EntityCoverageContractTest(unittest.TestCase):
                 "sensor.e2e_telemetry_multi_overview"
             ],
         )
-    def test_lighting_profile_wires_tracking_controller_and_plain_actuators(self) -> None:
+
+    def test_lighting_profile_wires_tracking_controller_and_plain_actuators(
+        self,
+    ) -> None:
         profile = next(
             profile
             for profile in build_card_manifest()["profiles"]
@@ -393,9 +402,7 @@ class EntityCoverageContractTest(unittest.TestCase):
             "or is_state('light.e2e_lighting_growlight_dimmable', 'on') }}\"",
             package,
         )
-        self.assertIn(
-            "input_boolean.e2e_lighting_growlight_dimmable", package
-        )
+        self.assertIn("input_boolean.e2e_lighting_growlight_dimmable", package)
         self.assertIn(
             "input_number.e2e_lighting_growlight_dimmable_brightness", package
         )
@@ -519,7 +526,9 @@ class EntityCoverageContractTest(unittest.TestCase):
             "humidifier_entities",
             "dehumidifier_entities",
         )
-        actuators = [entity for field in actuator_fields for entity in environment[field]]
+        actuators = [
+            entity for field in actuator_fields for entity in environment[field]
+        ]
         self.assertEqual(len(actuators), len(set(actuators)))
         self.assertTrue(
             all(".e2e_climate_plain_" in entity_id for entity_id in actuators)
@@ -540,14 +549,140 @@ class EntityCoverageContractTest(unittest.TestCase):
         self.assertIn("  - fan:\n", package)
         self.assertIn("generic_hygrostat:\n", package)
         self.assertIn(
-            "    max: 10\n"
-            "    step: 1\n"
-            "    initial: 0\n"
-            "    mode: slider\n",
-            package.split(
-                "  e2e_climate_plain_circulation_fan_speed:\n", 1
-            )[1],
+            "    max: 10\n    step: 1\n    initial: 0\n    mode: slider\n",
+            package.split("  e2e_climate_plain_circulation_fan_speed:\n", 1)[1],
         )
+
+    def test_ac_infinity_profile_wires_one_representative_port_per_role(self) -> None:
+        profile = next(
+            profile
+            for profile in build_card_manifest()["profiles"]
+            if profile["profile"] == "ac_infinity"
+        )
+        environment = profile["services"]["configure_environment"]
+
+        for role in (
+            "circulation_fan",
+            "exhaust_fan",
+            "humidifier",
+            "dehumidifier",
+        ):
+            self.assertEqual(
+                environment[f"{role}_ac_infinity_devices"],
+                [
+                    {
+                        "mode_entity": (
+                            f"select.e2e_ac_infinity_{role.removesuffix('_fan')}_active_mode"
+                        ),
+                        "speed_entity": (
+                            f"number.e2e_ac_infinity_{role.removesuffix('_fan')}_speed"
+                        ),
+                    }
+                ],
+            )
+
+        self.assertEqual(
+            environment["growlight_ac_infinity_devices"],
+            [
+                {
+                    "mode_entity": "select.e2e_ac_infinity_growlight_active_mode",
+                    "on_time_entity": "time.e2e_ac_infinity_growlight_on_time",
+                    "off_time_entity": "time.e2e_ac_infinity_growlight_off_time",
+                    "power_entity": "number.e2e_ac_infinity_growlight_on_power",
+                    "sunrise_switch_entity": (
+                        "switch.e2e_ac_infinity_growlight_sunrise_enabled"
+                    ),
+                    "sunrise_duration_entity": (
+                        "number.e2e_ac_infinity_growlight_sunrise_duration"
+                    ),
+                }
+            ],
+        )
+
+    def test_ac_infinity_entities_declare_platform_roles_and_port_devices(self) -> None:
+        entities = [
+            entity
+            for entity in build_card_manifest()["entities"]
+            if entity["profile"] == "ac_infinity" and "platform" in entity
+        ]
+        expected_translation_keys = {
+            "select": "active_mode",
+            "time_on": "schedule_mode_on_time",
+            "time_off": "schedule_mode_off_time",
+            "number_power": "on_power",
+            "switch": "sunrise_timer_enabled",
+            "number_sunrise": "sunrise_timer_minutes",
+        }
+
+        self.assertEqual(len(entities), 14)
+        self.assertTrue(all(entity["platform"] == "ac_infinity" for entity in entities))
+        for entity in entities:
+            entity_id = entity["entity_id"]
+            if entity_id.endswith("_active_mode"):
+                expected = expected_translation_keys["select"]
+            elif entity_id.endswith("_on_time"):
+                expected = expected_translation_keys["time_on"]
+            elif entity_id.endswith("_off_time"):
+                expected = expected_translation_keys["time_off"]
+            elif entity_id.endswith("_sunrise_enabled"):
+                expected = expected_translation_keys["switch"]
+            elif entity_id.endswith("_sunrise_duration"):
+                expected = expected_translation_keys["number_sunrise"]
+            else:
+                expected = expected_translation_keys["number_power"]
+            self.assertEqual(entity["translation_key"], expected, entity_id)
+            self.assertEqual(
+                entity["device_key"],
+                entity_id.split(".", 1)[1]
+                .removesuffix("_active_mode")
+                .removesuffix("_speed")
+                .removesuffix("_on_time")
+                .removesuffix("_off_time")
+                .removesuffix("_on_power")
+                .removesuffix("_sunrise_enabled")
+                .removesuffix("_sunrise_duration"),
+            )
+
+        by_device: dict[str, list[dict[str, object]]] = {}
+        for entity in entities:
+            by_device.setdefault(entity["device_key"], []).append(entity)
+        self.assertEqual(
+            sorted(len(group) for group in by_device.values()), [2, 2, 2, 2, 6]
+        )
+        self.assertEqual(
+            {entity["device_name"] for entity in entities},
+            {
+                "E2E AC Infinity Circulation Port",
+                "E2E AC Infinity Exhaust Port",
+                "E2E AC Infinity Humidifier Port",
+                "E2E AC Infinity Dehumidifier Port",
+                "E2E AC Infinity Grow Light Port",
+            },
+        )
+
+    def test_ac_infinity_package_provisions_registry_faithful_local_entities(
+        self,
+    ) -> None:
+        package = render_ha_package()
+
+        self.assertIn("\nac_infinity:\n  entities:\n", package)
+        self.assertIn(
+            "    - entity_id: select.e2e_ac_infinity_circulation_active_mode\n"
+            "      translation_key: active_mode\n"
+            "      device_key: e2e_ac_infinity_circulation\n"
+            "      device_name: E2E AC Infinity Circulation Port\n",
+            package,
+        )
+        self.assertIn(
+            "    - entity_id: number.e2e_ac_infinity_growlight_sunrise_duration\n"
+            "      translation_key: sunrise_timer_minutes\n"
+            "      device_key: e2e_ac_infinity_growlight\n"
+            "      device_name: E2E AC Infinity Grow Light Port\n",
+            package,
+        )
+        generated = extract_generated_entity_ids(package)
+        self.assertIn("select.e2e_ac_infinity_exhaust_active_mode", generated)
+        self.assertIn("number.e2e_ac_infinity_growlight_on_power", generated)
 
     def test_vision_profile_wires_cameras_interval_and_schedule(self) -> None:
         profile = next(
