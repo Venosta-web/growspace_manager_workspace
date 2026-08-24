@@ -16,6 +16,7 @@ const EXPECTED_DASHBOARDS = [
   'e2e-cure',
   'e2e-vwc-veg',
   'e2e-vwc-flower',
+  'e2e-telemetry-multi',
 ];
 
 test('builds a four-column Sections view with a four-row card for every stage', () => {

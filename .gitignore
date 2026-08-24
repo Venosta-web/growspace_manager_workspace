@@ -54,3 +54,6 @@ worktrees/
 !.codex/environments/
 .codex/environments/*
 !.codex/environments/environment.toml
+
+# --- Python bytecode from the e2e coverage contract ---
+__pycache__/
