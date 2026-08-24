@@ -142,9 +142,9 @@ setup manifest, and this coverage table are checked against it by
 | `ac_infinity.growlight.power_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `number.e2e_{slug}_growlight_on_power` | `number` | exactly one (1) | controllable | covered |
 | `ac_infinity.growlight.sunrise_switch_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `switch.e2e_{slug}_growlight_sunrise_enabled` | `switch` | exactly one (1) | controllable | covered |
 | `ac_infinity.growlight.sunrise_duration_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `number.e2e_{slug}_growlight_sunrise_duration` | `number` | exactly one (1) | controllable | covered |
-| `source_air.temperature` | source_air | `source_air` (source_air) | `input_number.e2e_{slug}_temperature` | `input_number` | exactly one (1) | controllable | planned in [#23](https://github.com/Venosta-web/growspace_manager_workspace/issues/23) |
-| `source_air.humidity` | source_air | `source_air` (source_air) | `input_number.e2e_{slug}_humidity` | `input_number` | exactly one (1) | controllable | planned in [#23](https://github.com/Venosta-web/growspace_manager_workspace/issues/23) |
-| `source_air.weather` | source_air | `source_air` (source_air) | `weather.e2e_outdoor_conditions` | `weather` | exactly one (1) | read-only | planned in [#23](https://github.com/Venosta-web/growspace_manager_workspace/issues/23) |
+| `source_air.temperature` | source_air | `source_air` (source_air) | `input_number.e2e_{slug}_temperature` | `input_number` | exactly one (1) | controllable | covered |
+| `source_air.humidity` | source_air | `source_air` (source_air) | `input_number.e2e_{slug}_humidity` | `input_number` | exactly one (1) | controllable | covered |
+| `source_air.weather` | source_air | `source_air` (source_air) | `weather.e2e_outdoor_conditions` | `weather` | exactly one (1) | read-only | covered |
 | `vision.camera` | vision | `vision` (vision) | `camera.e2e_{slug}_{ordinal}` | `camera` | one or more (2) | read-only | covered |
 
 <!-- END GENERATED E2E ENTITY COVERAGE -->
@@ -217,6 +217,35 @@ targets and hysteresis; humidification and dehumidification receive explicit
 flower-stage day/night thresholds. The three writable environmental inputs let
 the E2E spec drive controller demand without physical sensors.
 
+### Source air and outdoor conditions
+
+The install-wide source-air fixture is deliberately not a growspace. It exposes
+`input_number.e2e_source_air_temperature` and
+`input_number.e2e_source_air_humidity`, and setup links those helpers plus
+`weather.e2e_outdoor_conditions` through Growspace Manager's global settings.
+Setup uses the integration's options flow, preserves unrelated top-level options
+and existing global fields, and overwrites only these three fixture-owned entity
+references.
+
+The weather entity uses Home Assistant's modern template-weather schema and is
+fully local: cloudy, 12 °C and 85% humidity. Its temperature is intentionally
+below the default 18 °C minimum source-air temperature, so the stable outdoor
+fixture cannot unexpectedly win a recommendation while a test varies the lung
+room.
+
+The documented neutral lung-room baseline is **24 °C / 60% RH**. Both helper
+`initial` values use it, and tests or maintainers can restore it idempotently:
+
+```yaml
+action: script.e2e_reset_source_air
+```
+
+`source-air-conditions.spec.ts` drives four explicit cases against the
+`climate_plain` growspace: helpful lung-room air, unhelpful air, air below the
+minimum temperature, and a critical high-temperature breach that must bypass
+the Source-Air Gate. The same scenarios assert the backend air-exchange
+recommendation and all three exhaust actuator forms where applicable.
+
 ### Deterministic cameras
 
 The vision profile uses two Local File config entries,
@@ -234,8 +263,9 @@ the integration's availability gate before any external request.
 
 ## 2. Growspaces
 
-`tests/e2e/fixtures/e2e-setup.ts` creates the 14 growspaces, places an anchor
-plant in each, links the sensors above, and writes the resulting IDs back into
+`tests/e2e/fixtures/e2e-setup.ts` applies the install-wide global fixtures,
+creates the 14 growspaces, places an anchor plant in each, links the sensors
+above, and writes the resulting IDs back into
 `tests/e2e/.env.test`. It is idempotent — every profile-owned sensor list is set
 outright, so a rerun replaces it rather than growing it, while fields outside
 that profile's generated service payload remain untouched.
