@@ -4,6 +4,10 @@ The Playwright suite in `lovelace-growspace-manager-card/tests/e2e` runs against
 a **real Home Assistant instance** — the dev runtime on :8123. Three things have
 to exist before it can run, and all three are reproducible from scripts.
 
+The supported operator path is [the reproducible E2E workflow](E2E-WORKFLOW.md).
+`./scripts/e2e provision` owns generation, restart, profile setup, dashboards,
+and the final live health verdict.
+
 ## 1. Simulated sensors
 
 `./scripts/gen-e2e-sensors` writes `ha-dev/packages/e2e_simulated_sensors.yaml`,
@@ -264,7 +268,7 @@ the integration's availability gate before any external request.
 ## 2. Growspaces
 
 `tests/e2e/fixtures/e2e-setup.ts` applies the install-wide global fixtures,
-creates the 14 growspaces, places an anchor plant in each, links the sensors
+creates the 15 growspaces, places an anchor plant in each, links the sensors
 above, and writes the resulting IDs back into
 `tests/e2e/.env.test`. It is idempotent — every profile-owned sensor list is set
 outright, so a rerun replaces it rather than growing it, while fields outside
@@ -277,25 +281,9 @@ would get `sensor.e2e_multi_telemetry_overview` and setup would hang forever
 waiting for `sensor.e2e_telemetry_multi_overview`. `validate_contract` checks
 the name against the slug so this fails at generation time instead.
 
-The script mixes ESM `import` with CommonJS `__dirname`, so it only runs under a
-CJS transpiler. Neither `ts-node` nor `tsx` is installed; compile it instead:
-
-```bash
-cd ~/dev/lovelace-growspace-manager-card
-npx --no-install tsc tests/e2e/fixtures/e2e-setup.ts --ignoreConfig \
-  --module commonjs --target es2022 --esModuleInterop --skipLibCheck \
-  --types node --outDir /tmp/e2e-build
-cp /tmp/e2e-build/e2e-setup.js tests/e2e/fixtures/.e2e-setup.run.cjs
-node tests/e2e/fixtures/.e2e-setup.run.cjs
-rm tests/e2e/fixtures/.e2e-setup.run.cjs
-cd ~/dev/growspace_manager_workspace
-./scripts/ha dev restart
-```
-
-It must be copied back beside the original because it resolves `.env.test`
-relative to `__dirname`. The restart is required after adding or changing tank
-profiles: Home Assistant creates the tank-derived accounting sensors and their
-state-change subscriptions when the integration's sensor platform starts.
+`./scripts/e2e provision` invokes this fixture with the generated manifest and
+the selected card checkout. No fixture compilation, entity editing, or manual
+ID copying is required.
 
 ## 3. Dashboards
 
@@ -303,11 +291,11 @@ Most specs are pure-API, but the ones that assert on what a grower actually
 sees navigate to a dashboard and wait for `growspace-manager-card` to become
 visible. `TEST_*_DASHBOARD_PATH` in `.env.test` points at these:
 
-```bash
-node scripts/gen-e2e-dashboards.cjs
-```
+The provision workflow invokes `scripts/gen-e2e-dashboards.cjs` after profile
+setup has resolved every growspace ID.
 
-Creates one dashboard per growspace (`/e2e-veg/0`, `/e2e-vwc-flower/0`, …).
+It derives one dashboard per growspace from the generated manifest
+(`/e2e-veg/0`, `/e2e-vwc-flower/0`, …).
 Each dashboard uses a Sections view capped at four columns for a representative
 desktop layout, with a single card bound to that growspace and sized to four
 grid rows. The command is idempotent: rerunning it updates every existing stage
@@ -319,13 +307,7 @@ the WebSocket API because HA has no REST endpoint for
 
 ```bash
 cd ~/dev/growspace_manager_workspace
-./scripts/ha dev up
-./scripts/ha dev token                       # once
-./scripts/gen-e2e-sensors && ./scripts/ha dev restart
-# then the e2e-setup compile-and-run above
-# restart HA once more so profile-dependent sensor entities are registered
-node scripts/gen-e2e-dashboards.cjs
-cd ../lovelace-growspace-manager-card && npm run test:e2e
+./scripts/e2e provision
 ```
 
 `.env.test` holds a long-lived token — it is gitignored and chmod 600. Never
@@ -333,15 +315,9 @@ commit it.
 
 ## Status
 
-Verified 2026-08-22 against the generated environment:
-
-| Spec | Result |
-|---|---|
-| `vwc-day-cycle` (pure-API, 12 tests) | **12 passed** in ~19 min, `--retries=0` (2026-08-23, twice) |
-| `vwc-strategy` (dashboard, 3 tests) | card renders correctly; 3 fail on dialog interaction |
-
-Before the generators existed, all of these failed at setup — the sensors,
-pumps, input_numbers and dashboards simply were not there.
+The authoritative status is the live verdict from `./scripts/e2e preflight`.
+Run `./scripts/e2e smoke` for focused capability coverage or
+`./scripts/e2e full` for every existing Playwright spec.
 
 Full-suite run, 2026-08-22 (37 tests, 41.3 min): **17 passed, 18 failed,
 2 flaky.** The dialog cause below is fixed; the remaining failures are the

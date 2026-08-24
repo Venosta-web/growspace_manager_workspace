@@ -1,37 +1,44 @@
 #!/usr/bin/env node
-/*
- * Create one Lovelace Sections dashboard per e2e growspace, each holding a
- * four-row growspace-manager-card bound to that growspace. Sections views are
- * capped at four columns to exercise the representative desktop layout.
- *
- *   ./scripts/ha dev up
- *   ./scripts/ha dev token          # once, stores .ha-token
- *   node scripts/gen-e2e-dashboards.cjs
- *
- * Idempotent: existing dashboards are reused, their config re-saved.
- * Growspace IDs are read from tests/e2e/.env.test, which
- * tests/e2e/fixtures/e2e-setup.ts writes.
- *
- * Dashboards are created via the WebSocket API — HA has no REST endpoint
- * for lovelace/dashboards/create.
- */
-const fs = require('fs');
+/* Create or update one Lovelace dashboard for every generated E2E profile. */
+'use strict';
 
-// url_path must contain a hyphen (HA requirement) and match TEST_*_DASHBOARD_PATH
-const STAGES = [
-  ['e2e-veg',        'TEST_VEG_GROWSPACE_ID',        'E2E Veg'],
-  ['e2e-clone',      'TEST_CLONE_GROWSPACE_ID',      'E2E Clone'],
-  ['e2e-mother',     'TEST_MOTHER_GROWSPACE_ID',     'E2E Mother'],
-  ['e2e-flower',     'TEST_FLOWER_GROWSPACE_ID',     'E2E Flower'],
-  ['e2e-dry',        'TEST_DRY_GROWSPACE_ID',        'E2E Dry'],
-  ['e2e-cure',       'TEST_CURE_GROWSPACE_ID',       'E2E Cure'],
-  ['e2e-vwc-veg',    'TEST_VWC_VEG_GROWSPACE_ID',    'E2E VWC Veg'],
-  ['e2e-vwc-flower', 'TEST_VWC_FLOWER_GROWSPACE_ID', 'E2E VWC Flower'],
-  ['e2e-telemetry-multi', 'TEST_TELEMETRY_MULTI_GROWSPACE_ID', 'E2E Multi Telemetry'],
-  ['e2e-climate-plain', 'TEST_CLIMATE_PLAIN_GROWSPACE_ID', 'E2E Climate Plain'],
-  ['e2e-ac-infinity', 'TEST_AC_INFINITY_GROWSPACE_ID', 'E2E AC Infinity'],
-  ['e2e-vision',     'TEST_VISION_GROWSPACE_ID',     'E2E Vision'],
-];
+const fs = require('node:fs');
+const path = require('node:path');
+
+const WORKSPACE = path.resolve(__dirname, '..');
+const CARD_URL = '/local/community/lovelace-growspace-manager-card/growspace-manager-card.js';
+
+function parseEnvFile(filename) {
+  if (!fs.existsSync(filename)) return {};
+  return Object.fromEntries(
+    fs.readFileSync(filename, 'utf8')
+      .split('\n')
+      .filter((line) => line.includes('=') && !line.trim().startsWith('#'))
+      .map((line) => {
+        const separator = line.indexOf('=');
+        return [line.slice(0, separator).trim(), line.slice(separator + 1).trim()];
+      }),
+  );
+}
+
+function envKeyForSlug(slug, suffix) {
+  return `TEST_${slug.toUpperCase()}_${suffix}`;
+}
+
+function dashboardPathForSlug(slug) {
+  return `e2e-${slug.replaceAll('_', '-')}`;
+}
+
+function buildDashboardStages(manifest) {
+  return manifest.profiles.map(({ slug, name, profile }) => ({
+    profile,
+    slug,
+    title: name,
+    urlPath: dashboardPathForSlug(slug),
+    growspaceEnvKey: envKeyForSlug(slug, 'GROWSPACE_ID'),
+    dashboardEnvKey: envKeyForSlug(slug, 'DASHBOARD_PATH'),
+  }));
+}
 
 function buildDashboardConfig(title, growspaceId) {
   return {
@@ -51,82 +58,198 @@ function buildDashboardConfig(title, growspaceId) {
   };
 }
 
-async function syncDashboards({ send, env, log = console.log }) {
+function messageError(message) {
+  return JSON.stringify(message.error || message);
+}
+
+async function syncDashboards({ send, env, stages, log = console.log }) {
+  const missing = stages.filter((stage) => !env[stage.growspaceEnvKey]);
+  if (missing.length > 0) {
+    throw new Error(missing.map((stage) => `${stage.profile}/${stage.slug}: ${stage.growspaceEnvKey} is empty`).join('\n'));
+  }
   const existing = await send({ type: 'lovelace/dashboards/list' });
-  const have = new Set((existing.result || []).map(d => d.url_path));
+  if (!existing.success) throw new Error(`Could not list dashboards: ${messageError(existing)}`);
+  const have = new Set((existing.result || []).map((dashboard) => dashboard.url_path));
   log('  existing dashboards:', [...have].join(', ') || '(none)');
 
-  for (const [urlPath, envKey, title] of STAGES) {
-    const gsId = env[envKey];
-    if (!gsId) { log(`  SKIP ${urlPath}: ${envKey} empty`); continue; }
+  for (const stage of stages) {
+    const growspaceId = env[stage.growspaceEnvKey];
+    if (!have.has(stage.urlPath)) {
+      const created = await send({
+        type: 'lovelace/dashboards/create',
+        url_path: stage.urlPath,
+        title: stage.title,
+        show_in_sidebar: false,
+        require_admin: false,
+      });
+      if (!created.success) {
+        throw new Error(`${stage.profile}/${stage.slug}: could not create ${stage.urlPath}: ${messageError(created)}`);
+      }
+      have.add(stage.urlPath);
+      log(`  created dashboard ${stage.urlPath}`);
+    } else {
+      log(`  dashboard ${stage.urlPath} already exists`);
+    }
 
-    if (!have.has(urlPath)) {
-      const r = await send({ type: 'lovelace/dashboards/create', url_path: urlPath, title, show_in_sidebar: false, require_admin: false });
-      if (!r.success) { log(`  FAIL create ${urlPath}:`, JSON.stringify(r.error)); continue; }
-      log(`  created dashboard ${urlPath}`);
-    } else { log(`  dashboard ${urlPath} already exists`); }
-
-    // The config key is `default_growspace` (see GrowspaceManagerCardConfig in
-    // src/lib/types/config.ts). An unrecognised key is ignored and the card
-    // auto-selects an arbitrary growspace instead — which looks like it works
-    // until you notice every dashboard is showing the same wrong space.
-    const cfg = buildDashboardConfig(title, gsId);
-    const s = await send({ type: 'lovelace/config/save', url_path: urlPath, config: cfg });
-    log(`    config saved: ${s.success ? 'ok' : JSON.stringify(s.error)}  -> growspace ${gsId.slice(0,8)}`);
+    const saved = await send({
+      type: 'lovelace/config/save',
+      url_path: stage.urlPath,
+      config: buildDashboardConfig(stage.title, growspaceId),
+    });
+    if (!saved.success) {
+      throw new Error(`${stage.profile}/${stage.slug}: could not save ${stage.urlPath}: ${messageError(saved)}`);
+    }
+    log(`    config saved: ok -> growspace ${growspaceId.slice(0, 8)}`);
   }
 }
 
-function main() {
-  const WebSocket = require('/home/maxi/dev/lovelace-growspace-manager-card/node_modules/ws');
-  const TOKEN = fs.readFileSync('/home/maxi/dev/growspace_manager_workspace/.ha-token','utf8').trim();
-  const env = Object.fromEntries(
-    fs.readFileSync('/home/maxi/dev/lovelace-growspace-manager-card/tests/e2e/.env.test','utf8')
-      .split('\n').filter(l=>l.includes('=')&&!l.trim().startsWith('#'))
-      .map(l=>{const i=l.indexOf('=');return [l.slice(0,i).trim(), l.slice(i+1).trim()];}));
-
-  const ws = new WebSocket('ws://localhost:8123/api/websocket');
-  let id = 1; const pending = new Map();
-  const send = (msg) => new Promise((res) => {
-    const i = id++;
-    pending.set(i, res);
-    ws.send(JSON.stringify({ id: i, ...msg }));
-  });
-
-  ws.on('message', async (raw) => {
-    const m = JSON.parse(raw);
-    if (m.type === 'auth_required') return ws.send(JSON.stringify({ type: 'auth', access_token: TOKEN }));
-    if (m.type === 'auth_invalid') { console.error('AUTH FAILED'); process.exit(1); }
-    if (m.type === 'auth_ok') return run();
-    if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); }
-  });
-
-  const CARD_URL = '/local/community/lovelace-growspace-manager-card/growspace-manager-card.js';
-
-  /*
-   * Register the card as a Lovelace resource.
-   *
-   * This CANNOT be done from configuration.yaml: `lovelace.resources` is only
-   * honoured in YAML mode. This instance runs `lovelace: mode: storage`, where
-   * resources live in .storage/lovelace_resources and are managed through the
-   * websocket API. A YAML `resources:` block is silently ignored — the card JS
-   * never loads, <growspace-manager-card> is never defined, and every spec that
-   * waits for it times out with an empty page.
-   */
-  async function ensureResource() {
-    const list = await send({ type: 'lovelace/resources' });
-    const have = (list.result || []).find((r) => r.url === CARD_URL);
-    if (have) { console.log('  resource already registered'); return; }
-    const r = await send({ type: 'lovelace/resources/create', res_type: 'module', url: CARD_URL });
-    console.log(r.success ? `  registered resource ${CARD_URL}` : `  FAIL resource: ${JSON.stringify(r.error)}`);
-  }
-
-  async function run() {
-    await ensureResource();
-    await syncDashboards({ send, env });
-    ws.close(); process.exit(0);
+function resourcePath(url) {
+  try {
+    return new URL(url, 'http://home-assistant.local').pathname;
+  } catch {
+    return url.split('?', 1)[0];
   }
 }
 
-module.exports = { STAGES, buildDashboardConfig, syncDashboards };
+async function ensureCardResource({ send, cardUrl = CARD_URL, log = console.log }) {
+  const listed = await send({ type: 'lovelace/resources' });
+  if (!listed.success) throw new Error(`Could not list Lovelace resources: ${messageError(listed)}`);
+  const matches = (listed.result || []).filter(
+    (resource) => resourcePath(resource.url) === resourcePath(cardUrl),
+  );
+  if (matches.length > 1) {
+    // Older versions compared the complete URL, so a stamped `?v=` resource
+    // looked different and could be registered a second time. Keep the stamped
+    // row (or the first row) and remove only duplicates for this exact path.
+    const keep = matches.find((item) => new URL(item.url, 'http://home-assistant.local').searchParams.has('v')) || matches[0];
+    for (const duplicate of matches.filter((item) => item !== keep)) {
+      if (!duplicate.id) throw new Error(`Duplicate Growspace Manager resource has no registry ID: ${duplicate.url}`);
+      const deleted = await send({ type: 'lovelace/resources/delete', resource_id: duplicate.id });
+      if (!deleted.success) throw new Error(`Could not remove duplicate resource ${duplicate.url}: ${messageError(deleted)}`);
+      log(`  removed duplicate resource ${duplicate.url}`);
+    }
+    log(`  resource already registered: ${keep.url}`);
+    return;
+  }
+  if (matches.length === 1) {
+    log(`  resource already registered: ${matches[0].url}`);
+    return;
+  }
+  const created = await send({
+    type: 'lovelace/resources/create',
+    res_type: 'module',
+    url: cardUrl,
+  });
+  if (!created.success) throw new Error(`Could not register ${cardUrl}: ${messageError(created)}`);
+  log(`  registered resource ${cardUrl}`);
+}
 
-if (require.main === module) main();
+function writeEnvValues(filename, values) {
+  let content = fs.existsSync(filename) ? fs.readFileSync(filename, 'utf8') : '';
+  for (const [key, value] of Object.entries(values)) {
+    const line = `${key}=${value}`;
+    const matcher = new RegExp(`^${key}=.*$`, 'm');
+    if (matcher.test(content)) content = content.replace(matcher, line);
+    else content += `${content.endsWith('\n') || content === '' ? '' : '\n'}${line}\n`;
+  }
+  fs.writeFileSync(filename, content, 'utf8');
+}
+
+function dashboardEnvValues(stages, env) {
+  const values = {};
+  for (const stage of stages) values[stage.dashboardEnvKey] = `/${stage.urlPath}/0`;
+  const veg = stages.find((stage) => stage.slug === 'veg');
+  if (veg) {
+    values.TEST_DASHBOARD_PATH = `/${veg.urlPath}/0`;
+    values.TEST_GROWSPACE_ID = env[veg.growspaceEnvKey];
+  }
+  return values;
+}
+
+function connectHaWebSocket({ WebSocket, baseUrl, token }) {
+  const url = new URL('/api/websocket', baseUrl);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  const socket = new WebSocket(url);
+  let nextId = 1;
+  const pending = new Map();
+
+  return new Promise((resolve, reject) => {
+    const startup = setTimeout(() => reject(new Error(`Timed out connecting to ${url}`)), 10_000);
+    socket.on('error', reject);
+    socket.on('message', (raw) => {
+      const message = JSON.parse(String(raw));
+      if (message.type === 'auth_required') {
+        socket.send(JSON.stringify({ type: 'auth', access_token: token }));
+      } else if (message.type === 'auth_invalid') {
+        clearTimeout(startup);
+        reject(new Error('Home Assistant WebSocket authentication failed'));
+      } else if (message.type === 'auth_ok') {
+        clearTimeout(startup);
+        resolve({
+          send(command) {
+            return new Promise((resolveCommand) => {
+              const id = nextId++;
+              pending.set(id, resolveCommand);
+              socket.send(JSON.stringify({ id, ...command }));
+            });
+          },
+          close() { socket.close(); },
+        });
+      } else if (message.id && pending.has(message.id)) {
+        pending.get(message.id)(message);
+        pending.delete(message.id);
+      }
+    });
+  });
+}
+
+function readOption(argv, name, fallback) {
+  const index = argv.indexOf(name);
+  return index === -1 ? fallback : argv[index + 1];
+}
+
+async function main(argv = process.argv.slice(2)) {
+  const cardRoot = path.resolve(readOption(argv, '--card-root', process.env.GROWSPACE_CARD || path.join(WORKSPACE, '..', 'lovelace-growspace-manager-card')));
+  const envFile = path.resolve(readOption(argv, '--env-file', path.join(cardRoot, 'tests/e2e/.env.test')));
+  const tokenFile = path.resolve(readOption(argv, '--token-file', path.join(WORKSPACE, '.ha-token')));
+  const manifestFile = path.join(cardRoot, 'tests/e2e/fixtures/e2e-entity-coverage.generated.json');
+  const env = { ...parseEnvFile(envFile), ...process.env };
+  const token = env.HA_ACCESS_TOKEN || (fs.existsSync(tokenFile) ? fs.readFileSync(tokenFile, 'utf8').trim() : '');
+  const baseUrl = readOption(argv, '--base-url', env.HA_BASE_URL || 'http://localhost:8123');
+  if (!token) throw new Error(`HA_ACCESS_TOKEN is empty and no token exists at ${tokenFile}`);
+  if (!fs.existsSync(manifestFile)) throw new Error(`Missing generated manifest: ${manifestFile}`);
+
+  const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+  const stages = buildDashboardStages(manifest);
+  const WebSocket = require(require.resolve('ws', { paths: [cardRoot] }));
+  const connection = await connectHaWebSocket({ WebSocket, baseUrl, token });
+  try {
+    await ensureCardResource({ send: connection.send });
+    await syncDashboards({ send: connection.send, env, stages });
+  } finally {
+    connection.close();
+  }
+  writeEnvValues(envFile, dashboardEnvValues(stages, env));
+  console.log(`  updated dashboard paths in ${envFile}`);
+}
+
+module.exports = {
+  CARD_URL,
+  buildDashboardConfig,
+  buildDashboardStages,
+  connectHaWebSocket,
+  dashboardEnvValues,
+  dashboardPathForSlug,
+  ensureCardResource,
+  parseEnvFile,
+  resourcePath,
+  syncDashboards,
+  writeEnvValues,
+};
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(`ERROR: ${error.message || error}`);
+    process.exitCode = 1;
+  });
+}
