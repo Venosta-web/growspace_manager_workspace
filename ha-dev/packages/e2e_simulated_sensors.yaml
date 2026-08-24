@@ -1565,3 +1565,7 @@ input_number:
     step: 1
     initial: 128
     mode: slider
+
+# Config-entry fixtures provisioned by the card's e2e-setup.ts:
+# e2e_fixture_entity: camera.e2e_vision_1
+# e2e_fixture_entity: camera.e2e_vision_2
