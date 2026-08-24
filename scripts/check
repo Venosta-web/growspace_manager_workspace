@@ -72,6 +72,14 @@ check_card() {
   fi
 }
 
+check_workspace_e2e() {
+  cd "$WS"
+  run "workspace E2E contract tests" python3 -m unittest e2e.test_entity_coverage
+  run "workspace E2E tooling tests" node --test scripts/e2e-ensure-integration.test.cjs \
+    scripts/e2e-preflight.test.cjs \
+    scripts/gen-e2e-dashboards.test.cjs scripts/stamp-card-resource.test.cjs
+}
+
 # The dependency tree a card check is about to validate is not necessarily the
 # one this checkout installed. A hub-managed worktree's node_modules is a single
 # symlink into the main checkout's tree, and that sharing is only valid while
@@ -265,9 +273,9 @@ if [ "$GUARDED" -ne 0 ]; then
 fi
 
 case "$TARGET" in
-  backend) check_backend ;;
-  card)    check_card ;;
-  all)     check_backend; check_card ;;
+  backend) check_workspace_e2e; check_backend ;;
+  card)    check_workspace_e2e; check_card ;;
+  all)     check_workspace_e2e; check_backend; check_card ;;
 esac
 
 if [ $RC -eq 0 ]; then
