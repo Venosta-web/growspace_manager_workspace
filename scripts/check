@@ -4,8 +4,8 @@
 #
 #   ./scripts/check backend fast     ruff + mypy + targeted pytest
 #   ./scripts/check backend full     + whole pytest suite w/ coverage
-#   ./scripts/check card    fast     eslint + tsc + vitest
-#   ./scripts/check card    full     + coverage + production build
+#   ./scripts/check card    fast     eslint + tsc + prettier + tokens + vitest
+#   ./scripts/check card    full     + coverage + contract fixture + build + HACS
 #   ./scripts/check all     fast|full
 #
 # Exit code is non-zero if ANY stage fails (nothing is swallowed).
@@ -61,12 +61,21 @@ check_backend() {
 
 check_card() {
   cd "$CARD"
-  run "eslint"     npm run --silent lint
-  run "typecheck"  npm run --silent typecheck
+  # Stages below mirror .github/workflows/lint.yml's job, in its order, so a
+  # green run here means CI's lint job will not reject your PR. The card has no
+  # husky/lint-staged, so nothing formats on commit — `format:check` is a real
+  # gate that only CI was enforcing until it bit #750.
+  run "eslint"           npm run --silent lint
+  run "typecheck"        npm run --silent typecheck
+  run "format:check"     npm run --silent format:check
+  run "design tokens"    npm run --silent tokens:check
+  run "colour literals"  npm run --silent tokens:audit -- --check
   if [ "$LEVEL" = full ]; then
     run "unit tests (coverage)" npm run --silent test:coverage
     run "contract fixture"      npm run --silent test:contract-fixture
     run "rollup build"          npm run --silent build
+    # Reads dist/, so it has to follow the build.
+    run "HACS release layout"   npm run --silent validate:hacs-release
   else
     run "unit tests" npm run --silent test
   fi
