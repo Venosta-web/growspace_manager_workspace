@@ -33,7 +33,14 @@ class EntityCoverageContractTest(unittest.TestCase):
 
         self.assertEqual(
             counts,
-            {"sensor": 115, "input_number": 51, "switch": 19, "input_boolean": 20},
+            {
+                "sensor": 115,
+                "input_number": 52,
+                "switch": 20,
+                "input_boolean": 22,
+                "binary_sensor": 1,
+                "light": 1,
+            },
         )
         self.assertEqual(
             {profile["slug"] for profile in build_card_manifest()["profiles"]},
@@ -49,6 +56,7 @@ class EntityCoverageContractTest(unittest.TestCase):
                 "irrigation_monitored",
                 "irrigation_tanks",
                 "telemetry_multi",
+                "lighting",
             },
         )
 
@@ -59,7 +67,7 @@ class EntityCoverageContractTest(unittest.TestCase):
             for assignment in role.assignments
             if assignment.status is Status.PLANNED
         }
-        self.assertEqual(planned_tickets, {19, 20, 21, 22, 23})
+        self.assertEqual(planned_tickets, {20, 21, 22, 23})
         self.assertTrue(
             {
                 "environment",
@@ -333,6 +341,73 @@ class EntityCoverageContractTest(unittest.TestCase):
                 "sensor sensor.e2e_multi_telemetry_overview, not "
                 "sensor.e2e_telemetry_multi_overview"
             ],
+        )
+    def test_lighting_profile_wires_tracking_controller_and_plain_actuators(self) -> None:
+        profile = next(
+            profile
+            for profile in build_card_manifest()["profiles"]
+            if profile["profile"] == "lighting"
+        )
+
+        environment = profile["services"]["configure_environment"]
+        self.assertEqual(
+            environment["light_sensors"],
+            ["binary_sensor.e2e_lighting_light_state"],
+        )
+        self.assertEqual(
+            environment["growlight_entities"],
+            [
+                "switch.e2e_lighting_growlight_switch",
+                "light.e2e_lighting_growlight_dimmable",
+            ],
+        )
+        self.assertEqual(
+            environment["growlight_config"],
+            {
+                "enabled": True,
+                "power": 65,
+                "sunrise_enabled": False,
+                "sunrise_minutes": 0,
+            },
+        )
+        self.assertEqual(
+            profile["services"]["set_irrigation_strategy"],
+            {
+                "enabled": True,
+                "auto_light_tracking": True,
+                "lights_on_time": "06:00:00",
+            },
+        )
+
+    def test_lighting_simulator_is_state_backed_and_restart_deterministic(self) -> None:
+        package = render_ha_package()
+
+        self.assertEqual(package, render_ha_package())
+        self.assertIn(
+            "state: \"{{ is_state('switch.e2e_lighting_growlight_switch', 'on') "
+            "or is_state('light.e2e_lighting_growlight_dimmable', 'on') }}\"",
+            package,
+        )
+        self.assertIn(
+            "input_boolean.e2e_lighting_growlight_dimmable", package
+        )
+        self.assertIn(
+            "input_number.e2e_lighting_growlight_dimmable_brightness", package
+        )
+        self.assertIn(
+            "  e2e_lighting_growlight_switch:\n"
+            "    name: e2e lighting growlight switch\n"
+            "    initial: false\n",
+            package,
+        )
+        self.assertIn(
+            "  e2e_lighting_growlight_dimmable_brightness:\n"
+            "    name: e2e lighting growlight dimmable brightness\n"
+            "    min: 0\n"
+            "    max: 255\n"
+            "    step: 1\n"
+            "    initial: 128\n",
+            package,
         )
 
     def test_duplicate_entity_ids_fail_validation(self) -> None:
