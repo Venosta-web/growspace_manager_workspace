@@ -1,0 +1,21 @@
+# Repro sensor for issue #37 — a soil-moisture probe with no device_class.
+#
+# ESPHome and template VWC probes overwhelmingly ship like this: a `%` unit and
+# `state_class: measurement`, but no `device_class`. The Config Dialog's Soil
+# Moisture Sensor field filtered strictly on `device_class: moisture`, so a
+# working, already-saved probe of this shape vanished from its own picker and
+# rendered as "Unknown entity selected".
+#
+# Mirrors the reporter's sensor.waveshare001_vwc_links.
+
+template:
+  - trigger:
+      - platform: time_pattern
+        seconds: "/30"
+    sensor:
+      - name: issue37 classless vwc
+        unique_id: issue37_classless_vwc
+        unit_of_measurement: "%"
+        state_class: measurement
+        state: >-
+          {{ (50.0 + 15.0 * sin( ((as_timestamp(now()) + 0) % 2700) / 2700 * 2 * pi )) | round(2) }}
