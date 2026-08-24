@@ -37,7 +37,12 @@ services:
 
       # The integration, mounted live from its repo. Edit Python in VS Code,
       # reload the integration in HA, done. No copy step, no HACS round-trip.
-      - ../growspace_manager/custom_components/growspace_manager:/config/custom_components/growspace_manager
+      #
+      # GROWSPACE_BACKEND_SRC serves a worktree's integration instead, the way
+      # GROWSPACE_CARD_DIST serves a worktree's bundle. Without it a backend
+      # worktree cannot be exercised against :8123 at all — the runtime would
+      # keep serving the main checkout while you tested the wrong code.
+      - ${GROWSPACE_BACKEND_SRC:-../growspace_manager/custom_components/growspace_manager}:/config/custom_components/growspace_manager
 
       # The card's rollup output, mounted at the exact path HACS would use.
       # `npm run watch` writes dist/ -> file is live -> hard-refresh browser.
