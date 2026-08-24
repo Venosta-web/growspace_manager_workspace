@@ -35,7 +35,7 @@ class EntityCoverageContractTest(unittest.TestCase):
             counts,
             {
                 "sensor": 115,
-                "input_number": 62,
+                "input_number": 64,
                 "input_boolean": 30,
                 "binary_sensor": 1,
                 "light": 1,
@@ -46,6 +46,7 @@ class EntityCoverageContractTest(unittest.TestCase):
                 "number": 6,
                 "time": 2,
                 "switch": 25,
+                "weather": 1,
             },
         )
         self.assertEqual(
@@ -76,7 +77,7 @@ class EntityCoverageContractTest(unittest.TestCase):
             for assignment in role.assignments
             if assignment.status is Status.PLANNED
         }
-        self.assertEqual(planned_tickets, {23})
+        self.assertEqual(planned_tickets, set())
         self.assertTrue(
             {
                 "environment",
@@ -502,6 +503,7 @@ class EntityCoverageContractTest(unittest.TestCase):
         self.assertEqual(
             services["configure_exhaust_fan"]["critical_temp_hysteresis"], 1
         )
+        self.assertEqual(services["configure_exhaust_fan"]["critical_temp_high"], 32)
         self.assertTrue(services["set_humidifier_control"]["enabled"])
         self.assertTrue(services["set_dehumidifier_control"]["enabled"])
         self.assertEqual(
@@ -753,6 +755,63 @@ class EntityCoverageContractTest(unittest.TestCase):
         package = render_ha_package()
         self.assertIn("# e2e_fixture_entity: camera.e2e_vision_1", package)
         self.assertIn("# e2e_fixture_entity: camera.e2e_vision_2", package)
+
+    def test_source_air_fixture_is_global_deterministic_and_resettable(self) -> None:
+        manifest = build_card_manifest()
+
+        self.assertEqual(manifest["version"], 2)
+        self.assertEqual(
+            manifest["global_settings"],
+            {
+                "lung_room_temp_sensor": "input_number.e2e_source_air_temperature",
+                "lung_room_humidity_sensor": "input_number.e2e_source_air_humidity",
+                "weather_entity": "weather.e2e_outdoor_conditions",
+            },
+        )
+        self.assertNotIn(
+            "source_air", {profile["profile"] for profile in manifest["profiles"]}
+        )
+        weather = next(
+            entity
+            for entity in manifest["entities"]
+            if entity["role"] == "source_air.weather"
+        )
+        self.assertEqual(
+            weather["attributes"],
+            {"condition": "cloudy", "temperature": 12, "humidity": 85},
+        )
+
+        package = render_ha_package()
+        self.assertIn(
+            "  - weather:\n"
+            "      - name: e2e outdoor conditions\n"
+            "        unique_id: e2e_outdoor_conditions\n"
+            '        condition: "cloudy"\n'
+            '        temperature: "{{ 12 }}"\n'
+            '        temperature_unit: "°C"\n'
+            '        humidity: "{{ 85 }}"\n',
+            package,
+        )
+        self.assertNotIn("condition_template:", package)
+        self.assertNotIn("temperature_template:", package)
+        self.assertNotIn("humidity_template:", package)
+        self.assertIn(
+            "  e2e_source_air_temperature:\n"
+            "    name: e2e source_air temperature\n"
+            "    min: 5\n"
+            "    max: 45\n"
+            "    step: 0.5\n"
+            "    initial: 24\n",
+            package,
+        )
+        self.assertIn(
+            "  e2e_reset_source_air:\n"
+            "    alias: E2E Reset Source Air\n"
+            "    description: Restore the documented neutral lung-room baseline\n",
+            package,
+        )
+        self.assertIn("          value: 24\n", package)
+        self.assertIn("          value: 60\n", package)
 
     def test_duplicate_entity_ids_fail_validation(self) -> None:
         original = ROLES[0]
