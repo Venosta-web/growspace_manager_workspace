@@ -40,6 +40,7 @@ class EntityCoverageContractTest(unittest.TestCase):
                 "input_boolean": 22,
                 "binary_sensor": 1,
                 "light": 1,
+                "camera": 2,
             },
         )
         self.assertEqual(
@@ -57,6 +58,7 @@ class EntityCoverageContractTest(unittest.TestCase):
                 "irrigation_tanks",
                 "telemetry_multi",
                 "lighting",
+                "vision",
             },
         )
 
@@ -67,7 +69,7 @@ class EntityCoverageContractTest(unittest.TestCase):
             for assignment in role.assignments
             if assignment.status is Status.PLANNED
         }
-        self.assertEqual(planned_tickets, {20, 21, 22, 23})
+        self.assertEqual(planned_tickets, {20, 21, 23})
         self.assertTrue(
             {
                 "environment",
@@ -409,6 +411,76 @@ class EntityCoverageContractTest(unittest.TestCase):
             "    initial: 128\n",
             package,
         )
+
+    def test_vision_profile_wires_cameras_interval_and_schedule(self) -> None:
+        profile = next(
+            profile
+            for profile in build_card_manifest()["profiles"]
+            if profile["profile"] == "vision"
+        )
+
+        self.assertEqual(
+            profile["services"]["configure_environment"],
+            {
+                "snapshot_interval_hours": 6,
+                "camera_entities": [
+                    "camera.e2e_vision_1",
+                    "camera.e2e_vision_2",
+                ],
+            },
+        )
+        self.assertEqual(
+            profile["services"]["update_vision_checkup_config"],
+            {
+                "enabled": True,
+                "early_check_offset_minutes": 45,
+                "mid_check_hours": 6,
+                "late_check_offset_minutes": 45,
+            },
+        )
+
+    def test_vision_cameras_are_local_file_config_entry_fixtures(self) -> None:
+        manifest = build_card_manifest()
+        cameras = [
+            entity
+            for entity in manifest["entities"]
+            if entity["role"] == "vision.camera"
+        ]
+
+        self.assertEqual(
+            cameras,
+            [
+                {
+                    "entity_id": "camera.e2e_vision_1",
+                    "role": "vision.camera",
+                    "profile": "vision",
+                    "slug": "vision",
+                    "domain": "camera",
+                    "behavior": "read-only",
+                    "fixture": {
+                        "handler": "local_file",
+                        "name": "E2E Vision 1",
+                        "file_path": "/config/www/e2e-camera-assets/e2e_vision_1.jpg",
+                    },
+                },
+                {
+                    "entity_id": "camera.e2e_vision_2",
+                    "role": "vision.camera",
+                    "profile": "vision",
+                    "slug": "vision",
+                    "domain": "camera",
+                    "behavior": "read-only",
+                    "fixture": {
+                        "handler": "local_file",
+                        "name": "E2E Vision 2",
+                        "file_path": "/config/www/e2e-camera-assets/e2e_vision_2.jpg",
+                    },
+                },
+            ],
+        )
+        package = render_ha_package()
+        self.assertIn("# e2e_fixture_entity: camera.e2e_vision_1", package)
+        self.assertIn("# e2e_fixture_entity: camera.e2e_vision_2", package)
 
     def test_duplicate_entity_ids_fail_validation(self) -> None:
         original = ROLES[0]

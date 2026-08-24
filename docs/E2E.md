@@ -10,7 +10,7 @@ to exist before it can run, and all three are reproducible from scripts.
 loaded via `homeassistant.packages` in `ha-dev/configuration.yaml`.
 
 The executable contract in `e2e/entity_coverage.py` owns the entity inventory,
-the eleven current capability-profile instances, their setup payloads, and the
+the thirteen current capability-profile instances, their setup payloads, and the
 roles reserved for the later simulator tickets. The generated package, the card
 setup manifest, and this coverage table are checked against it by
 `./scripts/check-e2e-coverage`.
@@ -129,7 +129,7 @@ setup manifest, and this coverage table are checked against it by
 | `source_air.temperature` | source_air | `source_air` (source_air) | `input_number.e2e_{slug}_temperature` | `input_number` | exactly one (1) | controllable | planned in [#23](https://github.com/Venosta-web/growspace_manager_workspace/issues/23) |
 | `source_air.humidity` | source_air | `source_air` (source_air) | `input_number.e2e_{slug}_humidity` | `input_number` | exactly one (1) | controllable | planned in [#23](https://github.com/Venosta-web/growspace_manager_workspace/issues/23) |
 | `source_air.weather` | source_air | `source_air` (source_air) | `weather.e2e_outdoor_conditions` | `weather` | exactly one (1) | read-only | planned in [#23](https://github.com/Venosta-web/growspace_manager_workspace/issues/23) |
-| `vision.camera` | vision | `vision` (vision) | `camera.e2e_{slug}_{ordinal}` | `camera` | one or more (2) | read-only | planned in [#22](https://github.com/Venosta-web/growspace_manager_workspace/issues/22) |
+| `vision.camera` | vision | `vision` (vision) | `camera.e2e_{slug}_{ordinal}` | `camera` | one or more (2) | read-only | covered |
 
 <!-- END GENERATED E2E ENTITY COVERAGE -->
 
@@ -186,9 +186,24 @@ whose backing input or gate does not exist. Adding a signal to the profile is on
 > *"Configuring the template integration under the switch platform key is not
 > supported."*
 
+### Deterministic cameras
+
+The vision profile uses two Local File config entries,
+`camera.e2e_vision_1` and `camera.e2e_vision_2`. Their distinct JPEG sources
+live under `ha-dev/www/e2e-camera-assets/`, so both the sources and snapshots
+under `ha-dev/www/growspace_manager/snapshots/` are host-visible through the
+`/config` bind mount.
+
+`e2e-setup` creates the camera entries through Home Assistant's config flow and
+reuses them on subsequent runs. It also repairs their source paths through the
+Local File update action, assigns both cameras to the vision growspace, sets a
+six-hour snapshot interval, and configures a representative Vision Checkup
+schedule. Manual snapshots need no AI agent; the no-AI checkup case stops at
+the integration's availability gate before any external request.
+
 ## 2. Growspaces
 
-`tests/e2e/fixtures/e2e-setup.ts` creates the 11 growspaces, places an anchor
+`tests/e2e/fixtures/e2e-setup.ts` creates the 13 growspaces, places an anchor
 plant in each, links the sensors above, and writes the resulting IDs back into
 `tests/e2e/.env.test`. It is idempotent — every sensor list is set outright, so
 a rerun replaces it rather than growing it.
