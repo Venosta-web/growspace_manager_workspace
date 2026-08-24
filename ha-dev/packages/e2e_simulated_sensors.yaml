@@ -1047,6 +1047,120 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.e2e_lighting_growlight_switch
+      - name: e2e climate plain circulation fan switch
+        unique_id: e2e_climate_plain_circulation_fan_switch
+        state: "{{ is_state('input_boolean.e2e_climate_plain_circulation_fan_switch', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.e2e_climate_plain_circulation_fan_switch
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.e2e_climate_plain_circulation_fan_switch
+      - name: e2e climate plain exhaust fan switch
+        unique_id: e2e_climate_plain_exhaust_fan_switch
+        state: "{{ is_state('input_boolean.e2e_climate_plain_exhaust_fan_switch', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.e2e_climate_plain_exhaust_fan_switch
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.e2e_climate_plain_exhaust_fan_switch
+      - name: e2e climate plain humidifier switch
+        unique_id: e2e_climate_plain_humidifier_switch
+        state: "{{ is_state('input_boolean.e2e_climate_plain_humidifier_switch', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.e2e_climate_plain_humidifier_switch
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.e2e_climate_plain_humidifier_switch
+      - name: e2e climate plain dehumidifier switch
+        unique_id: e2e_climate_plain_dehumidifier_switch
+        state: "{{ is_state('input_boolean.e2e_climate_plain_dehumidifier_switch', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.e2e_climate_plain_dehumidifier_switch
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.e2e_climate_plain_dehumidifier_switch
+  # ---------------------------------------------------------------
+  # percentage fans (state and percentage backed by helpers)
+  # ---------------------------------------------------------------
+  - fan:
+      - name: e2e climate plain circulation fan percentage
+        unique_id: e2e_climate_plain_circulation_fan_percentage
+        state: "{{ is_state('input_boolean.e2e_climate_plain_circulation_fan_percentage', 'on') }}"
+        percentage: "{{ states('input_number.e2e_climate_plain_circulation_fan_percentage_value') | int(0) }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.e2e_climate_plain_circulation_fan_percentage
+        turn_off:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.e2e_climate_plain_circulation_fan_percentage
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.e2e_climate_plain_circulation_fan_percentage_value
+            data:
+              value: 0
+        set_percentage:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.e2e_climate_plain_circulation_fan_percentage_value
+            data:
+              value: "{{ percentage }}"
+          - choose:
+              - conditions: "{{ percentage | int(0) > 0 }}"
+                sequence:
+                  - action: input_boolean.turn_on
+                    target:
+                      entity_id: input_boolean.e2e_climate_plain_circulation_fan_percentage
+            default:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.e2e_climate_plain_circulation_fan_percentage
+      - name: e2e climate plain exhaust fan percentage
+        unique_id: e2e_climate_plain_exhaust_fan_percentage
+        state: "{{ is_state('input_boolean.e2e_climate_plain_exhaust_fan_percentage', 'on') }}"
+        percentage: "{{ states('input_number.e2e_climate_plain_exhaust_fan_percentage_value') | int(0) }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.e2e_climate_plain_exhaust_fan_percentage
+        turn_off:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.e2e_climate_plain_exhaust_fan_percentage
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.e2e_climate_plain_exhaust_fan_percentage_value
+            data:
+              value: 0
+        set_percentage:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.e2e_climate_plain_exhaust_fan_percentage_value
+            data:
+              value: "{{ percentage }}"
+          - choose:
+              - conditions: "{{ percentage | int(0) > 0 }}"
+                sequence:
+                  - action: input_boolean.turn_on
+                    target:
+                      entity_id: input_boolean.e2e_climate_plain_exhaust_fan_percentage
+            default:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.e2e_climate_plain_exhaust_fan_percentage
   # ---------------------------------------------------------------
   # aggregate light-state sensors used by automatic cycle tracking
   # ---------------------------------------------------------------
@@ -1147,6 +1261,30 @@ input_boolean:
     initial: false
   sim_e2e_telemetry_multi_manual_telemetry:
     name: sim e2e telemetry_multi manual_pump
+    initial: false
+  e2e_climate_plain_circulation_fan_percentage:
+    name: e2e climate plain circulation fan percentage
+    initial: false
+  e2e_climate_plain_circulation_fan_switch:
+    name: e2e climate plain circulation fan switch
+    initial: false
+  e2e_climate_plain_exhaust_fan_percentage:
+    name: e2e climate plain exhaust fan percentage
+    initial: false
+  e2e_climate_plain_exhaust_fan_switch:
+    name: e2e climate plain exhaust fan switch
+    initial: false
+  e2e_climate_plain_humidifier_native:
+    name: e2e climate plain humidifier native
+    initial: false
+  e2e_climate_plain_humidifier_switch:
+    name: e2e climate plain humidifier switch
+    initial: false
+  e2e_climate_plain_dehumidifier_native:
+    name: e2e climate plain dehumidifier native
+    initial: false
+  e2e_climate_plain_dehumidifier_switch:
+    name: e2e climate plain dehumidifier switch
     initial: false
 
 input_number:
@@ -1558,6 +1696,30 @@ input_number:
     initial: 80
     unit_of_measurement: "%"
     mode: box
+  e2e_climate_plain_temperature:
+    name: e2e climate_plain temperature
+    min: 0
+    max: 56.0
+    step: 0.01
+    initial: 24.0
+    unit_of_measurement: "°C"
+    mode: box
+  e2e_climate_plain_humidity:
+    name: e2e climate_plain humidity
+    min: 0
+    max: 140.0
+    step: 0.01
+    initial: 57.5
+    unit_of_measurement: "%"
+    mode: box
+  e2e_climate_plain_vpd:
+    name: e2e climate_plain vpd
+    min: 0
+    max: 2.8
+    step: 0.01
+    initial: 1.1
+    unit_of_measurement: "kPa"
+    mode: box
   e2e_lighting_growlight_dimmable_brightness:
     name: e2e lighting growlight dimmable brightness
     min: 0
@@ -1565,6 +1727,54 @@ input_number:
     step: 1
     initial: 128
     mode: slider
+  e2e_climate_plain_circulation_fan_speed:
+    name: e2e climate plain circulation fan speed
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  e2e_climate_plain_exhaust_fan_speed:
+    name: e2e climate plain exhaust fan speed
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  e2e_climate_plain_circulation_fan_percentage_value:
+    name: e2e climate plain circulation fan percentage value
+    min: 0
+    max: 100
+    step: 1
+    initial: 0
+    mode: slider
+  e2e_climate_plain_exhaust_fan_percentage_value:
+    name: e2e climate plain exhaust fan percentage value
+    min: 0
+    max: 100
+    step: 1
+    initial: 0
+    mode: slider
+
+generic_hygrostat:
+  - name: e2e climate plain humidifier native
+    unique_id: e2e_climate_plain_humidifier_native
+    humidifier: input_boolean.e2e_climate_plain_humidifier_native
+    target_sensor: input_number.e2e_climate_plain_humidity
+    device_class: humidifier
+    target_humidity: 50
+    dry_tolerance: 0.5
+    wet_tolerance: 0.5
+    initial_state: false
+  - name: e2e climate plain dehumidifier native
+    unique_id: e2e_climate_plain_dehumidifier_native
+    humidifier: input_boolean.e2e_climate_plain_dehumidifier_native
+    target_sensor: input_number.e2e_climate_plain_humidity
+    device_class: dehumidifier
+    target_humidity: 60
+    dry_tolerance: 0.5
+    wet_tolerance: 0.5
+    initial_state: false
 
 # Config-entry fixtures provisioned by the card's e2e-setup.ts:
 # e2e_fixture_entity: camera.e2e_vision_1

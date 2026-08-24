@@ -35,11 +35,13 @@ class EntityCoverageContractTest(unittest.TestCase):
             counts,
             {
                 "sensor": 115,
-                "input_number": 52,
-                "switch": 20,
-                "input_boolean": 22,
+                "input_number": 59,
+                "switch": 24,
+                "input_boolean": 30,
                 "binary_sensor": 1,
                 "light": 1,
+                "fan": 2,
+                "humidifier": 2,
                 "camera": 2,
             },
         )
@@ -58,6 +60,7 @@ class EntityCoverageContractTest(unittest.TestCase):
                 "irrigation_tanks",
                 "telemetry_multi",
                 "lighting",
+                "climate_plain",
                 "vision",
             },
         )
@@ -69,7 +72,7 @@ class EntityCoverageContractTest(unittest.TestCase):
             for assignment in role.assignments
             if assignment.status is Status.PLANNED
         }
-        self.assertEqual(planned_tickets, {20, 21, 23})
+        self.assertEqual(planned_tickets, {20, 23})
         self.assertTrue(
             {
                 "environment",
@@ -410,6 +413,140 @@ class EntityCoverageContractTest(unittest.TestCase):
             "    step: 1\n"
             "    initial: 128\n",
             package,
+        )
+
+    def test_plain_climate_profile_wires_plural_arrays_and_controller_defaults(
+        self,
+    ) -> None:
+        profile = next(
+            profile
+            for profile in build_card_manifest()["profiles"]
+            if profile["profile"] == "climate_plain"
+        )
+        services = profile["services"]
+        environment = services["configure_environment"]
+
+        self.assertEqual(
+            environment["circulation_fan_entities"],
+            [
+                "fan.e2e_climate_plain_circulation_fan_percentage",
+                "input_number.e2e_climate_plain_circulation_fan_speed",
+                "switch.e2e_climate_plain_circulation_fan_switch",
+            ],
+        )
+        self.assertEqual(
+            environment["exhaust_fan_entities"],
+            [
+                "fan.e2e_climate_plain_exhaust_fan_percentage",
+                "input_number.e2e_climate_plain_exhaust_fan_speed",
+                "switch.e2e_climate_plain_exhaust_fan_switch",
+            ],
+        )
+        self.assertEqual(
+            environment["humidifier_entities"],
+            [
+                "humidifier.e2e_climate_plain_humidifier_native",
+                "switch.e2e_climate_plain_humidifier_switch",
+            ],
+        )
+        self.assertEqual(
+            environment["dehumidifier_entities"],
+            [
+                "humidifier.e2e_climate_plain_dehumidifier_native",
+                "switch.e2e_climate_plain_dehumidifier_switch",
+            ],
+        )
+        self.assertEqual(
+            environment["temperature_sensors"],
+            ["input_number.e2e_climate_plain_temperature"],
+        )
+        self.assertEqual(
+            environment["humidity_sensors"],
+            ["input_number.e2e_climate_plain_humidity"],
+        )
+        self.assertEqual(
+            environment["vpd_sensors"],
+            ["input_number.e2e_climate_plain_vpd"],
+        )
+        for singular in (
+            "circulation_fan_entity",
+            "exhaust_entity",
+            "humidifier_entity",
+            "dehumidifier_entity",
+            "temperature_sensor",
+            "humidity_sensor",
+            "vpd_sensor",
+        ):
+            self.assertNotIn(singular, environment)
+        for unrelated in (
+            "irrigation_tanks",
+            "growlight_entities",
+            "camera_entities",
+        ):
+            self.assertNotIn(unrelated, environment)
+
+        self.assertEqual(
+            services["configure_circulation_fan"]["regulation_mode"], "vpd"
+        )
+        self.assertEqual(
+            services["configure_circulation_fan"]["critical_temp_hysteresis"],
+            1,
+        )
+        self.assertEqual(
+            services["configure_exhaust_fan"]["critical_temp_hysteresis"], 1
+        )
+        self.assertTrue(services["set_humidifier_control"]["enabled"])
+        self.assertTrue(services["set_dehumidifier_control"]["enabled"])
+        self.assertEqual(
+            environment["humidifier_thresholds"]["flower_early"],
+            {
+                "day": {"on": 1.3, "off": 1.1},
+                "night": {"on": 1.3, "off": 1.1},
+            },
+        )
+
+    def test_plain_climate_actuators_are_unique_and_state_backed(self) -> None:
+        manifest = build_card_manifest()
+        profile = next(
+            profile
+            for profile in manifest["profiles"]
+            if profile["profile"] == "climate_plain"
+        )
+        environment = profile["services"]["configure_environment"]
+        actuator_fields = (
+            "circulation_fan_entities",
+            "exhaust_fan_entities",
+            "humidifier_entities",
+            "dehumidifier_entities",
+        )
+        actuators = [entity for field in actuator_fields for entity in environment[field]]
+        self.assertEqual(len(actuators), len(set(actuators)))
+        self.assertTrue(
+            all(".e2e_climate_plain_" in entity_id for entity_id in actuators)
+        )
+
+        package = render_ha_package()
+        for object_id in (
+            "e2e_climate_plain_circulation_fan_percentage",
+            "e2e_climate_plain_exhaust_fan_percentage",
+            "e2e_climate_plain_circulation_fan_switch",
+            "e2e_climate_plain_exhaust_fan_switch",
+            "e2e_climate_plain_humidifier_native",
+            "e2e_climate_plain_humidifier_switch",
+            "e2e_climate_plain_dehumidifier_native",
+            "e2e_climate_plain_dehumidifier_switch",
+        ):
+            self.assertIn(f"  {object_id}:\n", package)
+        self.assertIn("  - fan:\n", package)
+        self.assertIn("generic_hygrostat:\n", package)
+        self.assertIn(
+            "    max: 10\n"
+            "    step: 1\n"
+            "    initial: 0\n"
+            "    mode: slider\n",
+            package.split(
+                "  e2e_climate_plain_circulation_fan_speed:\n", 1
+            )[1],
         )
 
     def test_vision_profile_wires_cameras_interval_and_schedule(self) -> None:
