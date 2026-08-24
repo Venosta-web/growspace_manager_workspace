@@ -23,12 +23,15 @@ setup manifest, and this coverage table are checked against it by
 | `environment.temperature` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_temperature` | `sensor` | one or more (1) | read-only | covered |
 | `environment.temperature` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_temperature` | `input_number` | one or more (1) | controllable | covered |
 | `environment.temperature` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_temperature{ordinal_suffix}` | `sensor` | one or more (2) | read-only | covered |
+| `environment.temperature` | environment | `climate_plain` (climate_plain) | `input_number.e2e_{slug}_temperature` | `input_number` | one or more (1) | controllable | covered |
 | `environment.humidity` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_humidity` | `sensor` | one or more (1) | read-only | covered |
 | `environment.humidity` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_humidity` | `input_number` | one or more (1) | controllable | covered |
 | `environment.humidity` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_humidity{ordinal_suffix}` | `sensor` | one or more (2) | read-only | covered |
+| `environment.humidity` | environment | `climate_plain` (climate_plain) | `input_number.e2e_{slug}_humidity` | `input_number` | one or more (1) | controllable | covered |
 | `environment.vpd` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_vpd` | `sensor` | one or more (1) | read-only | covered |
 | `environment.vpd` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_vpd` | `input_number` | one or more (1) | controllable | covered |
 | `environment.vpd` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_vpd{ordinal_suffix}` | `sensor` | one or more (2) | read-only | covered |
+| `environment.vpd` | environment | `climate_plain` (climate_plain) | `input_number.e2e_{slug}_vpd` | `input_number` | one or more (1) | controllable | covered |
 | `environment.co2` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_co2` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.co2` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_co2` | `input_number` | exactly one (1) | controllable | covered |
 | `environment.co2` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_co2{ordinal_suffix}` | `sensor` | exactly one (1) | read-only | covered |
@@ -102,16 +105,26 @@ setup manifest, and this coverage table are checked against it by
 | `simulation.energy_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_energy{ordinal_suffix}` | `input_number` | one or more (1) | controllable | covered |
 | `simulation.light_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_light{ordinal_suffix}` | `input_number` | one or more (2) | controllable | covered |
 | `simulation.manual_telemetry` | internal | `telemetry_multi` (telemetry_multi) | `input_boolean.sim_e2e_{slug}_manual_telemetry` | `input_boolean` | exactly one (1) | controllable | covered |
-| `climate.circulation_percentage` | climate | `climate_plain` (climate_plain) | `fan.e2e_{slug}_circulation_fan_percentage` | `fan` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
-| `climate.circulation_numeric` | climate | `climate_plain` (climate_plain) | `input_number.e2e_{slug}_circulation_fan_speed` | `input_number` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
-| `climate.circulation_binary` | climate | `climate_plain` (climate_plain) | `switch.e2e_{slug}_circulation_fan_switch` | `switch` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
-| `climate.exhaust_percentage` | climate | `climate_plain` (climate_plain) | `fan.e2e_{slug}_exhaust_fan_percentage` | `fan` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
-| `climate.exhaust_numeric` | climate | `climate_plain` (climate_plain) | `input_number.e2e_{slug}_exhaust_fan_speed` | `input_number` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
-| `climate.exhaust_binary` | climate | `climate_plain` (climate_plain) | `switch.e2e_{slug}_exhaust_fan_switch` | `switch` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
-| `climate.humidifier_native` | climate | `climate_plain` (climate_plain) | `humidifier.e2e_{slug}_humidifier_native` | `humidifier` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
-| `climate.humidifier_switch` | climate | `climate_plain` (climate_plain) | `switch.e2e_{slug}_humidifier_switch` | `switch` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
-| `climate.dehumidifier_native` | climate | `climate_plain` (climate_plain) | `humidifier.e2e_{slug}_dehumidifier_native` | `humidifier` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
-| `climate.dehumidifier_switch` | climate | `climate_plain` (climate_plain) | `switch.e2e_{slug}_dehumidifier_switch` | `switch` | one or more (1) | controllable | planned in [#21](https://github.com/Venosta-web/growspace_manager_workspace/issues/21) |
+| `climate.circulation_percentage` | climate | `climate_plain` (climate_plain) | `fan.e2e_{slug}_circulation_fan_percentage` | `fan` | one or more (1) | controllable | covered |
+| `climate.circulation_numeric` | climate | `climate_plain` (climate_plain) | `input_number.e2e_{slug}_circulation_fan_speed` | `input_number` | one or more (1) | controllable | covered |
+| `climate.circulation_binary` | climate | `climate_plain` (climate_plain) | `switch.e2e_{slug}_circulation_fan_switch` | `switch` | one or more (1) | controllable | covered |
+| `climate.exhaust_percentage` | climate | `climate_plain` (climate_plain) | `fan.e2e_{slug}_exhaust_fan_percentage` | `fan` | one or more (1) | controllable | covered |
+| `climate.exhaust_numeric` | climate | `climate_plain` (climate_plain) | `input_number.e2e_{slug}_exhaust_fan_speed` | `input_number` | one or more (1) | controllable | covered |
+| `climate.exhaust_binary` | climate | `climate_plain` (climate_plain) | `switch.e2e_{slug}_exhaust_fan_switch` | `switch` | one or more (1) | controllable | covered |
+| `climate.humidifier_native` | climate | `climate_plain` (climate_plain) | `humidifier.e2e_{slug}_humidifier_native` | `humidifier` | one or more (1) | controllable | covered |
+| `climate.humidifier_switch` | climate | `climate_plain` (climate_plain) | `switch.e2e_{slug}_humidifier_switch` | `switch` | one or more (1) | controllable | covered |
+| `climate.dehumidifier_native` | climate | `climate_plain` (climate_plain) | `humidifier.e2e_{slug}_dehumidifier_native` | `humidifier` | one or more (1) | controllable | covered |
+| `climate.dehumidifier_switch` | climate | `climate_plain` (climate_plain) | `switch.e2e_{slug}_dehumidifier_switch` | `switch` | one or more (1) | controllable | covered |
+| `simulation.circulation_percentage_state` | internal | `climate_plain` (climate_plain) | `input_boolean.e2e_{slug}_circulation_fan_percentage` | `input_boolean` | exactly one (1) | controllable | covered |
+| `simulation.circulation_binary_state` | internal | `climate_plain` (climate_plain) | `input_boolean.e2e_{slug}_circulation_fan_switch` | `input_boolean` | exactly one (1) | controllable | covered |
+| `simulation.exhaust_percentage_state` | internal | `climate_plain` (climate_plain) | `input_boolean.e2e_{slug}_exhaust_fan_percentage` | `input_boolean` | exactly one (1) | controllable | covered |
+| `simulation.exhaust_binary_state` | internal | `climate_plain` (climate_plain) | `input_boolean.e2e_{slug}_exhaust_fan_switch` | `input_boolean` | exactly one (1) | controllable | covered |
+| `simulation.humidifier_native_state` | internal | `climate_plain` (climate_plain) | `input_boolean.e2e_{slug}_humidifier_native` | `input_boolean` | exactly one (1) | controllable | covered |
+| `simulation.humidifier_switch_state` | internal | `climate_plain` (climate_plain) | `input_boolean.e2e_{slug}_humidifier_switch` | `input_boolean` | exactly one (1) | controllable | covered |
+| `simulation.dehumidifier_native_state` | internal | `climate_plain` (climate_plain) | `input_boolean.e2e_{slug}_dehumidifier_native` | `input_boolean` | exactly one (1) | controllable | covered |
+| `simulation.dehumidifier_switch_state` | internal | `climate_plain` (climate_plain) | `input_boolean.e2e_{slug}_dehumidifier_switch` | `input_boolean` | exactly one (1) | controllable | covered |
+| `simulation.circulation_percentage_value` | internal | `climate_plain` (climate_plain) | `input_number.e2e_{slug}_circulation_fan_percentage_value` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.exhaust_percentage_value` | internal | `climate_plain` (climate_plain) | `input_number.e2e_{slug}_exhaust_fan_percentage_value` | `input_number` | exactly one (1) | controllable | covered |
 | `ac_infinity.circulation.mode_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `select.e2e_{slug}_circulation_active_mode` | `select` | exactly one (1) | controllable | planned in [#20](https://github.com/Venosta-web/growspace_manager_workspace/issues/20) |
 | `ac_infinity.circulation.speed_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `number.e2e_{slug}_circulation_speed` | `number` | exactly one (1) | controllable | planned in [#20](https://github.com/Venosta-web/growspace_manager_workspace/issues/20) |
 | `ac_infinity.exhaust.mode_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `select.e2e_{slug}_exhaust_active_mode` | `select` | exactly one (1) | controllable | planned in [#20](https://github.com/Venosta-web/growspace_manager_workspace/issues/20) |
@@ -186,6 +199,21 @@ whose backing input or gate does not exist. Adding a signal to the profile is on
 > *"Configuring the template integration under the switch platform key is not
 > supported."*
 
+### Plain climate actuators
+
+The `climate_plain` profile owns one writable example of every fan mode the
+card classifies: a percentage `fan`, a 0–10 `input_number`, and a binary
+`switch`, independently for circulation and exhaust. Template fans and
+switches use profile-local helpers, while native humidifier and dehumidifier
+entities use Generic Hygrostat over their own profile-local backing inputs.
+No actuator ID is shared with another growspace or controller.
+
+Setup sends only the contract-derived plural entity arrays and the controller
+fields this profile owns. Circulation and exhaust receive deterministic
+targets and hysteresis; humidification and dehumidification receive explicit
+flower-stage day/night thresholds. The three writable environmental inputs let
+the E2E spec drive controller demand without physical sensors.
+
 ### Deterministic cameras
 
 The vision profile uses two Local File config entries,
@@ -203,10 +231,11 @@ the integration's availability gate before any external request.
 
 ## 2. Growspaces
 
-`tests/e2e/fixtures/e2e-setup.ts` creates the 13 growspaces, places an anchor
+`tests/e2e/fixtures/e2e-setup.ts` creates the 14 growspaces, places an anchor
 plant in each, links the sensors above, and writes the resulting IDs back into
-`tests/e2e/.env.test`. It is idempotent — every sensor list is set outright, so
-a rerun replaces it rather than growing it.
+`tests/e2e/.env.test`. It is idempotent — every profile-owned sensor list is set
+outright, so a rerun replaces it rather than growing it, while fields outside
+that profile's generated service payload remain untouched.
 
 A growspace's own entities are named after the growspace, its simulated sensors
 after the profile slug, and setup waits for `sensor.e2e_<slug>_overview` to
