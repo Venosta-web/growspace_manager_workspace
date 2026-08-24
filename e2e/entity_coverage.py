@@ -52,6 +52,7 @@ class ProfileInstance:
     plant_stage_field: str | None = None
     stage_days_ago: int = 0
     vwc_strategy: dict[str, int | float] | None = None
+    service_defaults: dict[str, dict[str, Any]] | None = None
 
 
 @dataclass(frozen=True)
@@ -141,6 +142,24 @@ VWC_STRATEGY = {
     "shot_interval_minutes": 15,
 }
 
+LIGHTING_SERVICE_DEFAULTS: dict[str, dict[str, Any]] = {
+    "configure_environment": {
+        "growlight_config": {
+            "enabled": True,
+            "power": 65,
+            "sunrise_enabled": False,
+            "sunrise_minutes": 0,
+        }
+    },
+    "set_irrigation_strategy": {
+        "enabled": True,
+        "auto_light_tracking": True,
+        # A local wall-clock anchor is stable across restarts and does not bake
+        # the generator host's UTC offset into the fixture.
+        "lights_on_time": "06:00:00",
+    },
+}
+
 PROFILES: tuple[CapabilityProfile, ...] = (
     CapabilityProfile(
         "stage",
@@ -197,8 +216,14 @@ PROFILES: tuple[CapabilityProfile, ...] = (
     CapabilityProfile(
         "lighting",
         "Light-cycle sensing and plain grow-light control",
-        (ProfileInstance("lighting", "E2E Lighting", "flower_start"),),
-        19,
+        (
+            ProfileInstance(
+                "lighting",
+                "E2E Lighting",
+                "flower_start",
+                service_defaults=LIGHTING_SERVICE_DEFAULTS,
+            ),
+        ),
     ),
     CapabilityProfile(
         "climate_plain",
@@ -807,13 +832,14 @@ ROLES: tuple[CoverageRole, ...] = (
         "Binary light-state input used by automatic cycle tracking",
         ONE_OR_MORE,
         (
-            _planned(
+            Assignment(
                 "lighting",
                 "binary_sensor.e2e_{slug}_light_state",
                 "binary_sensor",
-                19,
-                _setup("light_sensors", "list"),
-                behavior=Behavior.READ_ONLY,
+                Behavior.READ_ONLY,
+                Status.COVERED,
+                generator="aggregate_light_sensor",
+                setup=_setup("light_sensors", "list"),
             ),
         ),
     ),
@@ -823,12 +849,14 @@ ROLES: tuple[CoverageRole, ...] = (
         "Plain switched grow light",
         ONE_OR_MORE,
         (
-            _planned(
+            Assignment(
                 "lighting",
                 "switch.e2e_{slug}_growlight_switch",
                 "switch",
-                19,
-                _setup("growlight_entities", "list"),
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="template_switch",
+                setup=_setup("growlight_entities", "list"),
             ),
         ),
     ),
@@ -838,12 +866,62 @@ ROLES: tuple[CoverageRole, ...] = (
         "Dimmable grow light",
         ONE_OR_MORE,
         (
-            _planned(
+            Assignment(
                 "lighting",
                 "light.e2e_{slug}_growlight_dimmable",
                 "light",
-                19,
-                _setup("growlight_entities", "list"),
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="template_light",
+                setup=_setup("growlight_entities", "list"),
+            ),
+        ),
+    ),
+    CoverageRole(
+        "simulation.growlight_switch_state",
+        "internal",
+        "Persistent backing state for the plain grow light",
+        EXACTLY_ONE,
+        (
+            Assignment(
+                "lighting",
+                "input_boolean.e2e_{slug}_growlight_switch",
+                "input_boolean",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="input_boolean",
+            ),
+        ),
+    ),
+    CoverageRole(
+        "simulation.growlight_dimmable_state",
+        "internal",
+        "Persistent on/off backing state for the dimmable grow light",
+        EXACTLY_ONE,
+        (
+            Assignment(
+                "lighting",
+                "input_boolean.e2e_{slug}_growlight_dimmable",
+                "input_boolean",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="input_boolean",
+            ),
+        ),
+    ),
+    CoverageRole(
+        "simulation.growlight_dimmable_brightness",
+        "internal",
+        "Persistent brightness backing value for the dimmable grow light",
+        EXACTLY_ONE,
+        (
+            Assignment(
+                "lighting",
+                "input_number.e2e_{slug}_growlight_dimmable_brightness",
+                "input_number",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="brightness_input",
             ),
         ),
     ),
@@ -1257,8 +1335,14 @@ def build_card_manifest(
     profiles: list[dict[str, Any]] = []
     for profile in PROFILES:
         for instance in profile.instances:
-            services = setup_by_instance.get((profile.id, instance.slug))
-            if services is None:
+            services = {
+                service: dict(payload)
+                for service, payload in (instance.service_defaults or {}).items()
+            }
+            generated_services = setup_by_instance.get((profile.id, instance.slug), {})
+            for service, payload in generated_services.items():
+                services.setdefault(service, {}).update(payload)
+            if not services:
                 continue
             item: dict[str, Any] = {
                 "profile": profile.id,
@@ -1426,16 +1510,20 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
     )
     lines += [
         "  # ---------------------------------------------------------------",
-        "  # pumps (toggleable, state backed by input_boolean)",
+        "  # plain switches (toggleable, state backed by input_boolean)",
         "  # ---------------------------------------------------------------",
         "  - switch:",
     ]
     for record in switches:
         unique_id = record.entity_id.split(".", 1)[1]
         backing = f"input_boolean.{unique_id}"
-        kind = unique_id.rsplit("_", 2)[-2] + "_pump"
+        if record.role_id.startswith("irrigation."):
+            kind = unique_id.rsplit("_", 2)[-2] + "_pump"
+            name = f"sim e2e {record.slug} {kind}"
+        else:
+            name = unique_id.replace("_", " ")
         lines += [
-            f"      - name: sim e2e {record.slug} {kind}",
+            f"      - name: {name}",
             f"        unique_id: {unique_id}",
             f"        state: \"{{{{ is_state('{backing}', 'on') }}}}\"",
             "        turn_on:",
@@ -1448,19 +1536,88 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
             f"            entity_id: {backing}",
         ]
 
+    binary_light_sensors = [
+        record for record in active if record.generator == "aggregate_light_sensor"
+    ]
+    if binary_light_sensors:
+        lines += [
+            "  # ---------------------------------------------------------------",
+            "  # aggregate light-state sensors used by automatic cycle tracking",
+            "  # ---------------------------------------------------------------",
+            "  - binary_sensor:",
+        ]
+    for record in binary_light_sensors:
+        unique_id = record.entity_id.split(".", 1)[1]
+        actuators = [
+            candidate.entity_id
+            for candidate in by_slug[record.slug]
+            if candidate.role_id
+            in {"lighting.growlight_switch", "lighting.growlight_dimmable"}
+        ]
+        state = " or ".join(
+            f"is_state('{entity_id}', 'on')" for entity_id in actuators
+        )
+        lines += [
+            f"      - name: {unique_id.replace('_', ' ')}",
+            f"        unique_id: {unique_id}",
+            "        device_class: light",
+            f'        state: "{{{{ {state} }}}}"',
+        ]
+
+    dimmable_lights = [
+        record for record in active if record.generator == "template_light"
+    ]
+    if dimmable_lights:
+        lines += [
+            "  # ---------------------------------------------------------------",
+            "  # dimmable lights (state and level backed by helpers)",
+            "  # ---------------------------------------------------------------",
+            "  - light:",
+        ]
+    for record in dimmable_lights:
+        unique_id = record.entity_id.split(".", 1)[1]
+        state_backing = f"input_boolean.{unique_id}"
+        level_backing = f"input_number.{unique_id}_brightness"
+        lines += [
+            f"      - name: {unique_id.replace('_', ' ')}",
+            f"        unique_id: {unique_id}",
+            f"        state: \"{{{{ is_state('{state_backing}', 'on') }}}}\"",
+            f"        level: \"{{{{ states('{level_backing}') | int(128) }}}}\"",
+            "        turn_on:",
+            "          action: input_boolean.turn_on",
+            "          target:",
+            f"            entity_id: {state_backing}",
+            "        turn_off:",
+            "          action: input_boolean.turn_off",
+            "          target:",
+            f"            entity_id: {state_backing}",
+            "        set_level:",
+            "          - action: input_number.set_value",
+            "            target:",
+            f"              entity_id: {level_backing}",
+            "            data:",
+            '              value: "{{ brightness }}"',
+            "          - action: input_boolean.turn_on",
+            "            target:",
+            f"              entity_id: {state_backing}",
+        ]
+
     lines += ["", "input_boolean:"]
-    backing_by_id = {
-        record.entity_id: record
-        for record in active
-        if record.generator == "input_boolean"
-    }
-    for switch in switches:
-        record = backing_by_id[f"input_boolean.{switch.entity_id.split('.', 1)[1]}"]
+    boolean_backings = [
+        record for record in active if record.generator == "input_boolean"
+    ]
+    for record in boolean_backings:
         object_id = record.entity_id.split(".", 1)[1]
-        kind = object_id.rsplit("_", 2)[-2] + "_pump"
+        if record.role_id.startswith("simulation.") and object_id.startswith(
+            "sim_e2e_"
+        ):
+            kind = object_id.rsplit("_", 2)[-2] + "_pump"
+            name = f"sim e2e {record.slug} {kind}"
+        else:
+            name = object_id.replace("_", " ")
         lines += [
             f"  {object_id}:",
-            f"    name: sim e2e {record.slug} {kind}",
+            f"    name: {name}",
             "    initial: false",
         ]
 
@@ -1508,6 +1665,19 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
                 f'    unit_of_measurement: "{sim.unit}"',
                 "    mode: box",
             ]
+    for record in active:
+        if record.generator != "brightness_input":
+            continue
+        object_id = record.entity_id.split(".", 1)[1]
+        lines += [
+            f"  {object_id}:",
+            f"    name: {object_id.replace('_', ' ')}",
+            "    min: 0",
+            "    max: 255",
+            "    step: 1",
+            "    initial: 128",
+            "    mode: slider",
+        ]
     return "\n".join(lines) + "\n"
 
 
@@ -1526,8 +1696,8 @@ def extract_generated_entity_ids(package_text: str) -> list[str]:
         if section == "template":
             if stripped == "sensor:":
                 template_domain = "sensor"
-            elif stripped == "- switch:":
-                template_domain = "switch"
+            elif stripped in {"- switch:", "- binary_sensor:", "- light:"}:
+                template_domain = stripped.removeprefix("- ").removesuffix(":")
             elif stripped.startswith("unique_id:") and template_domain:
                 ids.append(f"{template_domain}.{stripped.split(':', 1)[1].strip()}")
         elif section in {"input_boolean", "input_number"}:
