@@ -1348,6 +1348,96 @@ def _plain_climate_support_roles() -> tuple[CoverageRole, ...]:
     )
 
 
+def _dashboard_equipment_roles() -> tuple[CoverageRole, ...]:
+    """Give every growspace dashboard a complete passive equipment set.
+
+    Capability-specific profiles keep their faithful actuators. The shared
+    switches fill only the roles that profile does not already own, so focused
+    controller specs retain their exact hardware shape while every dashboard
+    still renders all five device chips.
+    """
+
+    specs = (
+        (
+            "exhaust_fan",
+            "exhaust_fan_entities",
+            "climate",
+            {"climate_plain", "ac_infinity"},
+        ),
+        (
+            "circulation_fan",
+            "circulation_fan_entities",
+            "climate",
+            {"climate_plain", "ac_infinity"},
+        ),
+        (
+            "humidifier",
+            "humidifier_entities",
+            "climate",
+            {"climate_plain", "ac_infinity"},
+        ),
+        (
+            "dehumidifier",
+            "dehumidifier_entities",
+            "climate",
+            {"climate_plain", "ac_infinity"},
+        ),
+        (
+            "growlight",
+            "growlight_entities",
+            "lighting",
+            {"lighting", "ac_infinity"},
+        ),
+    )
+    dashboard_profiles = tuple(
+        profile.id for profile in PROFILES if profile.id != "source_air"
+    )
+    roles: list[CoverageRole] = []
+    for suffix, field_name, category, native_profiles in specs:
+        assignments = tuple(
+            Assignment(
+                profile,
+                f"switch.sim_e2e_{{slug}}_{suffix}",
+                "switch",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="template_switch",
+                setup=_setup(field_name, "list"),
+            )
+            for profile in dashboard_profiles
+            if profile not in native_profiles
+        )
+        roles.append(
+            CoverageRole(
+                f"dashboard_equipment.{suffix}",
+                category,
+                f"Passive dashboard {suffix.replace('_', ' ')}",
+                ONE_OR_MORE,
+                assignments,
+            )
+        )
+        roles.append(
+            CoverageRole(
+                f"simulation.dashboard_{suffix}_state",
+                "internal",
+                f"Persistent state for the dashboard {suffix.replace('_', ' ')}",
+                EXACTLY_ONE,
+                tuple(
+                    Assignment(
+                        assignment.profile,
+                        assignment.entity_id_rule.replace("switch.", "input_boolean.", 1),
+                        "input_boolean",
+                        Behavior.CONTROLLABLE,
+                        Status.COVERED,
+                        generator="input_boolean",
+                    )
+                    for assignment in assignments
+                ),
+            )
+        )
+    return tuple(roles)
+
+
 def _ac_infinity_roles() -> tuple[CoverageRole, ...]:
     roles: list[CoverageRole] = []
 
@@ -1452,6 +1542,7 @@ def _ac_infinity_roles() -> tuple[CoverageRole, ...]:
 ROLES += _mirror_support_roles(ROLES)
 ROLES += _plain_climate_roles()
 ROLES += _plain_climate_support_roles()
+ROLES += _dashboard_equipment_roles()
 ROLES += _ac_infinity_roles()
 ROLES += (
     CoverageRole(

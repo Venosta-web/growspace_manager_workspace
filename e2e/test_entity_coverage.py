@@ -23,6 +23,41 @@ from e2e.entity_coverage import (
 
 
 class EntityCoverageContractTest(unittest.TestCase):
+    def test_every_dashboard_profile_exposes_complete_environment_equipment(
+        self,
+    ) -> None:
+        equipment_fields = {
+            "exhaust fan": (
+                "exhaust_fan_entities",
+                "exhaust_fan_ac_infinity_devices",
+            ),
+            "circulation fan": (
+                "circulation_fan_entities",
+                "circulation_fan_ac_infinity_devices",
+            ),
+            "humidifier": (
+                "humidifier_entities",
+                "humidifier_ac_infinity_devices",
+            ),
+            "dehumidifier": (
+                "dehumidifier_entities",
+                "dehumidifier_ac_infinity_devices",
+            ),
+            "grow light": (
+                "growlight_entities",
+                "growlight_ac_infinity_devices",
+            ),
+        }
+
+        for profile in build_card_manifest()["profiles"]:
+            environment = profile["services"].get("configure_environment", {})
+            for label, fields in equipment_fields.items():
+                with self.subTest(profile=profile["slug"], equipment=label):
+                    self.assertTrue(
+                        any(environment.get(field) for field in fields),
+                        f"{profile['slug']} has no simulated {label}",
+                    )
+
     def test_delivered_growspaces_and_entity_families_are_complete(self) -> None:
         records = [
             record for record in expand_entities() if record.status is Status.COVERED
@@ -36,7 +71,7 @@ class EntityCoverageContractTest(unittest.TestCase):
             {
                 "sensor": 115,
                 "input_number": 64,
-                "input_boolean": 30,
+                "input_boolean": 95,
                 "binary_sensor": 1,
                 "light": 1,
                 "fan": 2,
@@ -45,7 +80,7 @@ class EntityCoverageContractTest(unittest.TestCase):
                 "select": 5,
                 "number": 6,
                 "time": 2,
-                "switch": 25,
+                "switch": 90,
                 "weather": 1,
             },
         )
@@ -101,7 +136,15 @@ class EntityCoverageContractTest(unittest.TestCase):
         monitored = profiles["irrigation_monitored"]["services"]
         self.assertEqual(
             set(monitored["configure_environment"]),
-            {"drain_volume_sensors", "irrigation_flow_sensors"},
+            {
+                "drain_volume_sensors",
+                "irrigation_flow_sensors",
+                "exhaust_fan_entities",
+                "circulation_fan_entities",
+                "humidifier_entities",
+                "dehumidifier_entities",
+                "growlight_entities",
+            },
         )
         self.assertEqual(
             set(monitored["set_irrigation_settings"]),
@@ -180,6 +223,11 @@ class EntityCoverageContractTest(unittest.TestCase):
                 "runoff_ec_sensors": 1,
                 "power_sensors": 1,
                 "energy_sensors": 1,
+                "exhaust_fan_entities": 1,
+                "circulation_fan_entities": 1,
+                "humidifier_entities": 1,
+                "dehumidifier_entities": 1,
+                "growlight_entities": 1,
             },
         )
         # CO2 and soil moisture have no plural spelling in the backend schema,
@@ -224,7 +272,9 @@ class EntityCoverageContractTest(unittest.TestCase):
 
         configured = [
             entity_id
-            for value in environment.values()
+            for field, value in environment.items()
+            if field.endswith("_sensors")
+            or field in {"co2_sensor", "soil_moisture_sensor"}
             for entity_id in (value if isinstance(value, list) else [value])
         ]
         self.assertTrue(configured)
@@ -476,6 +526,10 @@ class EntityCoverageContractTest(unittest.TestCase):
             environment["vpd_sensors"],
             ["input_number.e2e_climate_plain_vpd"],
         )
+        self.assertEqual(
+            environment["growlight_entities"],
+            ["switch.sim_e2e_climate_plain_growlight"],
+        )
         for singular in (
             "circulation_fan_entity",
             "exhaust_entity",
@@ -488,7 +542,6 @@ class EntityCoverageContractTest(unittest.TestCase):
             self.assertNotIn(singular, environment)
         for unrelated in (
             "irrigation_tanks",
-            "growlight_entities",
             "camera_entities",
         ):
             self.assertNotIn(unrelated, environment)
@@ -697,6 +750,15 @@ class EntityCoverageContractTest(unittest.TestCase):
             profile["services"]["configure_environment"],
             {
                 "snapshot_interval_hours": 6,
+                "exhaust_fan_entities": ["switch.sim_e2e_vision_exhaust_fan"],
+                "circulation_fan_entities": [
+                    "switch.sim_e2e_vision_circulation_fan"
+                ],
+                "humidifier_entities": ["switch.sim_e2e_vision_humidifier"],
+                "dehumidifier_entities": [
+                    "switch.sim_e2e_vision_dehumidifier"
+                ],
+                "growlight_entities": ["switch.sim_e2e_vision_growlight"],
                 "camera_entities": [
                     "camera.e2e_vision_1",
                     "camera.e2e_vision_2",
