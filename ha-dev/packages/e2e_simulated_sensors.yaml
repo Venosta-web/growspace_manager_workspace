@@ -848,6 +848,61 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_veg_irrigation_pump
+      - name: sim e2e veg exhaust fan
+        unique_id: sim_e2e_veg_exhaust_fan
+        state: "{{ is_state('input_boolean.sim_e2e_veg_exhaust_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_veg_exhaust_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_veg_exhaust_fan
+      - name: sim e2e veg circulation fan
+        unique_id: sim_e2e_veg_circulation_fan
+        state: "{{ is_state('input_boolean.sim_e2e_veg_circulation_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_veg_circulation_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_veg_circulation_fan
+      - name: sim e2e veg humidifier
+        unique_id: sim_e2e_veg_humidifier
+        state: "{{ is_state('input_boolean.sim_e2e_veg_humidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_veg_humidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_veg_humidifier
+      - name: sim e2e veg dehumidifier
+        unique_id: sim_e2e_veg_dehumidifier
+        state: "{{ is_state('input_boolean.sim_e2e_veg_dehumidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_veg_dehumidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_veg_dehumidifier
+      - name: sim e2e veg growlight
+        unique_id: sim_e2e_veg_growlight
+        state: "{{ is_state('input_boolean.sim_e2e_veg_growlight', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_veg_growlight
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_veg_growlight
       - name: sim e2e veg drain_pump
         unique_id: sim_e2e_veg_drain_pump
         state: "{{ is_state('input_boolean.sim_e2e_veg_drain_pump', 'on') }}"
@@ -870,6 +925,61 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_clone_irrigation_pump
+      - name: sim e2e clone exhaust fan
+        unique_id: sim_e2e_clone_exhaust_fan
+        state: "{{ is_state('input_boolean.sim_e2e_clone_exhaust_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_clone_exhaust_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_clone_exhaust_fan
+      - name: sim e2e clone circulation fan
+        unique_id: sim_e2e_clone_circulation_fan
+        state: "{{ is_state('input_boolean.sim_e2e_clone_circulation_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_clone_circulation_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_clone_circulation_fan
+      - name: sim e2e clone humidifier
+        unique_id: sim_e2e_clone_humidifier
+        state: "{{ is_state('input_boolean.sim_e2e_clone_humidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_clone_humidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_clone_humidifier
+      - name: sim e2e clone dehumidifier
+        unique_id: sim_e2e_clone_dehumidifier
+        state: "{{ is_state('input_boolean.sim_e2e_clone_dehumidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_clone_dehumidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_clone_dehumidifier
+      - name: sim e2e clone growlight
+        unique_id: sim_e2e_clone_growlight
+        state: "{{ is_state('input_boolean.sim_e2e_clone_growlight', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_clone_growlight
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_clone_growlight
       - name: sim e2e clone drain_pump
         unique_id: sim_e2e_clone_drain_pump
         state: "{{ is_state('input_boolean.sim_e2e_clone_drain_pump', 'on') }}"
@@ -892,6 +1002,61 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_mother_irrigation_pump
+      - name: sim e2e mother exhaust fan
+        unique_id: sim_e2e_mother_exhaust_fan
+        state: "{{ is_state('input_boolean.sim_e2e_mother_exhaust_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_mother_exhaust_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_mother_exhaust_fan
+      - name: sim e2e mother circulation fan
+        unique_id: sim_e2e_mother_circulation_fan
+        state: "{{ is_state('input_boolean.sim_e2e_mother_circulation_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_mother_circulation_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_mother_circulation_fan
+      - name: sim e2e mother humidifier
+        unique_id: sim_e2e_mother_humidifier
+        state: "{{ is_state('input_boolean.sim_e2e_mother_humidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_mother_humidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_mother_humidifier
+      - name: sim e2e mother dehumidifier
+        unique_id: sim_e2e_mother_dehumidifier
+        state: "{{ is_state('input_boolean.sim_e2e_mother_dehumidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_mother_dehumidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_mother_dehumidifier
+      - name: sim e2e mother growlight
+        unique_id: sim_e2e_mother_growlight
+        state: "{{ is_state('input_boolean.sim_e2e_mother_growlight', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_mother_growlight
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_mother_growlight
       - name: sim e2e mother drain_pump
         unique_id: sim_e2e_mother_drain_pump
         state: "{{ is_state('input_boolean.sim_e2e_mother_drain_pump', 'on') }}"
@@ -914,6 +1079,61 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_flower_irrigation_pump
+      - name: sim e2e flower exhaust fan
+        unique_id: sim_e2e_flower_exhaust_fan
+        state: "{{ is_state('input_boolean.sim_e2e_flower_exhaust_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_flower_exhaust_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_flower_exhaust_fan
+      - name: sim e2e flower circulation fan
+        unique_id: sim_e2e_flower_circulation_fan
+        state: "{{ is_state('input_boolean.sim_e2e_flower_circulation_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_flower_circulation_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_flower_circulation_fan
+      - name: sim e2e flower humidifier
+        unique_id: sim_e2e_flower_humidifier
+        state: "{{ is_state('input_boolean.sim_e2e_flower_humidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_flower_humidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_flower_humidifier
+      - name: sim e2e flower dehumidifier
+        unique_id: sim_e2e_flower_dehumidifier
+        state: "{{ is_state('input_boolean.sim_e2e_flower_dehumidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_flower_dehumidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_flower_dehumidifier
+      - name: sim e2e flower growlight
+        unique_id: sim_e2e_flower_growlight
+        state: "{{ is_state('input_boolean.sim_e2e_flower_growlight', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_flower_growlight
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_flower_growlight
       - name: sim e2e flower drain_pump
         unique_id: sim_e2e_flower_drain_pump
         state: "{{ is_state('input_boolean.sim_e2e_flower_drain_pump', 'on') }}"
@@ -936,6 +1156,61 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_dry_irrigation_pump
+      - name: sim e2e dry exhaust fan
+        unique_id: sim_e2e_dry_exhaust_fan
+        state: "{{ is_state('input_boolean.sim_e2e_dry_exhaust_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_dry_exhaust_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_dry_exhaust_fan
+      - name: sim e2e dry circulation fan
+        unique_id: sim_e2e_dry_circulation_fan
+        state: "{{ is_state('input_boolean.sim_e2e_dry_circulation_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_dry_circulation_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_dry_circulation_fan
+      - name: sim e2e dry humidifier
+        unique_id: sim_e2e_dry_humidifier
+        state: "{{ is_state('input_boolean.sim_e2e_dry_humidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_dry_humidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_dry_humidifier
+      - name: sim e2e dry dehumidifier
+        unique_id: sim_e2e_dry_dehumidifier
+        state: "{{ is_state('input_boolean.sim_e2e_dry_dehumidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_dry_dehumidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_dry_dehumidifier
+      - name: sim e2e dry growlight
+        unique_id: sim_e2e_dry_growlight
+        state: "{{ is_state('input_boolean.sim_e2e_dry_growlight', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_dry_growlight
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_dry_growlight
       - name: sim e2e dry drain_pump
         unique_id: sim_e2e_dry_drain_pump
         state: "{{ is_state('input_boolean.sim_e2e_dry_drain_pump', 'on') }}"
@@ -958,6 +1233,61 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_cure_irrigation_pump
+      - name: sim e2e cure exhaust fan
+        unique_id: sim_e2e_cure_exhaust_fan
+        state: "{{ is_state('input_boolean.sim_e2e_cure_exhaust_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_cure_exhaust_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_cure_exhaust_fan
+      - name: sim e2e cure circulation fan
+        unique_id: sim_e2e_cure_circulation_fan
+        state: "{{ is_state('input_boolean.sim_e2e_cure_circulation_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_cure_circulation_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_cure_circulation_fan
+      - name: sim e2e cure humidifier
+        unique_id: sim_e2e_cure_humidifier
+        state: "{{ is_state('input_boolean.sim_e2e_cure_humidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_cure_humidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_cure_humidifier
+      - name: sim e2e cure dehumidifier
+        unique_id: sim_e2e_cure_dehumidifier
+        state: "{{ is_state('input_boolean.sim_e2e_cure_dehumidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_cure_dehumidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_cure_dehumidifier
+      - name: sim e2e cure growlight
+        unique_id: sim_e2e_cure_growlight
+        state: "{{ is_state('input_boolean.sim_e2e_cure_growlight', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_cure_growlight
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_cure_growlight
       - name: sim e2e cure drain_pump
         unique_id: sim_e2e_cure_drain_pump
         state: "{{ is_state('input_boolean.sim_e2e_cure_drain_pump', 'on') }}"
@@ -980,6 +1310,61 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_vwc_veg_irrigation_pump
+      - name: sim e2e vwc veg exhaust fan
+        unique_id: sim_e2e_vwc_veg_exhaust_fan
+        state: "{{ is_state('input_boolean.sim_e2e_vwc_veg_exhaust_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_veg_exhaust_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_veg_exhaust_fan
+      - name: sim e2e vwc veg circulation fan
+        unique_id: sim_e2e_vwc_veg_circulation_fan
+        state: "{{ is_state('input_boolean.sim_e2e_vwc_veg_circulation_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_veg_circulation_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_veg_circulation_fan
+      - name: sim e2e vwc veg humidifier
+        unique_id: sim_e2e_vwc_veg_humidifier
+        state: "{{ is_state('input_boolean.sim_e2e_vwc_veg_humidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_veg_humidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_veg_humidifier
+      - name: sim e2e vwc veg dehumidifier
+        unique_id: sim_e2e_vwc_veg_dehumidifier
+        state: "{{ is_state('input_boolean.sim_e2e_vwc_veg_dehumidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_veg_dehumidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_veg_dehumidifier
+      - name: sim e2e vwc veg growlight
+        unique_id: sim_e2e_vwc_veg_growlight
+        state: "{{ is_state('input_boolean.sim_e2e_vwc_veg_growlight', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_veg_growlight
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_veg_growlight
       - name: sim e2e vwc_veg drain_pump
         unique_id: sim_e2e_vwc_veg_drain_pump
         state: "{{ is_state('input_boolean.sim_e2e_vwc_veg_drain_pump', 'on') }}"
@@ -1002,6 +1387,61 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_vwc_flower_irrigation_pump
+      - name: sim e2e vwc flower exhaust fan
+        unique_id: sim_e2e_vwc_flower_exhaust_fan
+        state: "{{ is_state('input_boolean.sim_e2e_vwc_flower_exhaust_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_flower_exhaust_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_flower_exhaust_fan
+      - name: sim e2e vwc flower circulation fan
+        unique_id: sim_e2e_vwc_flower_circulation_fan
+        state: "{{ is_state('input_boolean.sim_e2e_vwc_flower_circulation_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_flower_circulation_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_flower_circulation_fan
+      - name: sim e2e vwc flower humidifier
+        unique_id: sim_e2e_vwc_flower_humidifier
+        state: "{{ is_state('input_boolean.sim_e2e_vwc_flower_humidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_flower_humidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_flower_humidifier
+      - name: sim e2e vwc flower dehumidifier
+        unique_id: sim_e2e_vwc_flower_dehumidifier
+        state: "{{ is_state('input_boolean.sim_e2e_vwc_flower_dehumidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_flower_dehumidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_flower_dehumidifier
+      - name: sim e2e vwc flower growlight
+        unique_id: sim_e2e_vwc_flower_growlight
+        state: "{{ is_state('input_boolean.sim_e2e_vwc_flower_growlight', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_flower_growlight
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_flower_growlight
       - name: sim e2e vwc_flower drain_pump
         unique_id: sim_e2e_vwc_flower_drain_pump
         state: "{{ is_state('input_boolean.sim_e2e_vwc_flower_drain_pump', 'on') }}"
@@ -1013,6 +1453,61 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_vwc_flower_drain_pump
+      - name: sim e2e telemetry multi exhaust fan
+        unique_id: sim_e2e_telemetry_multi_exhaust_fan
+        state: "{{ is_state('input_boolean.sim_e2e_telemetry_multi_exhaust_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_telemetry_multi_exhaust_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_telemetry_multi_exhaust_fan
+      - name: sim e2e telemetry multi circulation fan
+        unique_id: sim_e2e_telemetry_multi_circulation_fan
+        state: "{{ is_state('input_boolean.sim_e2e_telemetry_multi_circulation_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_telemetry_multi_circulation_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_telemetry_multi_circulation_fan
+      - name: sim e2e telemetry multi humidifier
+        unique_id: sim_e2e_telemetry_multi_humidifier
+        state: "{{ is_state('input_boolean.sim_e2e_telemetry_multi_humidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_telemetry_multi_humidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_telemetry_multi_humidifier
+      - name: sim e2e telemetry multi dehumidifier
+        unique_id: sim_e2e_telemetry_multi_dehumidifier
+        state: "{{ is_state('input_boolean.sim_e2e_telemetry_multi_dehumidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_telemetry_multi_dehumidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_telemetry_multi_dehumidifier
+      - name: sim e2e telemetry multi growlight
+        unique_id: sim_e2e_telemetry_multi_growlight
+        state: "{{ is_state('input_boolean.sim_e2e_telemetry_multi_growlight', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_telemetry_multi_growlight
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_telemetry_multi_growlight
       - name: sim e2e irrigation_monitored irrigation_pump
         unique_id: sim_e2e_irrigation_monitored_irrigation_pump
         state: "{{ is_state('input_boolean.sim_e2e_irrigation_monitored_irrigation_pump', 'on') }}"
@@ -1024,6 +1519,61 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_irrigation_monitored_irrigation_pump
+      - name: sim e2e irrigation monitored exhaust fan
+        unique_id: sim_e2e_irrigation_monitored_exhaust_fan
+        state: "{{ is_state('input_boolean.sim_e2e_irrigation_monitored_exhaust_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_monitored_exhaust_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_monitored_exhaust_fan
+      - name: sim e2e irrigation monitored circulation fan
+        unique_id: sim_e2e_irrigation_monitored_circulation_fan
+        state: "{{ is_state('input_boolean.sim_e2e_irrigation_monitored_circulation_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_monitored_circulation_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_monitored_circulation_fan
+      - name: sim e2e irrigation monitored humidifier
+        unique_id: sim_e2e_irrigation_monitored_humidifier
+        state: "{{ is_state('input_boolean.sim_e2e_irrigation_monitored_humidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_monitored_humidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_monitored_humidifier
+      - name: sim e2e irrigation monitored dehumidifier
+        unique_id: sim_e2e_irrigation_monitored_dehumidifier
+        state: "{{ is_state('input_boolean.sim_e2e_irrigation_monitored_dehumidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_monitored_dehumidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_monitored_dehumidifier
+      - name: sim e2e irrigation monitored growlight
+        unique_id: sim_e2e_irrigation_monitored_growlight
+        state: "{{ is_state('input_boolean.sim_e2e_irrigation_monitored_growlight', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_monitored_growlight
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_monitored_growlight
       - name: sim e2e irrigation_monitored drain_pump
         unique_id: sim_e2e_irrigation_monitored_drain_pump
         state: "{{ is_state('input_boolean.sim_e2e_irrigation_monitored_drain_pump', 'on') }}"
@@ -1046,6 +1596,61 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_irrigation_tanks_irrigation_pump
+      - name: sim e2e irrigation tanks exhaust fan
+        unique_id: sim_e2e_irrigation_tanks_exhaust_fan
+        state: "{{ is_state('input_boolean.sim_e2e_irrigation_tanks_exhaust_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_tanks_exhaust_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_tanks_exhaust_fan
+      - name: sim e2e irrigation tanks circulation fan
+        unique_id: sim_e2e_irrigation_tanks_circulation_fan
+        state: "{{ is_state('input_boolean.sim_e2e_irrigation_tanks_circulation_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_tanks_circulation_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_tanks_circulation_fan
+      - name: sim e2e irrigation tanks humidifier
+        unique_id: sim_e2e_irrigation_tanks_humidifier
+        state: "{{ is_state('input_boolean.sim_e2e_irrigation_tanks_humidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_tanks_humidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_tanks_humidifier
+      - name: sim e2e irrigation tanks dehumidifier
+        unique_id: sim_e2e_irrigation_tanks_dehumidifier
+        state: "{{ is_state('input_boolean.sim_e2e_irrigation_tanks_dehumidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_tanks_dehumidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_tanks_dehumidifier
+      - name: sim e2e irrigation tanks growlight
+        unique_id: sim_e2e_irrigation_tanks_growlight
+        state: "{{ is_state('input_boolean.sim_e2e_irrigation_tanks_growlight', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_tanks_growlight
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_irrigation_tanks_growlight
       - name: e2e lighting growlight switch
         unique_id: e2e_lighting_growlight_switch
         state: "{{ is_state('input_boolean.e2e_lighting_growlight_switch', 'on') }}"
@@ -1057,6 +1662,50 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.e2e_lighting_growlight_switch
+      - name: sim e2e lighting exhaust fan
+        unique_id: sim_e2e_lighting_exhaust_fan
+        state: "{{ is_state('input_boolean.sim_e2e_lighting_exhaust_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_lighting_exhaust_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_lighting_exhaust_fan
+      - name: sim e2e lighting circulation fan
+        unique_id: sim_e2e_lighting_circulation_fan
+        state: "{{ is_state('input_boolean.sim_e2e_lighting_circulation_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_lighting_circulation_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_lighting_circulation_fan
+      - name: sim e2e lighting humidifier
+        unique_id: sim_e2e_lighting_humidifier
+        state: "{{ is_state('input_boolean.sim_e2e_lighting_humidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_lighting_humidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_lighting_humidifier
+      - name: sim e2e lighting dehumidifier
+        unique_id: sim_e2e_lighting_dehumidifier
+        state: "{{ is_state('input_boolean.sim_e2e_lighting_dehumidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_lighting_dehumidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_lighting_dehumidifier
       - name: e2e climate plain circulation fan switch
         unique_id: e2e_climate_plain_circulation_fan_switch
         state: "{{ is_state('input_boolean.e2e_climate_plain_circulation_fan_switch', 'on') }}"
@@ -1101,6 +1750,72 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.e2e_climate_plain_dehumidifier_switch
+      - name: sim e2e climate plain growlight
+        unique_id: sim_e2e_climate_plain_growlight
+        state: "{{ is_state('input_boolean.sim_e2e_climate_plain_growlight', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_climate_plain_growlight
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_climate_plain_growlight
+      - name: sim e2e vision exhaust fan
+        unique_id: sim_e2e_vision_exhaust_fan
+        state: "{{ is_state('input_boolean.sim_e2e_vision_exhaust_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_vision_exhaust_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_vision_exhaust_fan
+      - name: sim e2e vision circulation fan
+        unique_id: sim_e2e_vision_circulation_fan
+        state: "{{ is_state('input_boolean.sim_e2e_vision_circulation_fan', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_vision_circulation_fan
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_vision_circulation_fan
+      - name: sim e2e vision humidifier
+        unique_id: sim_e2e_vision_humidifier
+        state: "{{ is_state('input_boolean.sim_e2e_vision_humidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_vision_humidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_vision_humidifier
+      - name: sim e2e vision dehumidifier
+        unique_id: sim_e2e_vision_dehumidifier
+        state: "{{ is_state('input_boolean.sim_e2e_vision_dehumidifier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_vision_dehumidifier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_vision_dehumidifier
+      - name: sim e2e vision growlight
+        unique_id: sim_e2e_vision_growlight
+        state: "{{ is_state('input_boolean.sim_e2e_vision_growlight', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_vision_growlight
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.sim_e2e_vision_growlight
   # ---------------------------------------------------------------
   # percentage fans (state and percentage backed by helpers)
   # ---------------------------------------------------------------
@@ -1295,6 +2010,201 @@ input_boolean:
     initial: false
   e2e_climate_plain_dehumidifier_switch:
     name: e2e climate plain dehumidifier switch
+    initial: false
+  sim_e2e_veg_exhaust_fan:
+    name: sim e2e veg exhaust_pump
+    initial: false
+  sim_e2e_clone_exhaust_fan:
+    name: sim e2e clone exhaust_pump
+    initial: false
+  sim_e2e_mother_exhaust_fan:
+    name: sim e2e mother exhaust_pump
+    initial: false
+  sim_e2e_flower_exhaust_fan:
+    name: sim e2e flower exhaust_pump
+    initial: false
+  sim_e2e_dry_exhaust_fan:
+    name: sim e2e dry exhaust_pump
+    initial: false
+  sim_e2e_cure_exhaust_fan:
+    name: sim e2e cure exhaust_pump
+    initial: false
+  sim_e2e_vwc_veg_exhaust_fan:
+    name: sim e2e vwc_veg exhaust_pump
+    initial: false
+  sim_e2e_vwc_flower_exhaust_fan:
+    name: sim e2e vwc_flower exhaust_pump
+    initial: false
+  sim_e2e_telemetry_multi_exhaust_fan:
+    name: sim e2e telemetry_multi exhaust_pump
+    initial: false
+  sim_e2e_irrigation_monitored_exhaust_fan:
+    name: sim e2e irrigation_monitored exhaust_pump
+    initial: false
+  sim_e2e_irrigation_tanks_exhaust_fan:
+    name: sim e2e irrigation_tanks exhaust_pump
+    initial: false
+  sim_e2e_lighting_exhaust_fan:
+    name: sim e2e lighting exhaust_pump
+    initial: false
+  sim_e2e_vision_exhaust_fan:
+    name: sim e2e vision exhaust_pump
+    initial: false
+  sim_e2e_veg_circulation_fan:
+    name: sim e2e veg circulation_pump
+    initial: false
+  sim_e2e_clone_circulation_fan:
+    name: sim e2e clone circulation_pump
+    initial: false
+  sim_e2e_mother_circulation_fan:
+    name: sim e2e mother circulation_pump
+    initial: false
+  sim_e2e_flower_circulation_fan:
+    name: sim e2e flower circulation_pump
+    initial: false
+  sim_e2e_dry_circulation_fan:
+    name: sim e2e dry circulation_pump
+    initial: false
+  sim_e2e_cure_circulation_fan:
+    name: sim e2e cure circulation_pump
+    initial: false
+  sim_e2e_vwc_veg_circulation_fan:
+    name: sim e2e vwc_veg circulation_pump
+    initial: false
+  sim_e2e_vwc_flower_circulation_fan:
+    name: sim e2e vwc_flower circulation_pump
+    initial: false
+  sim_e2e_telemetry_multi_circulation_fan:
+    name: sim e2e telemetry_multi circulation_pump
+    initial: false
+  sim_e2e_irrigation_monitored_circulation_fan:
+    name: sim e2e irrigation_monitored circulation_pump
+    initial: false
+  sim_e2e_irrigation_tanks_circulation_fan:
+    name: sim e2e irrigation_tanks circulation_pump
+    initial: false
+  sim_e2e_lighting_circulation_fan:
+    name: sim e2e lighting circulation_pump
+    initial: false
+  sim_e2e_vision_circulation_fan:
+    name: sim e2e vision circulation_pump
+    initial: false
+  sim_e2e_veg_humidifier:
+    name: sim e2e veg veg_pump
+    initial: false
+  sim_e2e_clone_humidifier:
+    name: sim e2e clone clone_pump
+    initial: false
+  sim_e2e_mother_humidifier:
+    name: sim e2e mother mother_pump
+    initial: false
+  sim_e2e_flower_humidifier:
+    name: sim e2e flower flower_pump
+    initial: false
+  sim_e2e_dry_humidifier:
+    name: sim e2e dry dry_pump
+    initial: false
+  sim_e2e_cure_humidifier:
+    name: sim e2e cure cure_pump
+    initial: false
+  sim_e2e_vwc_veg_humidifier:
+    name: sim e2e vwc_veg veg_pump
+    initial: false
+  sim_e2e_vwc_flower_humidifier:
+    name: sim e2e vwc_flower flower_pump
+    initial: false
+  sim_e2e_telemetry_multi_humidifier:
+    name: sim e2e telemetry_multi multi_pump
+    initial: false
+  sim_e2e_irrigation_monitored_humidifier:
+    name: sim e2e irrigation_monitored monitored_pump
+    initial: false
+  sim_e2e_irrigation_tanks_humidifier:
+    name: sim e2e irrigation_tanks tanks_pump
+    initial: false
+  sim_e2e_lighting_humidifier:
+    name: sim e2e lighting lighting_pump
+    initial: false
+  sim_e2e_vision_humidifier:
+    name: sim e2e vision vision_pump
+    initial: false
+  sim_e2e_veg_dehumidifier:
+    name: sim e2e veg veg_pump
+    initial: false
+  sim_e2e_clone_dehumidifier:
+    name: sim e2e clone clone_pump
+    initial: false
+  sim_e2e_mother_dehumidifier:
+    name: sim e2e mother mother_pump
+    initial: false
+  sim_e2e_flower_dehumidifier:
+    name: sim e2e flower flower_pump
+    initial: false
+  sim_e2e_dry_dehumidifier:
+    name: sim e2e dry dry_pump
+    initial: false
+  sim_e2e_cure_dehumidifier:
+    name: sim e2e cure cure_pump
+    initial: false
+  sim_e2e_vwc_veg_dehumidifier:
+    name: sim e2e vwc_veg veg_pump
+    initial: false
+  sim_e2e_vwc_flower_dehumidifier:
+    name: sim e2e vwc_flower flower_pump
+    initial: false
+  sim_e2e_telemetry_multi_dehumidifier:
+    name: sim e2e telemetry_multi multi_pump
+    initial: false
+  sim_e2e_irrigation_monitored_dehumidifier:
+    name: sim e2e irrigation_monitored monitored_pump
+    initial: false
+  sim_e2e_irrigation_tanks_dehumidifier:
+    name: sim e2e irrigation_tanks tanks_pump
+    initial: false
+  sim_e2e_lighting_dehumidifier:
+    name: sim e2e lighting lighting_pump
+    initial: false
+  sim_e2e_vision_dehumidifier:
+    name: sim e2e vision vision_pump
+    initial: false
+  sim_e2e_veg_growlight:
+    name: sim e2e veg veg_pump
+    initial: false
+  sim_e2e_clone_growlight:
+    name: sim e2e clone clone_pump
+    initial: false
+  sim_e2e_mother_growlight:
+    name: sim e2e mother mother_pump
+    initial: false
+  sim_e2e_flower_growlight:
+    name: sim e2e flower flower_pump
+    initial: false
+  sim_e2e_dry_growlight:
+    name: sim e2e dry dry_pump
+    initial: false
+  sim_e2e_cure_growlight:
+    name: sim e2e cure cure_pump
+    initial: false
+  sim_e2e_vwc_veg_growlight:
+    name: sim e2e vwc_veg veg_pump
+    initial: false
+  sim_e2e_vwc_flower_growlight:
+    name: sim e2e vwc_flower flower_pump
+    initial: false
+  sim_e2e_telemetry_multi_growlight:
+    name: sim e2e telemetry_multi multi_pump
+    initial: false
+  sim_e2e_irrigation_monitored_growlight:
+    name: sim e2e irrigation_monitored monitored_pump
+    initial: false
+  sim_e2e_irrigation_tanks_growlight:
+    name: sim e2e irrigation_tanks tanks_pump
+    initial: false
+  sim_e2e_climate_plain_growlight:
+    name: sim e2e climate_plain plain_pump
+    initial: false
+  sim_e2e_vision_growlight:
+    name: sim e2e vision vision_pump
     initial: false
 
 input_number:
