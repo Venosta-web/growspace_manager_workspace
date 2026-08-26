@@ -178,9 +178,12 @@ function validateGlobalSettings(manifest, entries) {
   if (!manifest.global_settings || Object.keys(manifest.global_settings).length === 0) return errors;
   if (entries.length !== 1) return [`global settings: expected one Growspace Manager config entry, found ${entries.length}`];
   if (!entries[0].options) return ['global settings: config-entry storage has no options payload'];
+  // The options flow nests install-wide fields under `global_settings`; older
+  // entries kept them at the top level, so read whichever this entry carries.
+  const options = entries[0].options.global_settings ?? entries[0].options;
   for (const [key, expected] of Object.entries(manifest.global_settings)) {
-    if (entries[0].options[key] !== expected) {
-      errors.push(`global settings: ${key} is ${JSON.stringify(entries[0].options[key])}, expected ${JSON.stringify(expected)}`);
+    if (options[key] !== expected) {
+      errors.push(`global settings: ${key} is ${JSON.stringify(options[key])}, expected ${JSON.stringify(expected)}`);
     }
   }
   return errors;
@@ -229,12 +232,40 @@ async function restJson(baseUrl, token, pathname, options = {}) {
   return body ? JSON.parse(body) : null;
 }
 
+// Writing a simulated device is not a no-op the way writing a helper is: it
+// pins that growspace to the value written, which is the point during a demo
+// and exactly wrong after a preflight. Releasing the gates hands every
+// dashboard back to its waveform.
+const EQUIPMENT_GATE_ROLE = 'simulation.manual_equipment';
+
+async function releaseSimulatedEquipment(manifest, baseUrl, token) {
+  const errors = [];
+  let released = 0;
+  for (const entity of manifest.entities.filter((item) => item.role === EQUIPMENT_GATE_ROLE)) {
+    try {
+      await restJson(baseUrl, token, '/api/services/input_boolean/turn_off', {
+        method: 'POST',
+        body: JSON.stringify({ entity_id: entity.entity_id }),
+      });
+      released += 1;
+    } catch (error) {
+      errors.push(`${owner(entity)}: could not release ${entity.entity_id}: ${error.message}`);
+    }
+  }
+  return { errors, released };
+}
+
 async function exerciseWritableEntities(manifest, states, baseUrl, token) {
   const live = stateMap(states);
   const errors = [];
   let exercised = 0;
   for (const entity of manifest.entities.filter((item) => item.behavior === 'controllable')) {
-    const state = live.get(entity.entity_id);
+    const snapshot = live.get(entity.entity_id);
+    if (!snapshot || UNAVAILABLE.has(snapshot.state)) continue;
+    // Re-read rather than replay the batch snapshot: a simulated device moves
+    // while the pass runs, and writing back a value it held minutes ago is a
+    // visible jump in the demo's history rather than the no-op this intends.
+    const state = await restJson(baseUrl, token, `/api/states/${entity.entity_id}`);
     if (!state || UNAVAILABLE.has(state.state)) continue;
     const call = serviceCallForState(state);
     if (!call || (Number.isNaN(call.data.value))) {
@@ -392,6 +423,8 @@ async function main(argv = process.argv.slice(2)) {
 
   const writes = await exerciseWritableEntities(manifest, states, baseUrl, token);
   errors.push(...writes.errors);
+  const released = await releaseSimulatedEquipment(manifest, baseUrl, token);
+  errors.push(...released.errors);
   const browser = argv.includes('--skip-browser')
     ? { errors: [], bootstrapped: 0 }
     : await bootstrapDashboards({ cardRoot, baseUrl, token, stages });
@@ -406,6 +439,7 @@ async function main(argv = process.argv.slice(2)) {
   }
   console.log(`  PASS entities: ${manifest.entities.length}/${manifest.entities.length} available with contract metadata`);
   console.log(`  PASS writes: ${writes.exercised} controllable entities exercised with no-op service calls`);
+  console.log(`  PASS simulation: ${released.released} growspaces released back to free-running devices`);
   console.log(`  PASS backend: ${manifest.profiles.length} profile payloads retained every configured entity role`);
   console.log(`  PASS registries: ${entityRegistry.length} entities checked; AC Infinity bundles have stable devices`);
   console.log(`  PASS Lovelace: ${stages.length} dashboards and one card resource are unique and current`);
@@ -414,6 +448,7 @@ async function main(argv = process.argv.slice(2)) {
 }
 
 module.exports = {
+  EQUIPMENT_GATE_ROLE,
   collectEntityIds,
   readConfigEntryStorage,
   serviceCallForState,
