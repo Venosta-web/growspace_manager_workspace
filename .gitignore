@@ -16,6 +16,10 @@ ha-dev/blueprints/
 # NOTE: ha-dev/packages/ is generated but TRACKED — see scripts/gen-e2e-sensors
 ha-dev/image/
 ha-dev/www/community/
+# Snapshots the integration captures at runtime (the camera fixtures under
+# ha-dev/www/e2e-camera-assets/ are generated but TRACKED — see
+# scripts/gen-e2e-camera-assets)
+ha-dev/www/growspace_manager/
 ha-dev/custom_components/*
 !ha-dev/custom_components/ac_infinity/
 !ha-dev/custom_components/ac_infinity/**
