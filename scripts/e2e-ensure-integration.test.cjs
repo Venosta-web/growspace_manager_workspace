@@ -29,6 +29,35 @@ test('creates the integration entry through its user config flow', async () => {
   ]);
 });
 
+test('waits for an entry that is still setting up', async () => {
+  const states = ['setup_in_progress', 'setup_in_progress', 'loaded'];
+  let slept = 0;
+  const result = await ensureIntegration({
+    listEntries: async () => [{ entry_id: 'entry-1', state: states.shift() }],
+    post: async () => assert.fail('must not open a config flow'),
+    intervalMs: 5,
+    sleep: async () => {
+      slept += 1;
+    },
+  });
+  assert.deepEqual(result, { created: false, entryId: 'entry-1' });
+  assert.equal(slept, 2);
+});
+
+test('gives up on an entry that never loads', async () => {
+  let ticks = 0;
+  await assert.rejects(
+    ensureIntegration({
+      listEntries: async () => [{ entry_id: 'entry-1', state: 'setup_retry' }],
+      timeoutMs: 30,
+      intervalMs: 10,
+      sleep: async () => {},
+      now: () => (ticks += 10),
+    }),
+    /still setup_retry/,
+  );
+});
+
 test('refuses duplicate integration entries', async () => {
   await assert.rejects(
     ensureIntegration({ listEntries: async () => [{}, {}] }),

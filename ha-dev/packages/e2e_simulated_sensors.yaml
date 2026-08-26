@@ -106,6 +106,11 @@ template:
         state_class: measurement
         state: >-
           {{ (55.0 + 45.0 * sin( ((as_timestamp(now()) + 0) % 10800) / 10800 * 2 * pi )) | round(2) }}
+      - name: e2e veg light
+        unique_id: e2e_veg_light
+        state_class: measurement
+        state: >-
+          {{ (5.0 + 5.0 * sin( ((as_timestamp(now()) + 0) % 86400) / 86400 * 2 * pi )) | round(0) }}
       - name: e2e veg energy
         unique_id: e2e_veg_energy
         unit_of_measurement: "kWh"
@@ -217,6 +222,11 @@ template:
         state_class: measurement
         state: >-
           {{ (55.0 + 45.0 * sin( ((as_timestamp(now()) + 600) % 10800) / 10800 * 2 * pi )) | round(2) }}
+      - name: e2e clone light
+        unique_id: e2e_clone_light
+        state_class: measurement
+        state: >-
+          {{ (5.0 + 5.0 * sin( ((as_timestamp(now()) + 600) % 86400) / 86400 * 2 * pi )) | round(0) }}
       - name: e2e clone energy
         unique_id: e2e_clone_energy
         unit_of_measurement: "kWh"
@@ -328,6 +338,11 @@ template:
         state_class: measurement
         state: >-
           {{ (55.0 + 45.0 * sin( ((as_timestamp(now()) + 1200) % 10800) / 10800 * 2 * pi )) | round(2) }}
+      - name: e2e mother light
+        unique_id: e2e_mother_light
+        state_class: measurement
+        state: >-
+          {{ (5.0 + 5.0 * sin( ((as_timestamp(now()) + 1200) % 86400) / 86400 * 2 * pi )) | round(0) }}
       - name: e2e mother energy
         unique_id: e2e_mother_energy
         unit_of_measurement: "kWh"
@@ -439,6 +454,11 @@ template:
         state_class: measurement
         state: >-
           {{ (55.0 + 45.0 * sin( ((as_timestamp(now()) + 1800) % 10800) / 10800 * 2 * pi )) | round(2) }}
+      - name: e2e flower light
+        unique_id: e2e_flower_light
+        state_class: measurement
+        state: >-
+          {{ (5.0 + 5.0 * sin( ((as_timestamp(now()) + 1800) % 86400) / 86400 * 2 * pi )) | round(0) }}
       - name: e2e flower energy
         unique_id: e2e_flower_energy
         unit_of_measurement: "kWh"
@@ -550,6 +570,11 @@ template:
         state_class: measurement
         state: >-
           {{ (55.0 + 45.0 * sin( ((as_timestamp(now()) + 2400) % 10800) / 10800 * 2 * pi )) | round(2) }}
+      - name: e2e dry light
+        unique_id: e2e_dry_light
+        state_class: measurement
+        state: >-
+          {{ (5.0 + 5.0 * sin( ((as_timestamp(now()) + 2400) % 86400) / 86400 * 2 * pi )) | round(0) }}
       - name: e2e dry energy
         unique_id: e2e_dry_energy
         unit_of_measurement: "kWh"
@@ -661,6 +686,11 @@ template:
         state_class: measurement
         state: >-
           {{ (55.0 + 45.0 * sin( ((as_timestamp(now()) + 3000) % 10800) / 10800 * 2 * pi )) | round(2) }}
+      - name: e2e cure light
+        unique_id: e2e_cure_light
+        state_class: measurement
+        state: >-
+          {{ (5.0 + 5.0 * sin( ((as_timestamp(now()) + 3000) % 86400) / 86400 * 2 * pi )) | round(0) }}
       - name: e2e cure energy
         unique_id: e2e_cure_energy
         unit_of_measurement: "kWh"
@@ -668,6 +698,603 @@ template:
         state_class: total_increasing
         state: >-
           {{ (((as_timestamp(now()) + 3000) % 86400) / 86400 * 12.0) | round(3) }}
+  # ---------------------------------------------------------------
+  # e2e_vwc_veg
+  # ---------------------------------------------------------------
+  - trigger:
+      - platform: time_pattern
+        seconds: "/30"
+    sensor:
+      - name: e2e vwc_veg temperature
+        unique_id: e2e_vwc_veg_temperature
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {{ (24.0 + 4.0 * sin( ((as_timestamp(now()) + 3600) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e vwc_veg humidity
+        unique_id: e2e_vwc_veg_humidity
+        unit_of_measurement: "%"
+        device_class: humidity
+        state_class: measurement
+        state: >-
+          {{ (57.5 + 12.5 * sin( ((as_timestamp(now()) + 3600) % 5400) / 5400 * 2 * pi )) | round(2) }}
+      - name: e2e vwc_veg vpd
+        unique_id: e2e_vwc_veg_vpd
+        unit_of_measurement: "kPa"
+        state_class: measurement
+        state: >-
+          {{ (1.1 + 0.29999999999999993 * sin( ((as_timestamp(now()) + 3600) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e vwc_veg co2
+        unique_id: e2e_vwc_veg_co2
+        unit_of_measurement: "ppm"
+        device_class: carbon_dioxide
+        state_class: measurement
+        state: >-
+          {{ (800.0 + 400.0 * sin( ((as_timestamp(now()) + 3600) % 1800) / 1800 * 2 * pi )) | round(0) }}
+      - name: e2e vwc_veg feed_ec
+        unique_id: e2e_vwc_veg_feed_ec
+        unit_of_measurement: "mS/cm"
+        state_class: measurement
+        state: >-
+          {{ (2.0 + 0.3999999999999999 * sin( ((as_timestamp(now()) + 3600) % 7200) / 7200 * 2 * pi )) | round(2) }}
+      - name: e2e vwc_veg bulk_ec
+        unique_id: e2e_vwc_veg_bulk_ec
+        unit_of_measurement: "mS/cm"
+        state_class: measurement
+        state: >-
+          {{ (2.0 + 1.0 * sin( ((as_timestamp(now()) + 3600) % 7200) / 7200 * 2 * pi )) | round(2) }}
+      - name: e2e vwc_veg pore_ec
+        unique_id: e2e_vwc_veg_pore_ec
+        unit_of_measurement: "mS/cm"
+        state_class: measurement
+        state: >-
+          {{ (2.3 + 1.1 * sin( ((as_timestamp(now()) + 3600) % 7200) / 7200 * 2 * pi )) | round(2) }}
+      - name: e2e vwc_veg runoff_ec
+        unique_id: e2e_vwc_veg_runoff_ec
+        unit_of_measurement: "mS/cm"
+        state_class: measurement
+        state: >-
+          {{ (2.2 + 0.8 * sin( ((as_timestamp(now()) + 3600) % 7200) / 7200 * 2 * pi )) | round(2) }}
+      - name: e2e vwc_veg ph
+        unique_id: e2e_vwc_veg_ph
+        unit_of_measurement: "pH"
+        state_class: measurement
+        state: >-
+          {{ (6.0 + 0.40000000000000036 * sin( ((as_timestamp(now()) + 3600) % 9000) / 9000 * 2 * pi )) | round(2) }}
+      - name: e2e vwc_veg substrate_temperature
+        unique_id: e2e_vwc_veg_substrate_temperature
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {{ (21.0 + 3.0 * sin( ((as_timestamp(now()) + 3600) % 5400) / 5400 * 2 * pi )) | round(2) }}
+      - name: e2e vwc_veg power
+        unique_id: e2e_vwc_veg_power
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >-
+          {{ (320.0 + 280.0 * sin( ((as_timestamp(now()) + 3600) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e vwc_veg light
+        unique_id: e2e_vwc_veg_light
+        state_class: measurement
+        state: >-
+          {{ (5.0 + 5.0 * sin( ((as_timestamp(now()) + 3600) % 86400) / 86400 * 2 * pi )) | round(0) }}
+      - name: e2e vwc_veg energy
+        unique_id: e2e_vwc_veg_energy
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: >-
+          {{ (((as_timestamp(now()) + 3600) % 86400) / 86400 * 12.0) | round(3) }}
+  # ---------------------------------------------------------------
+  # e2e_vwc_flower
+  # ---------------------------------------------------------------
+  - trigger:
+      - platform: time_pattern
+        seconds: "/30"
+    sensor:
+      - name: e2e vwc_flower temperature
+        unique_id: e2e_vwc_flower_temperature
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {{ (24.0 + 4.0 * sin( ((as_timestamp(now()) + 4200) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e vwc_flower humidity
+        unique_id: e2e_vwc_flower_humidity
+        unit_of_measurement: "%"
+        device_class: humidity
+        state_class: measurement
+        state: >-
+          {{ (57.5 + 12.5 * sin( ((as_timestamp(now()) + 4200) % 5400) / 5400 * 2 * pi )) | round(2) }}
+      - name: e2e vwc_flower vpd
+        unique_id: e2e_vwc_flower_vpd
+        unit_of_measurement: "kPa"
+        state_class: measurement
+        state: >-
+          {{ (1.1 + 0.29999999999999993 * sin( ((as_timestamp(now()) + 4200) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e vwc_flower co2
+        unique_id: e2e_vwc_flower_co2
+        unit_of_measurement: "ppm"
+        device_class: carbon_dioxide
+        state_class: measurement
+        state: >-
+          {{ (800.0 + 400.0 * sin( ((as_timestamp(now()) + 4200) % 1800) / 1800 * 2 * pi )) | round(0) }}
+      - name: e2e vwc_flower feed_ec
+        unique_id: e2e_vwc_flower_feed_ec
+        unit_of_measurement: "mS/cm"
+        state_class: measurement
+        state: >-
+          {{ (2.0 + 0.3999999999999999 * sin( ((as_timestamp(now()) + 4200) % 7200) / 7200 * 2 * pi )) | round(2) }}
+      - name: e2e vwc_flower bulk_ec
+        unique_id: e2e_vwc_flower_bulk_ec
+        unit_of_measurement: "mS/cm"
+        state_class: measurement
+        state: >-
+          {{ (2.0 + 1.0 * sin( ((as_timestamp(now()) + 4200) % 7200) / 7200 * 2 * pi )) | round(2) }}
+      - name: e2e vwc_flower pore_ec
+        unique_id: e2e_vwc_flower_pore_ec
+        unit_of_measurement: "mS/cm"
+        state_class: measurement
+        state: >-
+          {{ (2.3 + 1.1 * sin( ((as_timestamp(now()) + 4200) % 7200) / 7200 * 2 * pi )) | round(2) }}
+      - name: e2e vwc_flower runoff_ec
+        unique_id: e2e_vwc_flower_runoff_ec
+        unit_of_measurement: "mS/cm"
+        state_class: measurement
+        state: >-
+          {{ (2.2 + 0.8 * sin( ((as_timestamp(now()) + 4200) % 7200) / 7200 * 2 * pi )) | round(2) }}
+      - name: e2e vwc_flower ph
+        unique_id: e2e_vwc_flower_ph
+        unit_of_measurement: "pH"
+        state_class: measurement
+        state: >-
+          {{ (6.0 + 0.40000000000000036 * sin( ((as_timestamp(now()) + 4200) % 9000) / 9000 * 2 * pi )) | round(2) }}
+      - name: e2e vwc_flower substrate_temperature
+        unique_id: e2e_vwc_flower_substrate_temperature
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {{ (21.0 + 3.0 * sin( ((as_timestamp(now()) + 4200) % 5400) / 5400 * 2 * pi )) | round(2) }}
+      - name: e2e vwc_flower power
+        unique_id: e2e_vwc_flower_power
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >-
+          {{ (320.0 + 280.0 * sin( ((as_timestamp(now()) + 4200) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e vwc_flower light
+        unique_id: e2e_vwc_flower_light
+        state_class: measurement
+        state: >-
+          {{ (5.0 + 5.0 * sin( ((as_timestamp(now()) + 4200) % 86400) / 86400 * 2 * pi )) | round(0) }}
+      - name: e2e vwc_flower energy
+        unique_id: e2e_vwc_flower_energy
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: >-
+          {{ (((as_timestamp(now()) + 4200) % 86400) / 86400 * 12.0) | round(3) }}
+  # ---------------------------------------------------------------
+  # e2e_irrigation_monitored
+  # ---------------------------------------------------------------
+  - trigger:
+      - platform: time_pattern
+        seconds: "/30"
+    sensor:
+      - name: e2e irrigation_monitored temperature
+        unique_id: e2e_irrigation_monitored_temperature
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {{ (24.0 + 4.0 * sin( ((as_timestamp(now()) + 5400) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_monitored humidity
+        unique_id: e2e_irrigation_monitored_humidity
+        unit_of_measurement: "%"
+        device_class: humidity
+        state_class: measurement
+        state: >-
+          {{ (57.5 + 12.5 * sin( ((as_timestamp(now()) + 5400) % 5400) / 5400 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_monitored vpd
+        unique_id: e2e_irrigation_monitored_vpd
+        unit_of_measurement: "kPa"
+        state_class: measurement
+        state: >-
+          {{ (1.1 + 0.29999999999999993 * sin( ((as_timestamp(now()) + 5400) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_monitored co2
+        unique_id: e2e_irrigation_monitored_co2
+        unit_of_measurement: "ppm"
+        device_class: carbon_dioxide
+        state_class: measurement
+        state: >-
+          {{ (800.0 + 400.0 * sin( ((as_timestamp(now()) + 5400) % 1800) / 1800 * 2 * pi )) | round(0) }}
+      - name: e2e irrigation_monitored feed_ec
+        unique_id: e2e_irrigation_monitored_feed_ec
+        unit_of_measurement: "mS/cm"
+        state_class: measurement
+        state: >-
+          {{ (2.0 + 0.3999999999999999 * sin( ((as_timestamp(now()) + 5400) % 7200) / 7200 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_monitored bulk_ec
+        unique_id: e2e_irrigation_monitored_bulk_ec
+        unit_of_measurement: "mS/cm"
+        state_class: measurement
+        state: >-
+          {{ (2.0 + 1.0 * sin( ((as_timestamp(now()) + 5400) % 7200) / 7200 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_monitored pore_ec
+        unique_id: e2e_irrigation_monitored_pore_ec
+        unit_of_measurement: "mS/cm"
+        state_class: measurement
+        state: >-
+          {{ (2.3 + 1.1 * sin( ((as_timestamp(now()) + 5400) % 7200) / 7200 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_monitored runoff_ec
+        unique_id: e2e_irrigation_monitored_runoff_ec
+        unit_of_measurement: "mS/cm"
+        state_class: measurement
+        state: >-
+          {{ (2.2 + 0.8 * sin( ((as_timestamp(now()) + 5400) % 7200) / 7200 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_monitored ph
+        unique_id: e2e_irrigation_monitored_ph
+        unit_of_measurement: "pH"
+        state_class: measurement
+        state: >-
+          {{ (6.0 + 0.40000000000000036 * sin( ((as_timestamp(now()) + 5400) % 9000) / 9000 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_monitored substrate_temperature
+        unique_id: e2e_irrigation_monitored_substrate_temperature
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {{ (21.0 + 3.0 * sin( ((as_timestamp(now()) + 5400) % 5400) / 5400 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_monitored substrate_moisture
+        unique_id: e2e_irrigation_monitored_substrate_moisture
+        unit_of_measurement: "%"
+        device_class: moisture
+        state_class: measurement
+        state: >-
+          {{ (52.5 + 17.5 * sin( ((as_timestamp(now()) + 5400) % 2700) / 2700 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_monitored power
+        unique_id: e2e_irrigation_monitored_power
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >-
+          {{ (320.0 + 280.0 * sin( ((as_timestamp(now()) + 5400) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_monitored light
+        unique_id: e2e_irrigation_monitored_light
+        state_class: measurement
+        state: >-
+          {{ (5.0 + 5.0 * sin( ((as_timestamp(now()) + 5400) % 86400) / 86400 * 2 * pi )) | round(0) }}
+      - name: e2e irrigation_monitored energy
+        unique_id: e2e_irrigation_monitored_energy
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: >-
+          {{ (((as_timestamp(now()) + 5400) % 86400) / 86400 * 12.0) | round(3) }}
+  # ---------------------------------------------------------------
+  # e2e_irrigation_tanks
+  # ---------------------------------------------------------------
+  - trigger:
+      - platform: time_pattern
+        seconds: "/30"
+    sensor:
+      - name: e2e irrigation_tanks temperature
+        unique_id: e2e_irrigation_tanks_temperature
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {{ (24.0 + 4.0 * sin( ((as_timestamp(now()) + 6000) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_tanks humidity
+        unique_id: e2e_irrigation_tanks_humidity
+        unit_of_measurement: "%"
+        device_class: humidity
+        state_class: measurement
+        state: >-
+          {{ (57.5 + 12.5 * sin( ((as_timestamp(now()) + 6000) % 5400) / 5400 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_tanks vpd
+        unique_id: e2e_irrigation_tanks_vpd
+        unit_of_measurement: "kPa"
+        state_class: measurement
+        state: >-
+          {{ (1.1 + 0.29999999999999993 * sin( ((as_timestamp(now()) + 6000) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_tanks co2
+        unique_id: e2e_irrigation_tanks_co2
+        unit_of_measurement: "ppm"
+        device_class: carbon_dioxide
+        state_class: measurement
+        state: >-
+          {{ (800.0 + 400.0 * sin( ((as_timestamp(now()) + 6000) % 1800) / 1800 * 2 * pi )) | round(0) }}
+      - name: e2e irrigation_tanks feed_ec
+        unique_id: e2e_irrigation_tanks_feed_ec
+        unit_of_measurement: "mS/cm"
+        state_class: measurement
+        state: >-
+          {{ (2.0 + 0.3999999999999999 * sin( ((as_timestamp(now()) + 6000) % 7200) / 7200 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_tanks bulk_ec
+        unique_id: e2e_irrigation_tanks_bulk_ec
+        unit_of_measurement: "mS/cm"
+        state_class: measurement
+        state: >-
+          {{ (2.0 + 1.0 * sin( ((as_timestamp(now()) + 6000) % 7200) / 7200 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_tanks pore_ec
+        unique_id: e2e_irrigation_tanks_pore_ec
+        unit_of_measurement: "mS/cm"
+        state_class: measurement
+        state: >-
+          {{ (2.3 + 1.1 * sin( ((as_timestamp(now()) + 6000) % 7200) / 7200 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_tanks runoff_ec
+        unique_id: e2e_irrigation_tanks_runoff_ec
+        unit_of_measurement: "mS/cm"
+        state_class: measurement
+        state: >-
+          {{ (2.2 + 0.8 * sin( ((as_timestamp(now()) + 6000) % 7200) / 7200 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_tanks ph
+        unique_id: e2e_irrigation_tanks_ph
+        unit_of_measurement: "pH"
+        state_class: measurement
+        state: >-
+          {{ (6.0 + 0.40000000000000036 * sin( ((as_timestamp(now()) + 6000) % 9000) / 9000 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_tanks substrate_temperature
+        unique_id: e2e_irrigation_tanks_substrate_temperature
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {{ (21.0 + 3.0 * sin( ((as_timestamp(now()) + 6000) % 5400) / 5400 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_tanks substrate_moisture
+        unique_id: e2e_irrigation_tanks_substrate_moisture
+        unit_of_measurement: "%"
+        device_class: moisture
+        state_class: measurement
+        state: >-
+          {{ (52.5 + 17.5 * sin( ((as_timestamp(now()) + 6000) % 2700) / 2700 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_tanks power
+        unique_id: e2e_irrigation_tanks_power
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >-
+          {{ (320.0 + 280.0 * sin( ((as_timestamp(now()) + 6000) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e irrigation_tanks light
+        unique_id: e2e_irrigation_tanks_light
+        state_class: measurement
+        state: >-
+          {{ (5.0 + 5.0 * sin( ((as_timestamp(now()) + 6000) % 86400) / 86400 * 2 * pi )) | round(0) }}
+      - name: e2e irrigation_tanks energy
+        unique_id: e2e_irrigation_tanks_energy
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: >-
+          {{ (((as_timestamp(now()) + 6000) % 86400) / 86400 * 12.0) | round(3) }}
+  # ---------------------------------------------------------------
+  # e2e_lighting
+  # ---------------------------------------------------------------
+  - trigger:
+      - platform: time_pattern
+        seconds: "/30"
+    sensor:
+      - name: e2e lighting temperature
+        unique_id: e2e_lighting_temperature
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {{ (24.0 + 4.0 * sin( ((as_timestamp(now()) + 6600) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e lighting humidity
+        unique_id: e2e_lighting_humidity
+        unit_of_measurement: "%"
+        device_class: humidity
+        state_class: measurement
+        state: >-
+          {{ (57.5 + 12.5 * sin( ((as_timestamp(now()) + 6600) % 5400) / 5400 * 2 * pi )) | round(2) }}
+      - name: e2e lighting vpd
+        unique_id: e2e_lighting_vpd
+        unit_of_measurement: "kPa"
+        state_class: measurement
+        state: >-
+          {{ (1.1 + 0.29999999999999993 * sin( ((as_timestamp(now()) + 6600) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e lighting co2
+        unique_id: e2e_lighting_co2
+        unit_of_measurement: "ppm"
+        device_class: carbon_dioxide
+        state_class: measurement
+        state: >-
+          {{ (800.0 + 400.0 * sin( ((as_timestamp(now()) + 6600) % 1800) / 1800 * 2 * pi )) | round(0) }}
+      - name: e2e lighting substrate_temperature
+        unique_id: e2e_lighting_substrate_temperature
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {{ (21.0 + 3.0 * sin( ((as_timestamp(now()) + 6600) % 5400) / 5400 * 2 * pi )) | round(2) }}
+      - name: e2e lighting substrate_moisture
+        unique_id: e2e_lighting_substrate_moisture
+        unit_of_measurement: "%"
+        device_class: moisture
+        state_class: measurement
+        state: >-
+          {{ (52.5 + 17.5 * sin( ((as_timestamp(now()) + 6600) % 2700) / 2700 * 2 * pi )) | round(2) }}
+      - name: e2e lighting power
+        unique_id: e2e_lighting_power
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >-
+          {{ (320.0 + 280.0 * sin( ((as_timestamp(now()) + 6600) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e lighting energy
+        unique_id: e2e_lighting_energy
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: >-
+          {{ (((as_timestamp(now()) + 6600) % 86400) / 86400 * 12.0) | round(3) }}
+  # ---------------------------------------------------------------
+  # e2e_climate_plain
+  # ---------------------------------------------------------------
+  - trigger:
+      - platform: time_pattern
+        seconds: "/30"
+    sensor:
+      - name: e2e climate_plain co2
+        unique_id: e2e_climate_plain_co2
+        unit_of_measurement: "ppm"
+        device_class: carbon_dioxide
+        state_class: measurement
+        state: >-
+          {{ (800.0 + 400.0 * sin( ((as_timestamp(now()) + 7200) % 1800) / 1800 * 2 * pi )) | round(0) }}
+      - name: e2e climate_plain substrate_temperature
+        unique_id: e2e_climate_plain_substrate_temperature
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {{ (21.0 + 3.0 * sin( ((as_timestamp(now()) + 7200) % 5400) / 5400 * 2 * pi )) | round(2) }}
+      - name: e2e climate_plain substrate_moisture
+        unique_id: e2e_climate_plain_substrate_moisture
+        unit_of_measurement: "%"
+        device_class: moisture
+        state_class: measurement
+        state: >-
+          {{ (52.5 + 17.5 * sin( ((as_timestamp(now()) + 7200) % 2700) / 2700 * 2 * pi )) | round(2) }}
+      - name: e2e climate_plain power
+        unique_id: e2e_climate_plain_power
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >-
+          {{ (320.0 + 280.0 * sin( ((as_timestamp(now()) + 7200) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e climate_plain light
+        unique_id: e2e_climate_plain_light
+        state_class: measurement
+        state: >-
+          {{ (5.0 + 5.0 * sin( ((as_timestamp(now()) + 7200) % 86400) / 86400 * 2 * pi )) | round(0) }}
+      - name: e2e climate_plain energy
+        unique_id: e2e_climate_plain_energy
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: >-
+          {{ (((as_timestamp(now()) + 7200) % 86400) / 86400 * 12.0) | round(3) }}
+  # ---------------------------------------------------------------
+  # e2e_ac_infinity
+  # ---------------------------------------------------------------
+  - trigger:
+      - platform: time_pattern
+        seconds: "/30"
+    sensor:
+      - name: e2e ac_infinity co2
+        unique_id: e2e_ac_infinity_co2
+        unit_of_measurement: "ppm"
+        device_class: carbon_dioxide
+        state_class: measurement
+        state: >-
+          {{ (800.0 + 400.0 * sin( ((as_timestamp(now()) + 7800) % 1800) / 1800 * 2 * pi )) | round(0) }}
+      - name: e2e ac_infinity substrate_temperature
+        unique_id: e2e_ac_infinity_substrate_temperature
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {{ (21.0 + 3.0 * sin( ((as_timestamp(now()) + 7800) % 5400) / 5400 * 2 * pi )) | round(2) }}
+      - name: e2e ac_infinity substrate_moisture
+        unique_id: e2e_ac_infinity_substrate_moisture
+        unit_of_measurement: "%"
+        device_class: moisture
+        state_class: measurement
+        state: >-
+          {{ (52.5 + 17.5 * sin( ((as_timestamp(now()) + 7800) % 2700) / 2700 * 2 * pi )) | round(2) }}
+      - name: e2e ac_infinity power
+        unique_id: e2e_ac_infinity_power
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >-
+          {{ (320.0 + 280.0 * sin( ((as_timestamp(now()) + 7800) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e ac_infinity light
+        unique_id: e2e_ac_infinity_light
+        state_class: measurement
+        state: >-
+          {{ (5.0 + 5.0 * sin( ((as_timestamp(now()) + 7800) % 86400) / 86400 * 2 * pi )) | round(0) }}
+      - name: e2e ac_infinity energy
+        unique_id: e2e_ac_infinity_energy
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: >-
+          {{ (((as_timestamp(now()) + 7800) % 86400) / 86400 * 12.0) | round(3) }}
+  # ---------------------------------------------------------------
+  # e2e_vision
+  # ---------------------------------------------------------------
+  - trigger:
+      - platform: time_pattern
+        seconds: "/30"
+    sensor:
+      - name: e2e vision temperature
+        unique_id: e2e_vision_temperature
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {{ (24.0 + 4.0 * sin( ((as_timestamp(now()) + 8400) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e vision humidity
+        unique_id: e2e_vision_humidity
+        unit_of_measurement: "%"
+        device_class: humidity
+        state_class: measurement
+        state: >-
+          {{ (57.5 + 12.5 * sin( ((as_timestamp(now()) + 8400) % 5400) / 5400 * 2 * pi )) | round(2) }}
+      - name: e2e vision vpd
+        unique_id: e2e_vision_vpd
+        unit_of_measurement: "kPa"
+        state_class: measurement
+        state: >-
+          {{ (1.1 + 0.29999999999999993 * sin( ((as_timestamp(now()) + 8400) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e vision co2
+        unique_id: e2e_vision_co2
+        unit_of_measurement: "ppm"
+        device_class: carbon_dioxide
+        state_class: measurement
+        state: >-
+          {{ (800.0 + 400.0 * sin( ((as_timestamp(now()) + 8400) % 1800) / 1800 * 2 * pi )) | round(0) }}
+      - name: e2e vision substrate_temperature
+        unique_id: e2e_vision_substrate_temperature
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {{ (21.0 + 3.0 * sin( ((as_timestamp(now()) + 8400) % 5400) / 5400 * 2 * pi )) | round(2) }}
+      - name: e2e vision substrate_moisture
+        unique_id: e2e_vision_substrate_moisture
+        unit_of_measurement: "%"
+        device_class: moisture
+        state_class: measurement
+        state: >-
+          {{ (52.5 + 17.5 * sin( ((as_timestamp(now()) + 8400) % 2700) / 2700 * 2 * pi )) | round(2) }}
+      - name: e2e vision power
+        unique_id: e2e_vision_power
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >-
+          {{ (320.0 + 280.0 * sin( ((as_timestamp(now()) + 8400) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e vision light
+        unique_id: e2e_vision_light
+        state_class: measurement
+        state: >-
+          {{ (5.0 + 5.0 * sin( ((as_timestamp(now()) + 8400) % 86400) / 86400 * 2 * pi )) | round(0) }}
+      - name: e2e vision energy
+        unique_id: e2e_vision_energy
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: >-
+          {{ (((as_timestamp(now()) + 8400) % 86400) / 86400 * 12.0) | round(3) }}
   # ---------------------------------------------------------------
   # e2e_telemetry_multi — every reading mirrors a writable input
   # ---------------------------------------------------------------
@@ -811,18 +1438,14 @@ template:
           {{ states('input_number.sim_e2e_telemetry_multi_energy') | float(0) | round(3) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (((as_timestamp(now()) + 0) % 86400) / 86400 * 12.0) | round(3) }}
       - name: e2e telemetry_multi light 1
         unique_id: e2e_telemetry_multi_light_1
-        unit_of_measurement: "lx"
-        device_class: illuminance
         state_class: measurement
         state: >-
-          {{ states('input_number.sim_e2e_telemetry_multi_light_1') | float(0) | round(0) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (30000.0 + 30000.0 * sin( ((as_timestamp(now()) + 0) % 86400) / 86400 * 2 * pi )) | round(0) }}
+          {{ states('input_number.sim_e2e_telemetry_multi_light_1') | float(0) | round(0) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 0) % 86400) / 86400 * 2 * pi )) | round(0) }}
       - name: e2e telemetry_multi light 2
         unique_id: e2e_telemetry_multi_light_2
-        unit_of_measurement: "lx"
-        device_class: illuminance
         state_class: measurement
         state: >-
-          {{ states('input_number.sim_e2e_telemetry_multi_light_2') | float(0) | round(0) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (30000.0 + 30000.0 * sin( ((as_timestamp(now()) + 21600) % 86400) / 86400 * 2 * pi )) | round(0) }}
+          {{ states('input_number.sim_e2e_telemetry_multi_light_2') | float(0) | round(0) if is_state('input_boolean.sim_e2e_telemetry_multi_manual_telemetry', 'on') else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 21600) % 86400) / 86400 * 2 * pi )) | round(0) }}
   # ---------------------------------------------------------------
   # fixed outdoor conditions (modern template-weather schema)
   # ---------------------------------------------------------------
@@ -848,61 +1471,6 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_veg_irrigation_pump
-      - name: sim e2e veg exhaust fan
-        unique_id: sim_e2e_veg_exhaust_fan
-        state: "{{ is_state('input_boolean.sim_e2e_veg_exhaust_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_veg_exhaust_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_veg_exhaust_fan
-      - name: sim e2e veg circulation fan
-        unique_id: sim_e2e_veg_circulation_fan
-        state: "{{ is_state('input_boolean.sim_e2e_veg_circulation_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_veg_circulation_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_veg_circulation_fan
-      - name: sim e2e veg humidifier
-        unique_id: sim_e2e_veg_humidifier
-        state: "{{ is_state('input_boolean.sim_e2e_veg_humidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_veg_humidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_veg_humidifier
-      - name: sim e2e veg dehumidifier
-        unique_id: sim_e2e_veg_dehumidifier
-        state: "{{ is_state('input_boolean.sim_e2e_veg_dehumidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_veg_dehumidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_veg_dehumidifier
-      - name: sim e2e veg growlight
-        unique_id: sim_e2e_veg_growlight
-        state: "{{ is_state('input_boolean.sim_e2e_veg_growlight', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_veg_growlight
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_veg_growlight
       - name: sim e2e veg drain_pump
         unique_id: sim_e2e_veg_drain_pump
         state: "{{ is_state('input_boolean.sim_e2e_veg_drain_pump', 'on') }}"
@@ -925,61 +1493,6 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_clone_irrigation_pump
-      - name: sim e2e clone exhaust fan
-        unique_id: sim_e2e_clone_exhaust_fan
-        state: "{{ is_state('input_boolean.sim_e2e_clone_exhaust_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_clone_exhaust_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_clone_exhaust_fan
-      - name: sim e2e clone circulation fan
-        unique_id: sim_e2e_clone_circulation_fan
-        state: "{{ is_state('input_boolean.sim_e2e_clone_circulation_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_clone_circulation_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_clone_circulation_fan
-      - name: sim e2e clone humidifier
-        unique_id: sim_e2e_clone_humidifier
-        state: "{{ is_state('input_boolean.sim_e2e_clone_humidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_clone_humidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_clone_humidifier
-      - name: sim e2e clone dehumidifier
-        unique_id: sim_e2e_clone_dehumidifier
-        state: "{{ is_state('input_boolean.sim_e2e_clone_dehumidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_clone_dehumidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_clone_dehumidifier
-      - name: sim e2e clone growlight
-        unique_id: sim_e2e_clone_growlight
-        state: "{{ is_state('input_boolean.sim_e2e_clone_growlight', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_clone_growlight
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_clone_growlight
       - name: sim e2e clone drain_pump
         unique_id: sim_e2e_clone_drain_pump
         state: "{{ is_state('input_boolean.sim_e2e_clone_drain_pump', 'on') }}"
@@ -1002,61 +1515,6 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_mother_irrigation_pump
-      - name: sim e2e mother exhaust fan
-        unique_id: sim_e2e_mother_exhaust_fan
-        state: "{{ is_state('input_boolean.sim_e2e_mother_exhaust_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_mother_exhaust_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_mother_exhaust_fan
-      - name: sim e2e mother circulation fan
-        unique_id: sim_e2e_mother_circulation_fan
-        state: "{{ is_state('input_boolean.sim_e2e_mother_circulation_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_mother_circulation_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_mother_circulation_fan
-      - name: sim e2e mother humidifier
-        unique_id: sim_e2e_mother_humidifier
-        state: "{{ is_state('input_boolean.sim_e2e_mother_humidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_mother_humidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_mother_humidifier
-      - name: sim e2e mother dehumidifier
-        unique_id: sim_e2e_mother_dehumidifier
-        state: "{{ is_state('input_boolean.sim_e2e_mother_dehumidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_mother_dehumidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_mother_dehumidifier
-      - name: sim e2e mother growlight
-        unique_id: sim_e2e_mother_growlight
-        state: "{{ is_state('input_boolean.sim_e2e_mother_growlight', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_mother_growlight
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_mother_growlight
       - name: sim e2e mother drain_pump
         unique_id: sim_e2e_mother_drain_pump
         state: "{{ is_state('input_boolean.sim_e2e_mother_drain_pump', 'on') }}"
@@ -1079,61 +1537,6 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_flower_irrigation_pump
-      - name: sim e2e flower exhaust fan
-        unique_id: sim_e2e_flower_exhaust_fan
-        state: "{{ is_state('input_boolean.sim_e2e_flower_exhaust_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_flower_exhaust_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_flower_exhaust_fan
-      - name: sim e2e flower circulation fan
-        unique_id: sim_e2e_flower_circulation_fan
-        state: "{{ is_state('input_boolean.sim_e2e_flower_circulation_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_flower_circulation_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_flower_circulation_fan
-      - name: sim e2e flower humidifier
-        unique_id: sim_e2e_flower_humidifier
-        state: "{{ is_state('input_boolean.sim_e2e_flower_humidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_flower_humidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_flower_humidifier
-      - name: sim e2e flower dehumidifier
-        unique_id: sim_e2e_flower_dehumidifier
-        state: "{{ is_state('input_boolean.sim_e2e_flower_dehumidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_flower_dehumidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_flower_dehumidifier
-      - name: sim e2e flower growlight
-        unique_id: sim_e2e_flower_growlight
-        state: "{{ is_state('input_boolean.sim_e2e_flower_growlight', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_flower_growlight
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_flower_growlight
       - name: sim e2e flower drain_pump
         unique_id: sim_e2e_flower_drain_pump
         state: "{{ is_state('input_boolean.sim_e2e_flower_drain_pump', 'on') }}"
@@ -1156,61 +1559,6 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_dry_irrigation_pump
-      - name: sim e2e dry exhaust fan
-        unique_id: sim_e2e_dry_exhaust_fan
-        state: "{{ is_state('input_boolean.sim_e2e_dry_exhaust_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_dry_exhaust_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_dry_exhaust_fan
-      - name: sim e2e dry circulation fan
-        unique_id: sim_e2e_dry_circulation_fan
-        state: "{{ is_state('input_boolean.sim_e2e_dry_circulation_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_dry_circulation_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_dry_circulation_fan
-      - name: sim e2e dry humidifier
-        unique_id: sim_e2e_dry_humidifier
-        state: "{{ is_state('input_boolean.sim_e2e_dry_humidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_dry_humidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_dry_humidifier
-      - name: sim e2e dry dehumidifier
-        unique_id: sim_e2e_dry_dehumidifier
-        state: "{{ is_state('input_boolean.sim_e2e_dry_dehumidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_dry_dehumidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_dry_dehumidifier
-      - name: sim e2e dry growlight
-        unique_id: sim_e2e_dry_growlight
-        state: "{{ is_state('input_boolean.sim_e2e_dry_growlight', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_dry_growlight
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_dry_growlight
       - name: sim e2e dry drain_pump
         unique_id: sim_e2e_dry_drain_pump
         state: "{{ is_state('input_boolean.sim_e2e_dry_drain_pump', 'on') }}"
@@ -1233,61 +1581,6 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_cure_irrigation_pump
-      - name: sim e2e cure exhaust fan
-        unique_id: sim_e2e_cure_exhaust_fan
-        state: "{{ is_state('input_boolean.sim_e2e_cure_exhaust_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_cure_exhaust_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_cure_exhaust_fan
-      - name: sim e2e cure circulation fan
-        unique_id: sim_e2e_cure_circulation_fan
-        state: "{{ is_state('input_boolean.sim_e2e_cure_circulation_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_cure_circulation_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_cure_circulation_fan
-      - name: sim e2e cure humidifier
-        unique_id: sim_e2e_cure_humidifier
-        state: "{{ is_state('input_boolean.sim_e2e_cure_humidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_cure_humidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_cure_humidifier
-      - name: sim e2e cure dehumidifier
-        unique_id: sim_e2e_cure_dehumidifier
-        state: "{{ is_state('input_boolean.sim_e2e_cure_dehumidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_cure_dehumidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_cure_dehumidifier
-      - name: sim e2e cure growlight
-        unique_id: sim_e2e_cure_growlight
-        state: "{{ is_state('input_boolean.sim_e2e_cure_growlight', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_cure_growlight
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_cure_growlight
       - name: sim e2e cure drain_pump
         unique_id: sim_e2e_cure_drain_pump
         state: "{{ is_state('input_boolean.sim_e2e_cure_drain_pump', 'on') }}"
@@ -1310,61 +1603,6 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_vwc_veg_irrigation_pump
-      - name: sim e2e vwc veg exhaust fan
-        unique_id: sim_e2e_vwc_veg_exhaust_fan
-        state: "{{ is_state('input_boolean.sim_e2e_vwc_veg_exhaust_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_vwc_veg_exhaust_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_vwc_veg_exhaust_fan
-      - name: sim e2e vwc veg circulation fan
-        unique_id: sim_e2e_vwc_veg_circulation_fan
-        state: "{{ is_state('input_boolean.sim_e2e_vwc_veg_circulation_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_vwc_veg_circulation_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_vwc_veg_circulation_fan
-      - name: sim e2e vwc veg humidifier
-        unique_id: sim_e2e_vwc_veg_humidifier
-        state: "{{ is_state('input_boolean.sim_e2e_vwc_veg_humidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_vwc_veg_humidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_vwc_veg_humidifier
-      - name: sim e2e vwc veg dehumidifier
-        unique_id: sim_e2e_vwc_veg_dehumidifier
-        state: "{{ is_state('input_boolean.sim_e2e_vwc_veg_dehumidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_vwc_veg_dehumidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_vwc_veg_dehumidifier
-      - name: sim e2e vwc veg growlight
-        unique_id: sim_e2e_vwc_veg_growlight
-        state: "{{ is_state('input_boolean.sim_e2e_vwc_veg_growlight', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_vwc_veg_growlight
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_vwc_veg_growlight
       - name: sim e2e vwc_veg drain_pump
         unique_id: sim_e2e_vwc_veg_drain_pump
         state: "{{ is_state('input_boolean.sim_e2e_vwc_veg_drain_pump', 'on') }}"
@@ -1387,61 +1625,6 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_vwc_flower_irrigation_pump
-      - name: sim e2e vwc flower exhaust fan
-        unique_id: sim_e2e_vwc_flower_exhaust_fan
-        state: "{{ is_state('input_boolean.sim_e2e_vwc_flower_exhaust_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_vwc_flower_exhaust_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_vwc_flower_exhaust_fan
-      - name: sim e2e vwc flower circulation fan
-        unique_id: sim_e2e_vwc_flower_circulation_fan
-        state: "{{ is_state('input_boolean.sim_e2e_vwc_flower_circulation_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_vwc_flower_circulation_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_vwc_flower_circulation_fan
-      - name: sim e2e vwc flower humidifier
-        unique_id: sim_e2e_vwc_flower_humidifier
-        state: "{{ is_state('input_boolean.sim_e2e_vwc_flower_humidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_vwc_flower_humidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_vwc_flower_humidifier
-      - name: sim e2e vwc flower dehumidifier
-        unique_id: sim_e2e_vwc_flower_dehumidifier
-        state: "{{ is_state('input_boolean.sim_e2e_vwc_flower_dehumidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_vwc_flower_dehumidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_vwc_flower_dehumidifier
-      - name: sim e2e vwc flower growlight
-        unique_id: sim_e2e_vwc_flower_growlight
-        state: "{{ is_state('input_boolean.sim_e2e_vwc_flower_growlight', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_vwc_flower_growlight
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_vwc_flower_growlight
       - name: sim e2e vwc_flower drain_pump
         unique_id: sim_e2e_vwc_flower_drain_pump
         state: "{{ is_state('input_boolean.sim_e2e_vwc_flower_drain_pump', 'on') }}"
@@ -1453,61 +1636,6 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_vwc_flower_drain_pump
-      - name: sim e2e telemetry multi exhaust fan
-        unique_id: sim_e2e_telemetry_multi_exhaust_fan
-        state: "{{ is_state('input_boolean.sim_e2e_telemetry_multi_exhaust_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_telemetry_multi_exhaust_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_telemetry_multi_exhaust_fan
-      - name: sim e2e telemetry multi circulation fan
-        unique_id: sim_e2e_telemetry_multi_circulation_fan
-        state: "{{ is_state('input_boolean.sim_e2e_telemetry_multi_circulation_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_telemetry_multi_circulation_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_telemetry_multi_circulation_fan
-      - name: sim e2e telemetry multi humidifier
-        unique_id: sim_e2e_telemetry_multi_humidifier
-        state: "{{ is_state('input_boolean.sim_e2e_telemetry_multi_humidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_telemetry_multi_humidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_telemetry_multi_humidifier
-      - name: sim e2e telemetry multi dehumidifier
-        unique_id: sim_e2e_telemetry_multi_dehumidifier
-        state: "{{ is_state('input_boolean.sim_e2e_telemetry_multi_dehumidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_telemetry_multi_dehumidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_telemetry_multi_dehumidifier
-      - name: sim e2e telemetry multi growlight
-        unique_id: sim_e2e_telemetry_multi_growlight
-        state: "{{ is_state('input_boolean.sim_e2e_telemetry_multi_growlight', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_telemetry_multi_growlight
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_telemetry_multi_growlight
       - name: sim e2e irrigation_monitored irrigation_pump
         unique_id: sim_e2e_irrigation_monitored_irrigation_pump
         state: "{{ is_state('input_boolean.sim_e2e_irrigation_monitored_irrigation_pump', 'on') }}"
@@ -1519,61 +1647,6 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_irrigation_monitored_irrigation_pump
-      - name: sim e2e irrigation monitored exhaust fan
-        unique_id: sim_e2e_irrigation_monitored_exhaust_fan
-        state: "{{ is_state('input_boolean.sim_e2e_irrigation_monitored_exhaust_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_irrigation_monitored_exhaust_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_irrigation_monitored_exhaust_fan
-      - name: sim e2e irrigation monitored circulation fan
-        unique_id: sim_e2e_irrigation_monitored_circulation_fan
-        state: "{{ is_state('input_boolean.sim_e2e_irrigation_monitored_circulation_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_irrigation_monitored_circulation_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_irrigation_monitored_circulation_fan
-      - name: sim e2e irrigation monitored humidifier
-        unique_id: sim_e2e_irrigation_monitored_humidifier
-        state: "{{ is_state('input_boolean.sim_e2e_irrigation_monitored_humidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_irrigation_monitored_humidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_irrigation_monitored_humidifier
-      - name: sim e2e irrigation monitored dehumidifier
-        unique_id: sim_e2e_irrigation_monitored_dehumidifier
-        state: "{{ is_state('input_boolean.sim_e2e_irrigation_monitored_dehumidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_irrigation_monitored_dehumidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_irrigation_monitored_dehumidifier
-      - name: sim e2e irrigation monitored growlight
-        unique_id: sim_e2e_irrigation_monitored_growlight
-        state: "{{ is_state('input_boolean.sim_e2e_irrigation_monitored_growlight', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_irrigation_monitored_growlight
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_irrigation_monitored_growlight
       - name: sim e2e irrigation_monitored drain_pump
         unique_id: sim_e2e_irrigation_monitored_drain_pump
         state: "{{ is_state('input_boolean.sim_e2e_irrigation_monitored_drain_pump', 'on') }}"
@@ -1596,61 +1669,6 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_irrigation_tanks_irrigation_pump
-      - name: sim e2e irrigation tanks exhaust fan
-        unique_id: sim_e2e_irrigation_tanks_exhaust_fan
-        state: "{{ is_state('input_boolean.sim_e2e_irrigation_tanks_exhaust_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_irrigation_tanks_exhaust_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_irrigation_tanks_exhaust_fan
-      - name: sim e2e irrigation tanks circulation fan
-        unique_id: sim_e2e_irrigation_tanks_circulation_fan
-        state: "{{ is_state('input_boolean.sim_e2e_irrigation_tanks_circulation_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_irrigation_tanks_circulation_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_irrigation_tanks_circulation_fan
-      - name: sim e2e irrigation tanks humidifier
-        unique_id: sim_e2e_irrigation_tanks_humidifier
-        state: "{{ is_state('input_boolean.sim_e2e_irrigation_tanks_humidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_irrigation_tanks_humidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_irrigation_tanks_humidifier
-      - name: sim e2e irrigation tanks dehumidifier
-        unique_id: sim_e2e_irrigation_tanks_dehumidifier
-        state: "{{ is_state('input_boolean.sim_e2e_irrigation_tanks_dehumidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_irrigation_tanks_dehumidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_irrigation_tanks_dehumidifier
-      - name: sim e2e irrigation tanks growlight
-        unique_id: sim_e2e_irrigation_tanks_growlight
-        state: "{{ is_state('input_boolean.sim_e2e_irrigation_tanks_growlight', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_irrigation_tanks_growlight
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_irrigation_tanks_growlight
       - name: e2e lighting growlight switch
         unique_id: e2e_lighting_growlight_switch
         state: "{{ is_state('input_boolean.e2e_lighting_growlight_switch', 'on') }}"
@@ -1662,50 +1680,6 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.e2e_lighting_growlight_switch
-      - name: sim e2e lighting exhaust fan
-        unique_id: sim_e2e_lighting_exhaust_fan
-        state: "{{ is_state('input_boolean.sim_e2e_lighting_exhaust_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_lighting_exhaust_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_lighting_exhaust_fan
-      - name: sim e2e lighting circulation fan
-        unique_id: sim_e2e_lighting_circulation_fan
-        state: "{{ is_state('input_boolean.sim_e2e_lighting_circulation_fan', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_lighting_circulation_fan
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_lighting_circulation_fan
-      - name: sim e2e lighting humidifier
-        unique_id: sim_e2e_lighting_humidifier
-        state: "{{ is_state('input_boolean.sim_e2e_lighting_humidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_lighting_humidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_lighting_humidifier
-      - name: sim e2e lighting dehumidifier
-        unique_id: sim_e2e_lighting_dehumidifier
-        state: "{{ is_state('input_boolean.sim_e2e_lighting_dehumidifier', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_lighting_dehumidifier
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_lighting_dehumidifier
       - name: e2e climate plain circulation fan switch
         unique_id: e2e_climate_plain_circulation_fan_switch
         state: "{{ is_state('input_boolean.e2e_climate_plain_circulation_fan_switch', 'on') }}"
@@ -1750,72 +1724,1089 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.e2e_climate_plain_dehumidifier_switch
-      - name: sim e2e climate plain growlight
-        unique_id: sim_e2e_climate_plain_growlight
-        state: "{{ is_state('input_boolean.sim_e2e_climate_plain_growlight', 'on') }}"
+      - name: sim e2e veg dehumidifier
+        unique_id: sim_e2e_veg_dehumidifier
+        state: >-
+          {{ is_state('input_boolean.sim_e2e_veg_dehumidifier', 'on') if is_state('input_boolean.sim_e2e_veg_dehumidifier_manual', 'on')
+             else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 0) % 9000) / 9000 * 2 * pi )) | round(0) > 5.0 }}
         turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_climate_plain_growlight
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_veg_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_veg_dehumidifier_manual
         turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_climate_plain_growlight
-      - name: sim e2e vision exhaust fan
-        unique_id: sim_e2e_vision_exhaust_fan
-        state: "{{ is_state('input_boolean.sim_e2e_vision_exhaust_fan', 'on') }}"
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.sim_e2e_veg_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_veg_dehumidifier_manual
+      - name: sim e2e clone dehumidifier
+        unique_id: sim_e2e_clone_dehumidifier
+        state: >-
+          {{ is_state('input_boolean.sim_e2e_clone_dehumidifier', 'on') if is_state('input_boolean.sim_e2e_clone_dehumidifier_manual', 'on')
+             else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 600) % 9000) / 9000 * 2 * pi )) | round(0) > 5.0 }}
         turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_vision_exhaust_fan
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_clone_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_clone_dehumidifier_manual
         turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_vision_exhaust_fan
-      - name: sim e2e vision circulation fan
-        unique_id: sim_e2e_vision_circulation_fan
-        state: "{{ is_state('input_boolean.sim_e2e_vision_circulation_fan', 'on') }}"
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.sim_e2e_clone_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_clone_dehumidifier_manual
+      - name: sim e2e mother dehumidifier
+        unique_id: sim_e2e_mother_dehumidifier
+        state: >-
+          {{ is_state('input_boolean.sim_e2e_mother_dehumidifier', 'on') if is_state('input_boolean.sim_e2e_mother_dehumidifier_manual', 'on')
+             else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 1200) % 9000) / 9000 * 2 * pi )) | round(0) > 5.0 }}
         turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_vision_circulation_fan
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_mother_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_mother_dehumidifier_manual
         turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_vision_circulation_fan
-      - name: sim e2e vision humidifier
-        unique_id: sim_e2e_vision_humidifier
-        state: "{{ is_state('input_boolean.sim_e2e_vision_humidifier', 'on') }}"
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.sim_e2e_mother_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_mother_dehumidifier_manual
+      - name: sim e2e flower dehumidifier
+        unique_id: sim_e2e_flower_dehumidifier
+        state: >-
+          {{ is_state('input_boolean.sim_e2e_flower_dehumidifier', 'on') if is_state('input_boolean.sim_e2e_flower_dehumidifier_manual', 'on')
+             else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 1800) % 9000) / 9000 * 2 * pi )) | round(0) > 5.0 }}
         turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_vision_humidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_flower_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_flower_dehumidifier_manual
         turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_vision_humidifier
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.sim_e2e_flower_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_flower_dehumidifier_manual
+      - name: sim e2e dry dehumidifier
+        unique_id: sim_e2e_dry_dehumidifier
+        state: >-
+          {{ is_state('input_boolean.sim_e2e_dry_dehumidifier', 'on') if is_state('input_boolean.sim_e2e_dry_dehumidifier_manual', 'on')
+             else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 2400) % 9000) / 9000 * 2 * pi )) | round(0) > 5.0 }}
+        turn_on:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_dry_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_dry_dehumidifier_manual
+        turn_off:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.sim_e2e_dry_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_dry_dehumidifier_manual
+      - name: sim e2e cure dehumidifier
+        unique_id: sim_e2e_cure_dehumidifier
+        state: >-
+          {{ is_state('input_boolean.sim_e2e_cure_dehumidifier', 'on') if is_state('input_boolean.sim_e2e_cure_dehumidifier_manual', 'on')
+             else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 3000) % 9000) / 9000 * 2 * pi )) | round(0) > 5.0 }}
+        turn_on:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_cure_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_cure_dehumidifier_manual
+        turn_off:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.sim_e2e_cure_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_cure_dehumidifier_manual
+      - name: sim e2e vwc veg dehumidifier
+        unique_id: sim_e2e_vwc_veg_dehumidifier
+        state: >-
+          {{ is_state('input_boolean.sim_e2e_vwc_veg_dehumidifier', 'on') if is_state('input_boolean.sim_e2e_vwc_veg_dehumidifier_manual', 'on')
+             else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 3600) % 9000) / 9000 * 2 * pi )) | round(0) > 5.0 }}
+        turn_on:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_vwc_veg_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_vwc_veg_dehumidifier_manual
+        turn_off:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.sim_e2e_vwc_veg_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_vwc_veg_dehumidifier_manual
+      - name: sim e2e vwc flower dehumidifier
+        unique_id: sim_e2e_vwc_flower_dehumidifier
+        state: >-
+          {{ is_state('input_boolean.sim_e2e_vwc_flower_dehumidifier', 'on') if is_state('input_boolean.sim_e2e_vwc_flower_dehumidifier_manual', 'on')
+             else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 4200) % 9000) / 9000 * 2 * pi )) | round(0) > 5.0 }}
+        turn_on:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_vwc_flower_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_vwc_flower_dehumidifier_manual
+        turn_off:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.sim_e2e_vwc_flower_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_vwc_flower_dehumidifier_manual
+      - name: sim e2e telemetry multi dehumidifier
+        unique_id: sim_e2e_telemetry_multi_dehumidifier
+        state: >-
+          {{ is_state('input_boolean.sim_e2e_telemetry_multi_dehumidifier', 'on') if is_state('input_boolean.sim_e2e_telemetry_multi_dehumidifier_manual', 'on')
+             else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 4800) % 9000) / 9000 * 2 * pi )) | round(0) > 5.0 }}
+        turn_on:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_telemetry_multi_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_telemetry_multi_dehumidifier_manual
+        turn_off:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.sim_e2e_telemetry_multi_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_telemetry_multi_dehumidifier_manual
+      - name: sim e2e irrigation monitored dehumidifier
+        unique_id: sim_e2e_irrigation_monitored_dehumidifier
+        state: >-
+          {{ is_state('input_boolean.sim_e2e_irrigation_monitored_dehumidifier', 'on') if is_state('input_boolean.sim_e2e_irrigation_monitored_dehumidifier_manual', 'on')
+             else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 5400) % 9000) / 9000 * 2 * pi )) | round(0) > 5.0 }}
+        turn_on:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_irrigation_monitored_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_irrigation_monitored_dehumidifier_manual
+        turn_off:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.sim_e2e_irrigation_monitored_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_irrigation_monitored_dehumidifier_manual
+      - name: sim e2e irrigation tanks dehumidifier
+        unique_id: sim_e2e_irrigation_tanks_dehumidifier
+        state: >-
+          {{ is_state('input_boolean.sim_e2e_irrigation_tanks_dehumidifier', 'on') if is_state('input_boolean.sim_e2e_irrigation_tanks_dehumidifier_manual', 'on')
+             else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 6000) % 9000) / 9000 * 2 * pi )) | round(0) > 5.0 }}
+        turn_on:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_irrigation_tanks_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_irrigation_tanks_dehumidifier_manual
+        turn_off:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.sim_e2e_irrigation_tanks_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_irrigation_tanks_dehumidifier_manual
+      - name: sim e2e lighting dehumidifier
+        unique_id: sim_e2e_lighting_dehumidifier
+        state: >-
+          {{ is_state('input_boolean.sim_e2e_lighting_dehumidifier', 'on') if is_state('input_boolean.sim_e2e_lighting_dehumidifier_manual', 'on')
+             else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 6600) % 9000) / 9000 * 2 * pi )) | round(0) > 5.0 }}
+        turn_on:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_lighting_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_lighting_dehumidifier_manual
+        turn_off:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.sim_e2e_lighting_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_lighting_dehumidifier_manual
       - name: sim e2e vision dehumidifier
         unique_id: sim_e2e_vision_dehumidifier
-        state: "{{ is_state('input_boolean.sim_e2e_vision_dehumidifier', 'on') }}"
+        state: >-
+          {{ is_state('input_boolean.sim_e2e_vision_dehumidifier', 'on') if is_state('input_boolean.sim_e2e_vision_dehumidifier_manual', 'on')
+             else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 8400) % 9000) / 9000 * 2 * pi )) | round(0) > 5.0 }}
         turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_vision_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_vision_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_vision_dehumidifier_manual
         turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_vision_dehumidifier
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.sim_e2e_vision_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_vision_dehumidifier_manual
+  # ---------------------------------------------------------------
+  # simulated 0-10 devices (free-running until written, then pinned)
+  # ---------------------------------------------------------------
+  - number:
+      - name: sim e2e veg exhaust fan
+        unique_id: sim_e2e_veg_exhaust_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_veg_exhaust_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_veg_exhaust_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 0) % 3600) / 3600 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_veg_exhaust_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_veg_exhaust_fan_manual
+      - name: sim e2e veg circulation fan
+        unique_id: sim_e2e_veg_circulation_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_veg_circulation_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_veg_circulation_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 0) % 5400) / 5400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_veg_circulation_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_veg_circulation_fan_manual
+      - name: sim e2e veg humidifier
+        unique_id: sim_e2e_veg_humidifier
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_veg_humidifier_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_veg_humidifier_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 0) % 7200) / 7200 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_veg_humidifier_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_veg_humidifier_manual
+      - name: sim e2e veg growlight
+        unique_id: sim_e2e_veg_growlight
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_veg_growlight_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_veg_growlight_manual', 'on') else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 0) % 86400) / 86400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_veg_growlight_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_veg_growlight_manual
+      - name: sim e2e clone exhaust fan
+        unique_id: sim_e2e_clone_exhaust_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_clone_exhaust_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_clone_exhaust_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 600) % 3600) / 3600 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_clone_exhaust_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_clone_exhaust_fan_manual
+      - name: sim e2e clone circulation fan
+        unique_id: sim_e2e_clone_circulation_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_clone_circulation_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_clone_circulation_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 600) % 5400) / 5400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_clone_circulation_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_clone_circulation_fan_manual
+      - name: sim e2e clone humidifier
+        unique_id: sim_e2e_clone_humidifier
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_clone_humidifier_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_clone_humidifier_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 600) % 7200) / 7200 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_clone_humidifier_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_clone_humidifier_manual
+      - name: sim e2e clone growlight
+        unique_id: sim_e2e_clone_growlight
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_clone_growlight_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_clone_growlight_manual', 'on') else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 600) % 86400) / 86400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_clone_growlight_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_clone_growlight_manual
+      - name: sim e2e mother exhaust fan
+        unique_id: sim_e2e_mother_exhaust_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_mother_exhaust_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_mother_exhaust_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 1200) % 3600) / 3600 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_mother_exhaust_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_mother_exhaust_fan_manual
+      - name: sim e2e mother circulation fan
+        unique_id: sim_e2e_mother_circulation_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_mother_circulation_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_mother_circulation_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 1200) % 5400) / 5400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_mother_circulation_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_mother_circulation_fan_manual
+      - name: sim e2e mother humidifier
+        unique_id: sim_e2e_mother_humidifier
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_mother_humidifier_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_mother_humidifier_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 1200) % 7200) / 7200 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_mother_humidifier_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_mother_humidifier_manual
+      - name: sim e2e mother growlight
+        unique_id: sim_e2e_mother_growlight
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_mother_growlight_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_mother_growlight_manual', 'on') else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 1200) % 86400) / 86400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_mother_growlight_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_mother_growlight_manual
+      - name: sim e2e flower exhaust fan
+        unique_id: sim_e2e_flower_exhaust_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_flower_exhaust_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_flower_exhaust_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 1800) % 3600) / 3600 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_flower_exhaust_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_flower_exhaust_fan_manual
+      - name: sim e2e flower circulation fan
+        unique_id: sim_e2e_flower_circulation_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_flower_circulation_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_flower_circulation_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 1800) % 5400) / 5400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_flower_circulation_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_flower_circulation_fan_manual
+      - name: sim e2e flower humidifier
+        unique_id: sim_e2e_flower_humidifier
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_flower_humidifier_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_flower_humidifier_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 1800) % 7200) / 7200 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_flower_humidifier_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_flower_humidifier_manual
+      - name: sim e2e flower growlight
+        unique_id: sim_e2e_flower_growlight
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_flower_growlight_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_flower_growlight_manual', 'on') else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 1800) % 86400) / 86400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_flower_growlight_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_flower_growlight_manual
+      - name: sim e2e dry exhaust fan
+        unique_id: sim_e2e_dry_exhaust_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_dry_exhaust_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_dry_exhaust_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 2400) % 3600) / 3600 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_dry_exhaust_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_dry_exhaust_fan_manual
+      - name: sim e2e dry circulation fan
+        unique_id: sim_e2e_dry_circulation_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_dry_circulation_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_dry_circulation_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 2400) % 5400) / 5400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_dry_circulation_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_dry_circulation_fan_manual
+      - name: sim e2e dry humidifier
+        unique_id: sim_e2e_dry_humidifier
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_dry_humidifier_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_dry_humidifier_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 2400) % 7200) / 7200 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_dry_humidifier_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_dry_humidifier_manual
+      - name: sim e2e dry growlight
+        unique_id: sim_e2e_dry_growlight
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_dry_growlight_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_dry_growlight_manual', 'on') else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 2400) % 86400) / 86400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_dry_growlight_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_dry_growlight_manual
+      - name: sim e2e cure exhaust fan
+        unique_id: sim_e2e_cure_exhaust_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_cure_exhaust_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_cure_exhaust_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 3000) % 3600) / 3600 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_cure_exhaust_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_cure_exhaust_fan_manual
+      - name: sim e2e cure circulation fan
+        unique_id: sim_e2e_cure_circulation_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_cure_circulation_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_cure_circulation_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 3000) % 5400) / 5400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_cure_circulation_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_cure_circulation_fan_manual
+      - name: sim e2e cure humidifier
+        unique_id: sim_e2e_cure_humidifier
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_cure_humidifier_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_cure_humidifier_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 3000) % 7200) / 7200 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_cure_humidifier_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_cure_humidifier_manual
+      - name: sim e2e cure growlight
+        unique_id: sim_e2e_cure_growlight
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_cure_growlight_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_cure_growlight_manual', 'on') else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 3000) % 86400) / 86400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_cure_growlight_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_cure_growlight_manual
+      - name: sim e2e vwc veg exhaust fan
+        unique_id: sim_e2e_vwc_veg_exhaust_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_vwc_veg_exhaust_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_vwc_veg_exhaust_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 3600) % 3600) / 3600 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_vwc_veg_exhaust_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_vwc_veg_exhaust_fan_manual
+      - name: sim e2e vwc veg circulation fan
+        unique_id: sim_e2e_vwc_veg_circulation_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_vwc_veg_circulation_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_vwc_veg_circulation_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 3600) % 5400) / 5400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_vwc_veg_circulation_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_vwc_veg_circulation_fan_manual
+      - name: sim e2e vwc veg humidifier
+        unique_id: sim_e2e_vwc_veg_humidifier
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_vwc_veg_humidifier_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_vwc_veg_humidifier_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 3600) % 7200) / 7200 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_vwc_veg_humidifier_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_vwc_veg_humidifier_manual
+      - name: sim e2e vwc veg growlight
+        unique_id: sim_e2e_vwc_veg_growlight
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_vwc_veg_growlight_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_vwc_veg_growlight_manual', 'on') else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 3600) % 86400) / 86400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_vwc_veg_growlight_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_vwc_veg_growlight_manual
+      - name: sim e2e vwc flower exhaust fan
+        unique_id: sim_e2e_vwc_flower_exhaust_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_vwc_flower_exhaust_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_vwc_flower_exhaust_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 4200) % 3600) / 3600 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_vwc_flower_exhaust_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_vwc_flower_exhaust_fan_manual
+      - name: sim e2e vwc flower circulation fan
+        unique_id: sim_e2e_vwc_flower_circulation_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_vwc_flower_circulation_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_vwc_flower_circulation_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 4200) % 5400) / 5400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_vwc_flower_circulation_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_vwc_flower_circulation_fan_manual
+      - name: sim e2e vwc flower humidifier
+        unique_id: sim_e2e_vwc_flower_humidifier
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_vwc_flower_humidifier_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_vwc_flower_humidifier_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 4200) % 7200) / 7200 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_vwc_flower_humidifier_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_vwc_flower_humidifier_manual
+      - name: sim e2e vwc flower growlight
+        unique_id: sim_e2e_vwc_flower_growlight
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_vwc_flower_growlight_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_vwc_flower_growlight_manual', 'on') else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 4200) % 86400) / 86400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_vwc_flower_growlight_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_vwc_flower_growlight_manual
+      - name: sim e2e telemetry multi exhaust fan
+        unique_id: sim_e2e_telemetry_multi_exhaust_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_exhaust_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_telemetry_multi_exhaust_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 4800) % 3600) / 3600 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_telemetry_multi_exhaust_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_telemetry_multi_exhaust_fan_manual
+      - name: sim e2e telemetry multi circulation fan
+        unique_id: sim_e2e_telemetry_multi_circulation_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_circulation_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_telemetry_multi_circulation_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 4800) % 5400) / 5400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_telemetry_multi_circulation_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_telemetry_multi_circulation_fan_manual
+      - name: sim e2e telemetry multi humidifier
+        unique_id: sim_e2e_telemetry_multi_humidifier
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_humidifier_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_telemetry_multi_humidifier_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 4800) % 7200) / 7200 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_telemetry_multi_humidifier_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_telemetry_multi_humidifier_manual
+      - name: sim e2e telemetry multi growlight
+        unique_id: sim_e2e_telemetry_multi_growlight
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_telemetry_multi_growlight_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_telemetry_multi_growlight_manual', 'on') else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 4800) % 86400) / 86400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_telemetry_multi_growlight_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_telemetry_multi_growlight_manual
+      - name: sim e2e irrigation monitored exhaust fan
+        unique_id: sim_e2e_irrigation_monitored_exhaust_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_irrigation_monitored_exhaust_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_irrigation_monitored_exhaust_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 5400) % 3600) / 3600 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_irrigation_monitored_exhaust_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_irrigation_monitored_exhaust_fan_manual
+      - name: sim e2e irrigation monitored circulation fan
+        unique_id: sim_e2e_irrigation_monitored_circulation_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_irrigation_monitored_circulation_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_irrigation_monitored_circulation_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 5400) % 5400) / 5400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_irrigation_monitored_circulation_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_irrigation_monitored_circulation_fan_manual
+      - name: sim e2e irrigation monitored humidifier
+        unique_id: sim_e2e_irrigation_monitored_humidifier
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_irrigation_monitored_humidifier_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_irrigation_monitored_humidifier_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 5400) % 7200) / 7200 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_irrigation_monitored_humidifier_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_irrigation_monitored_humidifier_manual
+      - name: sim e2e irrigation monitored growlight
+        unique_id: sim_e2e_irrigation_monitored_growlight
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_irrigation_monitored_growlight_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_irrigation_monitored_growlight_manual', 'on') else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 5400) % 86400) / 86400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_irrigation_monitored_growlight_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_irrigation_monitored_growlight_manual
+      - name: sim e2e irrigation tanks exhaust fan
+        unique_id: sim_e2e_irrigation_tanks_exhaust_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_irrigation_tanks_exhaust_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_irrigation_tanks_exhaust_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 6000) % 3600) / 3600 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_irrigation_tanks_exhaust_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_irrigation_tanks_exhaust_fan_manual
+      - name: sim e2e irrigation tanks circulation fan
+        unique_id: sim_e2e_irrigation_tanks_circulation_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_irrigation_tanks_circulation_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_irrigation_tanks_circulation_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 6000) % 5400) / 5400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_irrigation_tanks_circulation_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_irrigation_tanks_circulation_fan_manual
+      - name: sim e2e irrigation tanks humidifier
+        unique_id: sim_e2e_irrigation_tanks_humidifier
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_irrigation_tanks_humidifier_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_irrigation_tanks_humidifier_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 6000) % 7200) / 7200 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_irrigation_tanks_humidifier_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_irrigation_tanks_humidifier_manual
+      - name: sim e2e irrigation tanks growlight
+        unique_id: sim_e2e_irrigation_tanks_growlight
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_irrigation_tanks_growlight_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_irrigation_tanks_growlight_manual', 'on') else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 6000) % 86400) / 86400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_irrigation_tanks_growlight_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_irrigation_tanks_growlight_manual
+      - name: sim e2e lighting exhaust fan
+        unique_id: sim_e2e_lighting_exhaust_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_lighting_exhaust_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_lighting_exhaust_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 6600) % 3600) / 3600 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_lighting_exhaust_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_lighting_exhaust_fan_manual
+      - name: sim e2e lighting circulation fan
+        unique_id: sim_e2e_lighting_circulation_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_lighting_circulation_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_lighting_circulation_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 6600) % 5400) / 5400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_lighting_circulation_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_lighting_circulation_fan_manual
+      - name: sim e2e lighting humidifier
+        unique_id: sim_e2e_lighting_humidifier
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_lighting_humidifier_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_lighting_humidifier_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 6600) % 7200) / 7200 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_lighting_humidifier_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_lighting_humidifier_manual
+      - name: sim e2e climate plain growlight
+        unique_id: sim_e2e_climate_plain_growlight
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_climate_plain_growlight_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_climate_plain_growlight_manual', 'on') else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 7200) % 86400) / 86400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_climate_plain_growlight_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_climate_plain_growlight_manual
+      - name: sim e2e vision exhaust fan
+        unique_id: sim_e2e_vision_exhaust_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_vision_exhaust_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_vision_exhaust_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 8400) % 3600) / 3600 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_vision_exhaust_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_vision_exhaust_fan_manual
+      - name: sim e2e vision circulation fan
+        unique_id: sim_e2e_vision_circulation_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_vision_circulation_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_vision_circulation_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 8400) % 5400) / 5400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_vision_circulation_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_vision_circulation_fan_manual
+      - name: sim e2e vision humidifier
+        unique_id: sim_e2e_vision_humidifier
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_vision_humidifier_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_vision_humidifier_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 8400) % 7200) / 7200 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_vision_humidifier_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_vision_humidifier_manual
       - name: sim e2e vision growlight
         unique_id: sim_e2e_vision_growlight
-        state: "{{ is_state('input_boolean.sim_e2e_vision_growlight', 'on') }}"
-        turn_on:
-          action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.sim_e2e_vision_growlight
-        turn_off:
-          action: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.sim_e2e_vision_growlight
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_vision_growlight_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_vision_growlight_manual', 'on') else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 8400) % 86400) / 86400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_vision_growlight_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_vision_growlight_manual
   # ---------------------------------------------------------------
   # percentage fans (state and percentage backed by helpers)
   # ---------------------------------------------------------------
@@ -1985,7 +2976,7 @@ input_boolean:
     name: e2e lighting growlight dimmable
     initial: false
   sim_e2e_telemetry_multi_manual_telemetry:
-    name: sim e2e telemetry_multi manual_pump
+    name: sim e2e telemetry multi manual telemetry
     initial: false
   e2e_climate_plain_circulation_fan_percentage:
     name: e2e climate plain circulation fan percentage
@@ -2011,283 +3002,242 @@ input_boolean:
   e2e_climate_plain_dehumidifier_switch:
     name: e2e climate plain dehumidifier switch
     initial: false
-  sim_e2e_veg_exhaust_fan:
-    name: sim e2e veg exhaust_pump
-    initial: false
-  sim_e2e_clone_exhaust_fan:
-    name: sim e2e clone exhaust_pump
-    initial: false
-  sim_e2e_mother_exhaust_fan:
-    name: sim e2e mother exhaust_pump
-    initial: false
-  sim_e2e_flower_exhaust_fan:
-    name: sim e2e flower exhaust_pump
-    initial: false
-  sim_e2e_dry_exhaust_fan:
-    name: sim e2e dry exhaust_pump
-    initial: false
-  sim_e2e_cure_exhaust_fan:
-    name: sim e2e cure exhaust_pump
-    initial: false
-  sim_e2e_vwc_veg_exhaust_fan:
-    name: sim e2e vwc_veg exhaust_pump
-    initial: false
-  sim_e2e_vwc_flower_exhaust_fan:
-    name: sim e2e vwc_flower exhaust_pump
-    initial: false
-  sim_e2e_telemetry_multi_exhaust_fan:
-    name: sim e2e telemetry_multi exhaust_pump
-    initial: false
-  sim_e2e_irrigation_monitored_exhaust_fan:
-    name: sim e2e irrigation_monitored exhaust_pump
-    initial: false
-  sim_e2e_irrigation_tanks_exhaust_fan:
-    name: sim e2e irrigation_tanks exhaust_pump
-    initial: false
-  sim_e2e_lighting_exhaust_fan:
-    name: sim e2e lighting exhaust_pump
-    initial: false
-  sim_e2e_vision_exhaust_fan:
-    name: sim e2e vision exhaust_pump
-    initial: false
-  sim_e2e_veg_circulation_fan:
-    name: sim e2e veg circulation_pump
-    initial: false
-  sim_e2e_clone_circulation_fan:
-    name: sim e2e clone circulation_pump
-    initial: false
-  sim_e2e_mother_circulation_fan:
-    name: sim e2e mother circulation_pump
-    initial: false
-  sim_e2e_flower_circulation_fan:
-    name: sim e2e flower circulation_pump
-    initial: false
-  sim_e2e_dry_circulation_fan:
-    name: sim e2e dry circulation_pump
-    initial: false
-  sim_e2e_cure_circulation_fan:
-    name: sim e2e cure circulation_pump
-    initial: false
-  sim_e2e_vwc_veg_circulation_fan:
-    name: sim e2e vwc_veg circulation_pump
-    initial: false
-  sim_e2e_vwc_flower_circulation_fan:
-    name: sim e2e vwc_flower circulation_pump
-    initial: false
-  sim_e2e_telemetry_multi_circulation_fan:
-    name: sim e2e telemetry_multi circulation_pump
-    initial: false
-  sim_e2e_irrigation_monitored_circulation_fan:
-    name: sim e2e irrigation_monitored circulation_pump
-    initial: false
-  sim_e2e_irrigation_tanks_circulation_fan:
-    name: sim e2e irrigation_tanks circulation_pump
-    initial: false
-  sim_e2e_lighting_circulation_fan:
-    name: sim e2e lighting circulation_pump
-    initial: false
-  sim_e2e_vision_circulation_fan:
-    name: sim e2e vision circulation_pump
-    initial: false
-  sim_e2e_veg_humidifier:
-    name: sim e2e veg veg_pump
-    initial: false
-  sim_e2e_clone_humidifier:
-    name: sim e2e clone clone_pump
-    initial: false
-  sim_e2e_mother_humidifier:
-    name: sim e2e mother mother_pump
-    initial: false
-  sim_e2e_flower_humidifier:
-    name: sim e2e flower flower_pump
-    initial: false
-  sim_e2e_dry_humidifier:
-    name: sim e2e dry dry_pump
-    initial: false
-  sim_e2e_cure_humidifier:
-    name: sim e2e cure cure_pump
-    initial: false
-  sim_e2e_vwc_veg_humidifier:
-    name: sim e2e vwc_veg veg_pump
-    initial: false
-  sim_e2e_vwc_flower_humidifier:
-    name: sim e2e vwc_flower flower_pump
-    initial: false
-  sim_e2e_telemetry_multi_humidifier:
-    name: sim e2e telemetry_multi multi_pump
-    initial: false
-  sim_e2e_irrigation_monitored_humidifier:
-    name: sim e2e irrigation_monitored monitored_pump
-    initial: false
-  sim_e2e_irrigation_tanks_humidifier:
-    name: sim e2e irrigation_tanks tanks_pump
-    initial: false
-  sim_e2e_lighting_humidifier:
-    name: sim e2e lighting lighting_pump
-    initial: false
-  sim_e2e_vision_humidifier:
-    name: sim e2e vision vision_pump
-    initial: false
   sim_e2e_veg_dehumidifier:
-    name: sim e2e veg veg_pump
+    name: sim e2e veg dehumidifier
     initial: false
   sim_e2e_clone_dehumidifier:
-    name: sim e2e clone clone_pump
+    name: sim e2e clone dehumidifier
     initial: false
   sim_e2e_mother_dehumidifier:
-    name: sim e2e mother mother_pump
+    name: sim e2e mother dehumidifier
     initial: false
   sim_e2e_flower_dehumidifier:
-    name: sim e2e flower flower_pump
+    name: sim e2e flower dehumidifier
     initial: false
   sim_e2e_dry_dehumidifier:
-    name: sim e2e dry dry_pump
+    name: sim e2e dry dehumidifier
     initial: false
   sim_e2e_cure_dehumidifier:
-    name: sim e2e cure cure_pump
+    name: sim e2e cure dehumidifier
     initial: false
   sim_e2e_vwc_veg_dehumidifier:
-    name: sim e2e vwc_veg veg_pump
+    name: sim e2e vwc veg dehumidifier
     initial: false
   sim_e2e_vwc_flower_dehumidifier:
-    name: sim e2e vwc_flower flower_pump
+    name: sim e2e vwc flower dehumidifier
     initial: false
   sim_e2e_telemetry_multi_dehumidifier:
-    name: sim e2e telemetry_multi multi_pump
+    name: sim e2e telemetry multi dehumidifier
     initial: false
   sim_e2e_irrigation_monitored_dehumidifier:
-    name: sim e2e irrigation_monitored monitored_pump
+    name: sim e2e irrigation monitored dehumidifier
     initial: false
   sim_e2e_irrigation_tanks_dehumidifier:
-    name: sim e2e irrigation_tanks tanks_pump
+    name: sim e2e irrigation tanks dehumidifier
     initial: false
   sim_e2e_lighting_dehumidifier:
-    name: sim e2e lighting lighting_pump
+    name: sim e2e lighting dehumidifier
     initial: false
   sim_e2e_vision_dehumidifier:
-    name: sim e2e vision vision_pump
+    name: sim e2e vision dehumidifier
     initial: false
-  sim_e2e_veg_growlight:
-    name: sim e2e veg veg_pump
+  sim_e2e_veg_exhaust_fan_manual:
+    name: sim e2e veg exhaust fan manual
     initial: false
-  sim_e2e_clone_growlight:
-    name: sim e2e clone clone_pump
+  sim_e2e_clone_exhaust_fan_manual:
+    name: sim e2e clone exhaust fan manual
     initial: false
-  sim_e2e_mother_growlight:
-    name: sim e2e mother mother_pump
+  sim_e2e_mother_exhaust_fan_manual:
+    name: sim e2e mother exhaust fan manual
     initial: false
-  sim_e2e_flower_growlight:
-    name: sim e2e flower flower_pump
+  sim_e2e_flower_exhaust_fan_manual:
+    name: sim e2e flower exhaust fan manual
     initial: false
-  sim_e2e_dry_growlight:
-    name: sim e2e dry dry_pump
+  sim_e2e_dry_exhaust_fan_manual:
+    name: sim e2e dry exhaust fan manual
     initial: false
-  sim_e2e_cure_growlight:
-    name: sim e2e cure cure_pump
+  sim_e2e_cure_exhaust_fan_manual:
+    name: sim e2e cure exhaust fan manual
     initial: false
-  sim_e2e_vwc_veg_growlight:
-    name: sim e2e vwc_veg veg_pump
+  sim_e2e_vwc_veg_exhaust_fan_manual:
+    name: sim e2e vwc veg exhaust fan manual
     initial: false
-  sim_e2e_vwc_flower_growlight:
-    name: sim e2e vwc_flower flower_pump
+  sim_e2e_vwc_flower_exhaust_fan_manual:
+    name: sim e2e vwc flower exhaust fan manual
     initial: false
-  sim_e2e_telemetry_multi_growlight:
-    name: sim e2e telemetry_multi multi_pump
+  sim_e2e_telemetry_multi_exhaust_fan_manual:
+    name: sim e2e telemetry multi exhaust fan manual
     initial: false
-  sim_e2e_irrigation_monitored_growlight:
-    name: sim e2e irrigation_monitored monitored_pump
+  sim_e2e_irrigation_monitored_exhaust_fan_manual:
+    name: sim e2e irrigation monitored exhaust fan manual
     initial: false
-  sim_e2e_irrigation_tanks_growlight:
-    name: sim e2e irrigation_tanks tanks_pump
+  sim_e2e_irrigation_tanks_exhaust_fan_manual:
+    name: sim e2e irrigation tanks exhaust fan manual
     initial: false
-  sim_e2e_climate_plain_growlight:
-    name: sim e2e climate_plain plain_pump
+  sim_e2e_lighting_exhaust_fan_manual:
+    name: sim e2e lighting exhaust fan manual
     initial: false
-  sim_e2e_vision_growlight:
-    name: sim e2e vision vision_pump
+  sim_e2e_vision_exhaust_fan_manual:
+    name: sim e2e vision exhaust fan manual
+    initial: false
+  sim_e2e_veg_circulation_fan_manual:
+    name: sim e2e veg circulation fan manual
+    initial: false
+  sim_e2e_clone_circulation_fan_manual:
+    name: sim e2e clone circulation fan manual
+    initial: false
+  sim_e2e_mother_circulation_fan_manual:
+    name: sim e2e mother circulation fan manual
+    initial: false
+  sim_e2e_flower_circulation_fan_manual:
+    name: sim e2e flower circulation fan manual
+    initial: false
+  sim_e2e_dry_circulation_fan_manual:
+    name: sim e2e dry circulation fan manual
+    initial: false
+  sim_e2e_cure_circulation_fan_manual:
+    name: sim e2e cure circulation fan manual
+    initial: false
+  sim_e2e_vwc_veg_circulation_fan_manual:
+    name: sim e2e vwc veg circulation fan manual
+    initial: false
+  sim_e2e_vwc_flower_circulation_fan_manual:
+    name: sim e2e vwc flower circulation fan manual
+    initial: false
+  sim_e2e_telemetry_multi_circulation_fan_manual:
+    name: sim e2e telemetry multi circulation fan manual
+    initial: false
+  sim_e2e_irrigation_monitored_circulation_fan_manual:
+    name: sim e2e irrigation monitored circulation fan manual
+    initial: false
+  sim_e2e_irrigation_tanks_circulation_fan_manual:
+    name: sim e2e irrigation tanks circulation fan manual
+    initial: false
+  sim_e2e_lighting_circulation_fan_manual:
+    name: sim e2e lighting circulation fan manual
+    initial: false
+  sim_e2e_vision_circulation_fan_manual:
+    name: sim e2e vision circulation fan manual
+    initial: false
+  sim_e2e_veg_humidifier_manual:
+    name: sim e2e veg humidifier manual
+    initial: false
+  sim_e2e_clone_humidifier_manual:
+    name: sim e2e clone humidifier manual
+    initial: false
+  sim_e2e_mother_humidifier_manual:
+    name: sim e2e mother humidifier manual
+    initial: false
+  sim_e2e_flower_humidifier_manual:
+    name: sim e2e flower humidifier manual
+    initial: false
+  sim_e2e_dry_humidifier_manual:
+    name: sim e2e dry humidifier manual
+    initial: false
+  sim_e2e_cure_humidifier_manual:
+    name: sim e2e cure humidifier manual
+    initial: false
+  sim_e2e_vwc_veg_humidifier_manual:
+    name: sim e2e vwc veg humidifier manual
+    initial: false
+  sim_e2e_vwc_flower_humidifier_manual:
+    name: sim e2e vwc flower humidifier manual
+    initial: false
+  sim_e2e_telemetry_multi_humidifier_manual:
+    name: sim e2e telemetry multi humidifier manual
+    initial: false
+  sim_e2e_irrigation_monitored_humidifier_manual:
+    name: sim e2e irrigation monitored humidifier manual
+    initial: false
+  sim_e2e_irrigation_tanks_humidifier_manual:
+    name: sim e2e irrigation tanks humidifier manual
+    initial: false
+  sim_e2e_lighting_humidifier_manual:
+    name: sim e2e lighting humidifier manual
+    initial: false
+  sim_e2e_vision_humidifier_manual:
+    name: sim e2e vision humidifier manual
+    initial: false
+  sim_e2e_veg_growlight_manual:
+    name: sim e2e veg growlight manual
+    initial: false
+  sim_e2e_clone_growlight_manual:
+    name: sim e2e clone growlight manual
+    initial: false
+  sim_e2e_mother_growlight_manual:
+    name: sim e2e mother growlight manual
+    initial: false
+  sim_e2e_flower_growlight_manual:
+    name: sim e2e flower growlight manual
+    initial: false
+  sim_e2e_dry_growlight_manual:
+    name: sim e2e dry growlight manual
+    initial: false
+  sim_e2e_cure_growlight_manual:
+    name: sim e2e cure growlight manual
+    initial: false
+  sim_e2e_vwc_veg_growlight_manual:
+    name: sim e2e vwc veg growlight manual
+    initial: false
+  sim_e2e_vwc_flower_growlight_manual:
+    name: sim e2e vwc flower growlight manual
+    initial: false
+  sim_e2e_telemetry_multi_growlight_manual:
+    name: sim e2e telemetry multi growlight manual
+    initial: false
+  sim_e2e_irrigation_monitored_growlight_manual:
+    name: sim e2e irrigation monitored growlight manual
+    initial: false
+  sim_e2e_irrigation_tanks_growlight_manual:
+    name: sim e2e irrigation tanks growlight manual
+    initial: false
+  sim_e2e_climate_plain_growlight_manual:
+    name: sim e2e climate plain growlight manual
+    initial: false
+  sim_e2e_vision_growlight_manual:
+    name: sim e2e vision growlight manual
+    initial: false
+  sim_e2e_veg_dehumidifier_manual:
+    name: sim e2e veg dehumidifier manual
+    initial: false
+  sim_e2e_clone_dehumidifier_manual:
+    name: sim e2e clone dehumidifier manual
+    initial: false
+  sim_e2e_mother_dehumidifier_manual:
+    name: sim e2e mother dehumidifier manual
+    initial: false
+  sim_e2e_flower_dehumidifier_manual:
+    name: sim e2e flower dehumidifier manual
+    initial: false
+  sim_e2e_dry_dehumidifier_manual:
+    name: sim e2e dry dehumidifier manual
+    initial: false
+  sim_e2e_cure_dehumidifier_manual:
+    name: sim e2e cure dehumidifier manual
+    initial: false
+  sim_e2e_vwc_veg_dehumidifier_manual:
+    name: sim e2e vwc veg dehumidifier manual
+    initial: false
+  sim_e2e_vwc_flower_dehumidifier_manual:
+    name: sim e2e vwc flower dehumidifier manual
+    initial: false
+  sim_e2e_telemetry_multi_dehumidifier_manual:
+    name: sim e2e telemetry multi dehumidifier manual
+    initial: false
+  sim_e2e_irrigation_monitored_dehumidifier_manual:
+    name: sim e2e irrigation monitored dehumidifier manual
+    initial: false
+  sim_e2e_irrigation_tanks_dehumidifier_manual:
+    name: sim e2e irrigation tanks dehumidifier manual
+    initial: false
+  sim_e2e_lighting_dehumidifier_manual:
+    name: sim e2e lighting dehumidifier manual
+    initial: false
+  sim_e2e_vision_dehumidifier_manual:
+    name: sim e2e vision dehumidifier manual
     initial: false
 
 input_number:
-  e2e_vwc_veg_temperature:
-    name: e2e vwc_veg temperature
-    min: 0
-    max: 56.0
-    step: 0.01
-    initial: 24.0
-    unit_of_measurement: "°C"
-    mode: box
-  e2e_vwc_veg_humidity:
-    name: e2e vwc_veg humidity
-    min: 0
-    max: 140.0
-    step: 0.01
-    initial: 57.5
-    unit_of_measurement: "%"
-    mode: box
-  e2e_vwc_veg_vpd:
-    name: e2e vwc_veg vpd
-    min: 0
-    max: 2.8
-    step: 0.01
-    initial: 1.1
-    unit_of_measurement: "kPa"
-    mode: box
-  e2e_vwc_veg_co2:
-    name: e2e vwc_veg co2
-    min: 0
-    max: 2400
-    step: 0.01
-    initial: 800.0
-    unit_of_measurement: "ppm"
-    mode: box
-  e2e_vwc_veg_feed_ec:
-    name: e2e vwc_veg feed_ec
-    min: 0
-    max: 4.8
-    step: 0.01
-    initial: 2.0
-    unit_of_measurement: "mS/cm"
-    mode: box
-  e2e_vwc_veg_bulk_ec:
-    name: e2e vwc_veg bulk_ec
-    min: 0
-    max: 6.0
-    step: 0.01
-    initial: 2.0
-    unit_of_measurement: "mS/cm"
-    mode: box
-  e2e_vwc_veg_pore_ec:
-    name: e2e vwc_veg pore_ec
-    min: 0
-    max: 6.8
-    step: 0.01
-    initial: 2.3
-    unit_of_measurement: "mS/cm"
-    mode: box
-  e2e_vwc_veg_runoff_ec:
-    name: e2e vwc_veg runoff_ec
-    min: 0
-    max: 6.0
-    step: 0.01
-    initial: 2.2
-    unit_of_measurement: "mS/cm"
-    mode: box
-  e2e_vwc_veg_ph:
-    name: e2e vwc_veg ph
-    min: 0
-    max: 12.8
-    step: 0.01
-    initial: 6.0
-    unit_of_measurement: "pH"
-    mode: box
-  e2e_vwc_veg_substrate_temperature:
-    name: e2e vwc_veg substrate_temperature
-    min: 0
-    max: 48.0
-    step: 0.01
-    initial: 21.0
-    unit_of_measurement: "°C"
-    mode: box
   e2e_vwc_veg_substrate_moisture:
     name: e2e vwc_veg substrate_moisture
     min: 0
@@ -2295,14 +3245,6 @@ input_number:
     step: 0.01
     initial: 52.5
     unit_of_measurement: "%"
-    mode: box
-  e2e_vwc_veg_power:
-    name: e2e vwc_veg power
-    min: 0
-    max: 1200.0
-    step: 0.01
-    initial: 320.0
-    unit_of_measurement: "W"
     mode: box
   e2e_vwc_veg_irrigation_tank:
     name: e2e vwc_veg irrigation_tank
@@ -2312,94 +3254,6 @@ input_number:
     initial: 80
     unit_of_measurement: "%"
     mode: box
-  e2e_vwc_veg_energy:
-    name: e2e vwc_veg energy
-    min: 0
-    max: 100000
-    step: 0.001
-    initial: 5.0
-    unit_of_measurement: "kWh"
-    mode: box
-  e2e_vwc_flower_temperature:
-    name: e2e vwc_flower temperature
-    min: 0
-    max: 56.0
-    step: 0.01
-    initial: 24.0
-    unit_of_measurement: "°C"
-    mode: box
-  e2e_vwc_flower_humidity:
-    name: e2e vwc_flower humidity
-    min: 0
-    max: 140.0
-    step: 0.01
-    initial: 57.5
-    unit_of_measurement: "%"
-    mode: box
-  e2e_vwc_flower_vpd:
-    name: e2e vwc_flower vpd
-    min: 0
-    max: 2.8
-    step: 0.01
-    initial: 1.1
-    unit_of_measurement: "kPa"
-    mode: box
-  e2e_vwc_flower_co2:
-    name: e2e vwc_flower co2
-    min: 0
-    max: 2400
-    step: 0.01
-    initial: 800.0
-    unit_of_measurement: "ppm"
-    mode: box
-  e2e_vwc_flower_feed_ec:
-    name: e2e vwc_flower feed_ec
-    min: 0
-    max: 4.8
-    step: 0.01
-    initial: 2.0
-    unit_of_measurement: "mS/cm"
-    mode: box
-  e2e_vwc_flower_bulk_ec:
-    name: e2e vwc_flower bulk_ec
-    min: 0
-    max: 6.0
-    step: 0.01
-    initial: 2.0
-    unit_of_measurement: "mS/cm"
-    mode: box
-  e2e_vwc_flower_pore_ec:
-    name: e2e vwc_flower pore_ec
-    min: 0
-    max: 6.8
-    step: 0.01
-    initial: 2.3
-    unit_of_measurement: "mS/cm"
-    mode: box
-  e2e_vwc_flower_runoff_ec:
-    name: e2e vwc_flower runoff_ec
-    min: 0
-    max: 6.0
-    step: 0.01
-    initial: 2.2
-    unit_of_measurement: "mS/cm"
-    mode: box
-  e2e_vwc_flower_ph:
-    name: e2e vwc_flower ph
-    min: 0
-    max: 12.8
-    step: 0.01
-    initial: 6.0
-    unit_of_measurement: "pH"
-    mode: box
-  e2e_vwc_flower_substrate_temperature:
-    name: e2e vwc_flower substrate_temperature
-    min: 0
-    max: 48.0
-    step: 0.01
-    initial: 21.0
-    unit_of_measurement: "°C"
-    mode: box
   e2e_vwc_flower_substrate_moisture:
     name: e2e vwc_flower substrate_moisture
     min: 0
@@ -2408,14 +3262,6 @@ input_number:
     initial: 52.5
     unit_of_measurement: "%"
     mode: box
-  e2e_vwc_flower_power:
-    name: e2e vwc_flower power
-    min: 0
-    max: 1200.0
-    step: 0.01
-    initial: 320.0
-    unit_of_measurement: "W"
-    mode: box
   e2e_vwc_flower_irrigation_tank:
     name: e2e vwc_flower irrigation_tank
     min: 0
@@ -2423,14 +3269,6 @@ input_number:
     step: 1
     initial: 80
     unit_of_measurement: "%"
-    mode: box
-  e2e_vwc_flower_energy:
-    name: e2e vwc_flower energy
-    min: 0
-    max: 100000
-    step: 0.001
-    initial: 5.0
-    unit_of_measurement: "kWh"
     mode: box
   sim_e2e_telemetry_multi_temperature_1:
     name: sim e2e telemetry_multi temperature 1
@@ -2563,18 +3401,16 @@ input_number:
   sim_e2e_telemetry_multi_light_1:
     name: sim e2e telemetry_multi light 1
     min: 0
-    max: 100000
+    max: 10
     step: 1
-    initial: 20000.0
-    unit_of_measurement: "lx"
+    initial: 3.33
     mode: box
   sim_e2e_telemetry_multi_light_2:
     name: sim e2e telemetry_multi light 2
     min: 0
-    max: 100000
+    max: 10
     step: 1
-    initial: 40000.0
-    unit_of_measurement: "lx"
+    initial: 6.67
     mode: box
   sim_e2e_telemetry_multi_energy:
     name: sim e2e telemetry_multi energy
@@ -2712,6 +3548,370 @@ input_number:
     name: e2e climate plain exhaust fan percentage value
     min: 0
     max: 100
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_veg_exhaust_fan_level:
+    name: sim e2e veg exhaust fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_clone_exhaust_fan_level:
+    name: sim e2e clone exhaust fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_mother_exhaust_fan_level:
+    name: sim e2e mother exhaust fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_flower_exhaust_fan_level:
+    name: sim e2e flower exhaust fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_dry_exhaust_fan_level:
+    name: sim e2e dry exhaust fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_cure_exhaust_fan_level:
+    name: sim e2e cure exhaust fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_vwc_veg_exhaust_fan_level:
+    name: sim e2e vwc veg exhaust fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_vwc_flower_exhaust_fan_level:
+    name: sim e2e vwc flower exhaust fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_telemetry_multi_exhaust_fan_level:
+    name: sim e2e telemetry multi exhaust fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_irrigation_monitored_exhaust_fan_level:
+    name: sim e2e irrigation monitored exhaust fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_irrigation_tanks_exhaust_fan_level:
+    name: sim e2e irrigation tanks exhaust fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_lighting_exhaust_fan_level:
+    name: sim e2e lighting exhaust fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_vision_exhaust_fan_level:
+    name: sim e2e vision exhaust fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_veg_circulation_fan_level:
+    name: sim e2e veg circulation fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_clone_circulation_fan_level:
+    name: sim e2e clone circulation fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_mother_circulation_fan_level:
+    name: sim e2e mother circulation fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_flower_circulation_fan_level:
+    name: sim e2e flower circulation fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_dry_circulation_fan_level:
+    name: sim e2e dry circulation fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_cure_circulation_fan_level:
+    name: sim e2e cure circulation fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_vwc_veg_circulation_fan_level:
+    name: sim e2e vwc veg circulation fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_vwc_flower_circulation_fan_level:
+    name: sim e2e vwc flower circulation fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_telemetry_multi_circulation_fan_level:
+    name: sim e2e telemetry multi circulation fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_irrigation_monitored_circulation_fan_level:
+    name: sim e2e irrigation monitored circulation fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_irrigation_tanks_circulation_fan_level:
+    name: sim e2e irrigation tanks circulation fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_lighting_circulation_fan_level:
+    name: sim e2e lighting circulation fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_vision_circulation_fan_level:
+    name: sim e2e vision circulation fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_veg_humidifier_level:
+    name: sim e2e veg humidifier level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_clone_humidifier_level:
+    name: sim e2e clone humidifier level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_mother_humidifier_level:
+    name: sim e2e mother humidifier level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_flower_humidifier_level:
+    name: sim e2e flower humidifier level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_dry_humidifier_level:
+    name: sim e2e dry humidifier level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_cure_humidifier_level:
+    name: sim e2e cure humidifier level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_vwc_veg_humidifier_level:
+    name: sim e2e vwc veg humidifier level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_vwc_flower_humidifier_level:
+    name: sim e2e vwc flower humidifier level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_telemetry_multi_humidifier_level:
+    name: sim e2e telemetry multi humidifier level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_irrigation_monitored_humidifier_level:
+    name: sim e2e irrigation monitored humidifier level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_irrigation_tanks_humidifier_level:
+    name: sim e2e irrigation tanks humidifier level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_lighting_humidifier_level:
+    name: sim e2e lighting humidifier level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_vision_humidifier_level:
+    name: sim e2e vision humidifier level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_veg_growlight_level:
+    name: sim e2e veg growlight level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_clone_growlight_level:
+    name: sim e2e clone growlight level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_mother_growlight_level:
+    name: sim e2e mother growlight level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_flower_growlight_level:
+    name: sim e2e flower growlight level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_dry_growlight_level:
+    name: sim e2e dry growlight level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_cure_growlight_level:
+    name: sim e2e cure growlight level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_vwc_veg_growlight_level:
+    name: sim e2e vwc veg growlight level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_vwc_flower_growlight_level:
+    name: sim e2e vwc flower growlight level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_telemetry_multi_growlight_level:
+    name: sim e2e telemetry multi growlight level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_irrigation_monitored_growlight_level:
+    name: sim e2e irrigation monitored growlight level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_irrigation_tanks_growlight_level:
+    name: sim e2e irrigation tanks growlight level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_climate_plain_growlight_level:
+    name: sim e2e climate plain growlight level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_vision_growlight_level:
+    name: sim e2e vision growlight level
+    min: 0
+    max: 10
     step: 1
     initial: 0
     mode: slider

@@ -17,12 +17,37 @@ async function postJson(baseUrl, token, pathname, data) {
   return body ? JSON.parse(body) : null;
 }
 
-async function ensureIntegration({ listEntries, post = postJson, baseUrl, token }) {
-  const entries = await listEntries();
+// Home Assistant answers its HTTP API before the integration has finished
+// setting up, and setup grows with the number of simulated entities, so an
+// entry read once immediately after a restart is a race rather than a verdict.
+const ENTRY_LOAD_TIMEOUT_MS = 120_000;
+const ENTRY_POLL_INTERVAL_MS = 2_000;
+
+async function ensureIntegration({
+  listEntries,
+  post = postJson,
+  baseUrl,
+  token,
+  timeoutMs = ENTRY_LOAD_TIMEOUT_MS,
+  intervalMs = ENTRY_POLL_INTERVAL_MS,
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  now = () => Date.now(),
+}) {
+  const deadline = now() + timeoutMs;
+  let entries = await listEntries();
+  while (
+    entries.length === 1 &&
+    entries[0].state &&
+    entries[0].state !== 'loaded' &&
+    now() < deadline
+  ) {
+    await sleep(intervalMs);
+    entries = await listEntries();
+  }
   if (entries.length > 1) throw new Error(`Expected at most one Growspace Manager config entry, found ${entries.length}`);
   if (entries.length === 1) {
     if (entries[0].state && entries[0].state !== 'loaded') {
-      throw new Error(`Growspace Manager config entry is ${entries[0].state}, expected loaded`);
+      throw new Error(`Growspace Manager config entry is still ${entries[0].state} after ${Math.round(timeoutMs / 1000)}s, expected loaded`);
     }
     return { created: false, entryId: entries[0].entry_id };
   }
