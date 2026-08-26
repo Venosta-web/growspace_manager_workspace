@@ -335,6 +335,26 @@ six-hour snapshot interval, and configures a representative Vision Checkup
 schedule. Manual snapshots need no AI agent; the no-AI checkup case stops at
 the integration's availability gate before any external request.
 
+Both frames are drawn by `./scripts/gen-e2e-camera-assets`, not photographed:
+640x480 grow-tent scenes built from seeded noise, mylar streaks and procedural
+fan leaves under a camera HUD.
+
+* **vision_1** — a healthy wide canopy, green banner, no call-outs.
+* **vision_2** — a close shot carrying simulated symptoms (chlorosis, necrotic
+  spotting, droop), marked up the way a vision-model overlay would: amber
+  detection boxes with confidences plus a warning banner. It is what a spec or a
+  human needs to see a recognisable problem state in the snapshot dialog.
+
+Both carry a `SIMULATED FIXTURE` tag, so a frame that reaches that dialog can
+never be mistaken for a real capture. Every random draw is seeded and the HUD
+clock is a fixed string, so rerunning the script reproduces the frames; the
+suite only depends on both being valid JPEGs whose bytes differ.
+
+The frames are tracked, so `./scripts/e2e provision` does not regenerate them
+and does not depend on Pillow. Run the script by hand after changing what a
+frame should depict, then reload the two Local File entries — an entry that was
+set up while its file was missing stays `unavailable` until it is reloaded.
+
 ## 2. Growspaces
 
 `tests/e2e/fixtures/e2e-setup.ts` applies the install-wide global fixtures,

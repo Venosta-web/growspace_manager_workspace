@@ -1,0 +1,374 @@
+#!/usr/bin/env python3
+"""
+Generate the fake camera frames the vision e2e profile serves.
+
+`tests/e2e/fixtures/e2e-setup.ts` (`ensureCameraFixtures`) creates two Local
+File camera entries and points them at these files:
+
+  camera.e2e_vision_1 -> /config/www/e2e-camera-assets/e2e_vision_1.jpg
+  camera.e2e_vision_2 -> /config/www/e2e-camera-assets/e2e_vision_2.jpg
+
+  ./scripts/gen-e2e-camera-assets       # write both frames
+  ./scripts/ha dev restart              # only needed if the entries are new
+
+Output: ha-dev/www/e2e-camera-assets/*.jpg  (regenerate, never hand-edit)
+
+Design
+------
+* Frames are *drawn*, not photographed: a grow-tent scene composed from noise,
+  mylar streaks and procedural fan leaves. No binary blob in git history that
+  nobody can regenerate.
+* The two cameras are deliberately contrasting so specs can tell them apart by
+  eye and by bytes: vision_1 is a healthy wide canopy shot, vision_2 is a close
+  shot carrying simulated symptoms — chlorosis, necrotic spotting, droop.
+* Symptoms are also *called out* on the frame the way a vision model overlay
+  would: amber detection boxes with confidences plus a warning banner. A human
+  looking at the snapshot dialog can see at a glance which condition the fixture
+  is meant to represent.
+* Every random draw comes from a per-frame seeded `random.Random`, and the HUD
+  clock is a fixed string, so re-running this script reproduces the same file.
+  (Byte-identical output assumes the same Pillow and the same HUD font; the
+  suite only requires the two frames to be valid JPEGs that differ.)
+"""
+import math
+import pathlib
+import random
+import sys
+
+try:
+    from PIL import Image, ImageDraw, ImageFilter, ImageFont
+except ModuleNotFoundError:  # pragma: no cover - environment guard
+    sys.exit("Pillow is required: pip install --user Pillow")
+
+SIZE = (640, 480)
+JPEG_QUALITY = 82
+HUD_CLOCK = "2026-01-01 06:45:00"
+
+FONT_CANDIDATES = [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+]
+
+AMBER = (255, 176, 32)
+RED = (232, 78, 62)
+GREEN = (108, 208, 122)
+WHITE = (236, 240, 233)
+
+
+def load_font(size):
+    for path in FONT_CANDIDATES:
+        if pathlib.Path(path).exists():
+            return ImageFont.truetype(path, size)
+    return ImageFont.load_default()
+
+
+# --------------------------------------------------------------------------
+# scene
+# --------------------------------------------------------------------------
+def tent_background(rng):
+    """Dark tent interior: LED wash at the top, mylar streaks, floor shadow."""
+    img = Image.new("RGB", SIZE)
+    draw = ImageDraw.Draw(img)
+    w, h = SIZE
+    top, bottom = (44, 26, 62), (14, 18, 15)
+    for y in range(h):
+        t = y / (h - 1)
+        draw.line(
+            [(0, y), (w, y)],
+            fill=tuple(round(a + (b - a) * t) for a, b in zip(top, bottom)),
+        )
+
+    # mylar: vertical highlight streaks, brighter near the light
+    streaks = Image.new("RGBA", SIZE, (0, 0, 0, 0))
+    sd = ImageDraw.Draw(streaks)
+    for _ in range(26):
+        x = rng.uniform(0, w)
+        width = rng.uniform(3, 22)
+        alpha = rng.randint(6, 26)
+        sd.rectangle([x, 0, x + width, h * rng.uniform(0.45, 0.9)],
+                     fill=(196, 168, 236, alpha))
+    img = Image.alpha_composite(
+        img.convert("RGBA"), streaks.filter(ImageFilter.GaussianBlur(6))
+    ).convert("RGB")
+
+    # floor
+    draw = ImageDraw.Draw(img)
+    floor_y = int(h * 0.82)
+    for y in range(floor_y, h):
+        t = (y - floor_y) / max(1, h - floor_y)
+        draw.line([(0, y), (w, y)], fill=(int(26 - 10 * t), int(24 - 9 * t), int(22 - 8 * t)))
+    return img
+
+
+def leaflet(origin, angle, length, width, curve, rng):
+    """Polygon points for one lanceolate leaflet growing out of `origin`."""
+    left, right = [], []
+    steps = 14
+    for i in range(steps + 1):
+        t = i / steps
+        profile = math.sin(math.pi * t**0.7)
+        half = width * profile * rng.uniform(0.94, 1.06) / 2
+        a = angle + curve * t
+        cx = origin[0] + math.cos(a) * length * t
+        cy = origin[1] - math.sin(a) * length * t
+        nx, ny = math.sin(a), math.cos(a)
+        left.append((cx + nx * half, cy + ny * half))
+        right.append((cx - nx * half, cy - ny * half))
+    return left + right[::-1]
+
+
+def blend(a, b, t):
+    return tuple(round(x + (y - x) * t) for x, y in zip(a, b))
+
+
+def draw_fan_leaf(draw, origin, angle, length, rng, *, health, depth):
+    """One fan leaf (5 or 7 leaflets). `health` 1.0 = green, 0.0 = chlorotic."""
+    healthy = (48, 118, 52)
+    chlorotic = (176, 172, 58)
+    necrotic = (118, 76, 34)
+    base = blend(chlorotic, healthy, health)
+    # depth pushes the leaf toward the background wash
+    base = blend((36, 32, 48), base, depth)
+    count = rng.choice([5, 7])
+    spread = math.radians(rng.uniform(26, 34))
+    boxes = []
+    for i in range(count):
+        offset = i - (count - 1) / 2
+        scale = 1.0 - 0.16 * abs(offset)
+        a = angle + spread * offset
+        pts = leaflet(
+            origin,
+            a,
+            length * scale,
+            length * scale * rng.uniform(0.17, 0.22),
+            curve=rng.uniform(-0.18, 0.18),
+            rng=rng,
+        )
+        shade = rng.uniform(0.82, 1.12)
+        fill = tuple(min(255, round(c * shade)) for c in base)
+        if health < 0.55 and abs(offset) >= (count - 1) / 2 - 0.01:
+            fill = blend(fill, necrotic, 0.35)  # tips burn first
+        draw.polygon(pts, fill=fill, outline=blend(fill, (0, 0, 0), 0.35))
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        boxes.append((min(xs), min(ys), max(xs), max(ys)))
+        # midrib
+        tip = (origin[0] + math.cos(a) * length * scale,
+               origin[1] - math.sin(a) * length * scale)
+        draw.line([origin, tip], fill=blend(fill, WHITE, 0.28), width=1)
+    return (
+        min(b[0] for b in boxes),
+        min(b[1] for b in boxes),
+        max(b[2] for b in boxes),
+        max(b[3] for b in boxes),
+    )
+
+
+def necrotic_spots(draw, box, rng, count):
+    """Brown lesions scattered over a leaf's bounding box."""
+    x0, y0, x1, y1 = box
+    for _ in range(count):
+        cx = rng.uniform(x0 + (x1 - x0) * 0.2, x1 - (x1 - x0) * 0.2)
+        cy = rng.uniform(y0 + (y1 - y0) * 0.2, y1 - (y1 - y0) * 0.2)
+        r = rng.uniform(2.0, 5.5)
+        draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(96, 60, 28))
+        draw.ellipse(
+            [cx - r * 0.5, cy - r * 0.5, cx + r * 0.5, cy + r * 0.5],
+            fill=(142, 104, 44),
+        )
+
+
+def draw_plant(draw, rng, *, base_x, base_y, height, health, depth, droop=0.0,
+               spots=0):
+    """Pot, stem and a stack of fan leaves. Returns per-leaf bounding boxes."""
+    pot_w = height * 0.42
+    pot = [
+        (base_x - pot_w / 2, base_y),
+        (base_x + pot_w / 2, base_y),
+        (base_x + pot_w * 0.38, base_y + height * 0.19),
+        (base_x - pot_w * 0.38, base_y + height * 0.19),
+    ]
+    pot_fill = blend((30, 30, 34), (58, 58, 64), depth)
+    draw.polygon(pot, fill=pot_fill, outline=blend(pot_fill, (0, 0, 0), 0.4))
+    draw.ellipse(
+        [base_x - pot_w / 2, base_y - pot_w * 0.11,
+         base_x + pot_w / 2, base_y + pot_w * 0.11],
+        fill=blend(pot_fill, (18, 16, 14), 0.5),
+    )
+
+    stem_top = base_y - height
+    draw.line([(base_x, base_y), (base_x, stem_top)],
+              fill=blend((34, 60, 34), (62, 96, 54), depth), width=max(2, int(height * 0.02)))
+
+    boxes = []
+    nodes = 5
+    for i in range(nodes):
+        t = i / (nodes - 1)
+        y = base_y - height * (0.24 + 0.72 * t)
+        leaf_len = height * (0.46 - 0.22 * t)
+        for direction in (1, -1):
+            # droop swings the leaf axis from above the horizon to below it
+            lift = math.radians(rng.uniform(4, 26)) * (1 - droop) - math.radians(34) * droop
+            a = lift if direction > 0 else math.pi - lift
+            boxes.append(
+                draw_fan_leaf(
+                    draw,
+                    (base_x + direction * height * 0.02, y),
+                    a,
+                    leaf_len * rng.uniform(0.9, 1.1),
+                    rng,
+                    health=health,
+                    depth=depth,
+                )
+            )
+    if spots:
+        for box in rng.sample(boxes, min(spots, len(boxes))):
+            necrotic_spots(draw, box, rng, rng.randint(3, 6))
+    return boxes
+
+
+def sensor_grain(img, rng, strength=14):
+    noise = Image.frombytes("L", SIZE, rng.randbytes(SIZE[0] * SIZE[1]))
+    noise = noise.filter(ImageFilter.GaussianBlur(0.4)).convert("RGB")
+    return Image.blend(img, noise, strength / 255)
+
+
+# --------------------------------------------------------------------------
+# HUD
+# --------------------------------------------------------------------------
+def warning_triangle(draw, x, y, size, color):
+    draw.polygon(
+        [(x + size / 2, y), (x + size, y + size * 0.88), (x, y + size * 0.88)],
+        fill=color,
+    )
+    draw.line([(x + size / 2, y + size * 0.24), (x + size / 2, y + size * 0.58)],
+              fill=(30, 22, 8), width=2)
+    draw.point((x + size / 2, y + size * 0.72), fill=(30, 22, 8))
+
+
+def draw_hud(img, spec, boxes, rng):
+    draw = ImageDraw.Draw(img, "RGBA")
+    w, h = SIZE
+    small, tiny = load_font(13), load_font(11)
+
+    # detection overlays
+    for label, confidence, box in spec["detections"](boxes, rng):
+        x0, y0, x1, y1 = box
+        draw.rectangle([x0 - 3, y0 - 3, x1 + 3, y1 + 3], outline=AMBER, width=2)
+        text = f"{label} {confidence:.2f}"
+        tw = draw.textlength(text, font=tiny)
+        draw.rectangle([x0 - 3, y0 - 18, x0 + tw + 7, y0 - 3], fill=AMBER)
+        draw.text((x0 + 1, y0 - 16), text, font=tiny, fill=(28, 20, 6))
+
+    # top bar
+    draw.rectangle([0, 0, w, 26], fill=(0, 0, 0, 150))
+    draw.ellipse([12, 9, 20, 17], fill=RED)
+    draw.text((28, 6), spec["camera_label"], font=small, fill=WHITE)
+    clock_w = draw.textlength(HUD_CLOCK, font=small)
+    draw.text((w - clock_w - 12, 6), HUD_CLOCK, font=small, fill=WHITE)
+
+    # bottom bar: the simulated verdict
+    bar_h = 30
+    banner = spec["banner"]
+    draw.rectangle([0, h - bar_h, w, h], fill=(0, 0, 0, 170))
+    draw.rectangle([0, h - bar_h, 6, h], fill=banner["color"])
+    text_x = 16
+    if banner["warn"]:
+        warning_triangle(draw, 16, h - bar_h + 8, 15, banner["color"])
+        text_x = 38
+    draw.text((text_x, h - bar_h + 8), banner["text"], font=small, fill=banner["color"])
+
+    # never let a fake frame be mistaken for a real capture
+    tag = "SIMULATED FIXTURE"
+    tag_w = draw.textlength(tag, font=tiny)
+    draw.text((w - tag_w - 12, h - bar_h + 10), tag, font=tiny, fill=(150, 150, 150))
+    draw.text((12, h - bar_h - 18), spec["subtitle"], font=tiny, fill=(190, 190, 190, 220))
+
+
+# --------------------------------------------------------------------------
+# frames
+# --------------------------------------------------------------------------
+def render_healthy(rng):
+    img = tent_background(rng)
+    draw = ImageDraw.Draw(img)
+    # two background plants, then the subject: a wide, even canopy
+    draw_plant(draw, rng, base_x=138, base_y=372, height=196, health=0.94, depth=0.55)
+    draw_plant(draw, rng, base_x=506, base_y=368, height=188, health=0.9, depth=0.55)
+    draw_plant(draw, rng, base_x=320, base_y=402, height=250, health=1.0, depth=1.0)
+    return sensor_grain(img, rng), []
+
+
+def render_symptomatic(rng):
+    img = tent_background(rng)
+    draw = ImageDraw.Draw(img)
+    draw_plant(draw, rng, base_x=92, base_y=356, height=168, health=0.72, depth=0.5)
+    boxes = draw_plant(
+        draw, rng, base_x=338, base_y=430, height=306,
+        health=0.34, depth=1.0, droop=0.75, spots=4,
+    )
+    return sensor_grain(img, rng), boxes
+
+
+def healthy_detections(_boxes, _rng):
+    return []
+
+
+def symptomatic_detections(boxes, rng):
+    """Three call-outs on the largest visible leaves, lowest first."""
+    ranked = sorted(boxes, key=lambda b: (b[2] - b[0]) * (b[3] - b[1]), reverse=True)
+    labels = [("chlorosis", 0.86), ("necrotic spotting", 0.71), ("leaf droop", 0.63)]
+    return [
+        (label, confidence, box)
+        for (label, confidence), box in zip(labels, ranked[: len(labels)])
+    ]
+
+
+FRAMES = [
+    {
+        "filename": "e2e_vision_1.jpg",
+        "seed": 20260101,
+        "camera_label": "CAM  E2E VISION 1",
+        "subtitle": "growspace e2e_vision  ·  veg  ·  wide canopy",
+        "render": render_healthy,
+        "detections": healthy_detections,
+        "banner": {
+            "text": "NO ISSUES DETECTED  ·  canopy even, colour uniform",
+            "color": GREEN,
+            "warn": False,
+        },
+    },
+    {
+        "filename": "e2e_vision_2.jpg",
+        "seed": 20260102,
+        "camera_label": "CAM  E2E VISION 2",
+        "subtitle": "growspace e2e_vision  ·  veg  ·  close, lower canopy",
+        "render": render_symptomatic,
+        "detections": symptomatic_detections,
+        "banner": {
+            "text": "3 WARNINGS  ·  chlorosis  ·  necrotic spotting  ·  droop",
+            "color": AMBER,
+            "warn": True,
+        },
+    },
+]
+
+
+def main() -> int:
+    workspace = pathlib.Path(__file__).resolve().parent.parent
+    dest_dir = workspace / "ha-dev" / "www" / "e2e-camera-assets"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    for spec in FRAMES:
+        rng = random.Random(spec["seed"])
+        img, boxes = spec["render"](rng)
+        draw_hud(img, spec, boxes, rng)
+        dest = dest_dir / spec["filename"]
+        img.save(dest, "JPEG", quality=JPEG_QUALITY, optimize=True)
+        print(f"  wrote {dest.relative_to(workspace)}  ({dest.stat().st_size:,} bytes)")
+
+    print(f"  {len(FRAMES)} frames at {SIZE[0]}x{SIZE[1]} — served as camera.e2e_vision_1/2")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
