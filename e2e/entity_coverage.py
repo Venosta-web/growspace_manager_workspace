@@ -363,6 +363,32 @@ PROFILES: tuple[CapabilityProfile, ...] = (
     ),
 )
 
+# The install-wide fixture profile owns no growspace and therefore no dashboard.
+GLOBAL_FIXTURE_PROFILE = "source_air"
+
+# Every profile that owns a growspace, and so a dashboard a demo walks through.
+# A telemetry category reaches all of them unless a profile owns a faithful
+# variant of that reading or the category would misrepresent its hardware.
+DASHBOARD_PROFILES: tuple[str, ...] = tuple(
+    profile.id for profile in PROFILES if profile.id != GLOBAL_FIXTURE_PROFILE
+)
+
+# ``telemetry_multi`` is excluded from every generic telemetry family: its
+# readings are mirrored sensors declared by ``include_multi``, and a second
+# generic family would give it two entities for one category.
+MIRROR_PROFILE = "telemetry_multi"
+
+# Profiles that own irrigation hardware. An EC probe, a pH meter, a flow meter
+# or a tank belongs to a growspace that actually waters; a climate, lighting or
+# vision profile gets the environmental readings and no plumbing it does not
+# have.
+IRRIGATING_PROFILES: tuple[str, ...] = (
+    "stage",
+    "vwc",
+    "irrigation_monitored",
+    "irrigation_tanks",
+)
+
 
 def _setup(
     field: str, shape: str = "scalar", *, volume_liters: int | None = None
@@ -379,6 +405,47 @@ def _setup(
 # the two it shows.
 MIRROR_SENSOR = "mirror_sensor"
 MANUAL_GATE_ROLE = "simulation.manual_telemetry"
+
+# A simulated device makes the same bargain one step further out: the entity a
+# growspace is actually configured with free-runs on a waveform, and writing it
+# — through its own ``set_value`` / ``turn_on`` — pins it to what was written.
+#
+# The gate is per *device* rather than per growspace, unlike the telemetry gate.
+# A test pins a growspace's readings together, but devices are written one at a
+# time: a shared gate would freeze the other four at whatever their unwritten
+# backing held the moment one of them was touched.
+SIMULATED_NUMBER = "simulated_number"
+SIMULATED_SWITCH = "simulated_switch"
+EQUIPMENT_LEVEL_INPUT = "equipment_level_input"
+EQUIPMENT_GATE_ROLE = "simulation.manual_equipment"
+
+# The Fan Entity Mode range: the backend's ``NumberDriver`` maps a controller's
+# 0-100 demand onto it, and the card fixes its device axis to it.
+EQUIPMENT_SPEED_MINIMUM = 0
+EQUIPMENT_SPEED_MAXIMUM = 10
+
+
+def equipment_gate_entity_id(device_entity_id: str) -> str:
+    """Return the gate that pins one simulated device to what last wrote it.
+
+    One rule, used both to declare the gate and to render the templates that
+    read and set it, so the two can never name different entities. It takes a
+    naming *rule* as readily as a concrete ID.
+    """
+
+    return f"input_boolean.{device_entity_id.split('.', 1)[1]}_manual"
+
+
+def equipment_level_entity_id(device_entity_id: str) -> str:
+    """Return the written speed behind one simulated 0-10 device."""
+
+    return f"input_number.{device_entity_id.split('.', 1)[1]}_level"
+
+
+def equipment_state_entity_id(device_entity_id: str) -> str:
+    """Return the written on/off state behind one simulated binary device."""
+
+    return f"input_boolean.{device_entity_id.split('.', 1)[1]}"
 
 
 def mirror_backing_entity_id(sensor_entity_id: str) -> str:
@@ -397,31 +464,41 @@ def _covered_telemetry_assignments(
     field_name: str,
     shape: str,
     *,
-    include_stage: bool = True,
-    include_vwc: bool = True,
+    profiles: tuple[str, ...],
+    writable_profiles: tuple[str, ...] = (),
 ) -> tuple[Assignment, ...]:
+    """Give each listed profile this category's simulated entity family.
+
+    A reading is a free-running ``waveform`` sensor unless the profile is listed
+    in ``writable_profiles`` — the profiles whose *tests* drive that category and
+    therefore need a writable ``input_number`` instead. A demo dashboard reads
+    the difference directly: a waveform draws a moving graph on its own, and a
+    writable input holds whatever last wrote it.
+    """
+
     assignments: tuple[Assignment, ...] = ()
-    if include_stage:
+    for profile in profiles:
+        if profile in writable_profiles:
+            assignments += (
+                Assignment(
+                    profile,
+                    f"input_number.e2e_{{slug}}_{suffix}",
+                    "input_number",
+                    Behavior.CONTROLLABLE,
+                    Status.COVERED,
+                    generator="input_number",
+                    setup=_setup(field_name, shape),
+                ),
+            )
+            continue
         assignments += (
             Assignment(
-                "stage",
+                profile,
                 f"sensor.e2e_{{slug}}_{suffix}",
                 "sensor",
                 Behavior.READ_ONLY,
                 Status.COVERED,
                 generator="waveform",
-                setup=_setup(field_name, shape),
-            ),
-        )
-    if include_vwc:
-        assignments += (
-            Assignment(
-                "vwc",
-                f"input_number.e2e_{{slug}}_{suffix}",
-                "input_number",
-                Behavior.CONTROLLABLE,
-                Status.COVERED,
-                generator="input_number",
                 setup=_setup(field_name, shape),
             ),
         )
@@ -449,8 +526,8 @@ def _telemetry_role(
     control_maximum: int | float | None = None,
     control_step: int | float | None = None,
     control_initial: int | float | None = None,
-    include_stage: bool = True,
-    include_vwc: bool = True,
+    writable_profiles: tuple[str, ...] = (),
+    exclude_profiles: tuple[str, ...] = (),
     include_multi: bool = True,
 ) -> CoverageRole:
     multi_assignments: tuple[Assignment, ...] = ()
@@ -475,13 +552,27 @@ def _telemetry_role(
                 ),
             ),
         )
+    # A profile that already declares a faithful entity for this category keeps
+    # it; the generic family fills every remaining dashboard, so no growspace is
+    # left without the reading and none ends up with two of them.
+    claimed = {assignment.profile for assignment in extra_assignments}
+    reachable = (
+        IRRIGATING_PROFILES if category == "irrigation" else DASHBOARD_PROFILES
+    )
+    generic_profiles = tuple(
+        profile
+        for profile in reachable
+        if profile != MIRROR_PROFILE
+        and profile not in claimed
+        and profile not in exclude_profiles
+    )
     assignments = (
         _covered_telemetry_assignments(
             suffix,
             field_name,
             shape,
-            include_stage=include_stage,
-            include_vwc=include_vwc,
+            profiles=generic_profiles,
+            writable_profiles=writable_profiles,
         )
         + multi_assignments
         + extra_assignments
@@ -735,6 +826,9 @@ ROLES: tuple[CoverageRole, ...] = (
         low=35.0,
         high=70.0,
         period_seconds=2700,
+        # Crop Steering is driven by writing this reading, so a VWC growspace
+        # keeps a writable input where every other dashboard gets a waveform.
+        writable_profiles=("vwc",),
     ),
     _telemetry_role(
         role_id="environment.power",
@@ -788,7 +882,10 @@ ROLES: tuple[CoverageRole, ...] = (
         control_maximum=100,
         control_step=0.1,
         control_initial=0,
-        include_vwc=False,
+        # A VWC growspace steers on substrate moisture and a tank guard, and the
+        # tank profile is deliberately pump-only: neither may claim a direct
+        # water measurement it does not have.
+        exclude_profiles=("vwc", "irrigation_tanks"),
         include_multi=False,
     ),
     _telemetry_role(
@@ -818,7 +915,7 @@ ROLES: tuple[CoverageRole, ...] = (
         control_maximum=10,
         control_step=0.01,
         control_initial=0,
-        include_vwc=False,
+        exclude_profiles=("vwc", "irrigation_tanks"),
         include_multi=False,
     ),
     _telemetry_role(
@@ -850,6 +947,10 @@ ROLES: tuple[CoverageRole, ...] = (
         control_maximum=100,
         control_step=1,
         control_initial=80,
+        # The monitored profile measures its water at the pump and owns no tank.
+        exclude_profiles=("irrigation_monitored",),
+        # A VWC growspace's tank guard is the level its own spec drives.
+        writable_profiles=("vwc",),
         include_multi=False,
     ),
     _telemetry_role(
@@ -858,10 +959,14 @@ ROLES: tuple[CoverageRole, ...] = (
         description="Environmental light level",
         field_name="light_sensors",
         shape="list",
-        unit="lx",
-        device_class="illuminance",
+        # The 0-10 intensity index every Growspace light surface speaks, rather
+        # than lux: it is the scale the card fixes its light axis to and the
+        # scale an AC Infinity port reports, so one dial reads the same wherever
+        # a demo meets it.
+        unit="",
+        device_class=None,
         low=0,
-        high=60000,
+        high=10,
         # A full day per cycle, so the pair reads as a sunrise/sunset curve and
         # the backend's "numeric light sensor above zero means lights on" rule
         # sees a plausible photoperiod.
@@ -869,10 +974,11 @@ ROLES: tuple[CoverageRole, ...] = (
         multi_count=2,
         category="lighting",
         control_minimum=0,
-        control_maximum=100000,
+        control_maximum=10,
         control_step=1,
-        include_stage=False,
-        include_vwc=False,
+        # The lighting profile senses its cycle through a binary light-state
+        # sensor; a second, numeric light source would give it two answers.
+        exclude_profiles=("lighting",),
     ),
     CoverageRole(
         "irrigation.irrigation_pump",
@@ -1349,92 +1455,193 @@ def _plain_climate_support_roles() -> tuple[CoverageRole, ...]:
 
 
 def _dashboard_equipment_roles() -> tuple[CoverageRole, ...]:
-    """Give every growspace dashboard a complete passive equipment set.
+    """Give every growspace dashboard a complete, *moving* equipment set.
 
-    Capability-specific profiles keep their faithful actuators. The shared
-    switches fill only the roles that profile does not already own, so focused
+    Capability-specific profiles keep their faithful actuators. The simulated
+    devices fill only the roles that profile does not already own, so focused
     controller specs retain their exact hardware shape while every dashboard
     still renders all five device chips.
+
+    A simulated device is a 0-10 speed ``number`` — the numeric Fan Entity Mode
+    the backend's ``NumberDriver`` already speaks and the card already fixes its
+    exhaust/circulation/humidifier axis to — rather than the on/off switch it
+    used to be, because a switch nobody drives draws a flat line where a demo
+    needs a graph. It free-runs on a waveform until something writes it, then
+    holds that value: the same pin-on-write bargain a mirrored sensor makes,
+    with the device's own ``set_value`` as the gesture that flips the gate.
+
+    A dehumidifier stays binary, because that is the shape the card charts it
+    in; it cycles rather than sitting still.
     """
 
-    specs = (
+    speed_specs = (
         (
             "exhaust_fan",
             "exhaust_fan_entities",
             "climate",
             {"climate_plain", "ac_infinity"},
+            Simulation("exhaust_fan", "", None, "measurement", 1, 10, 3600),
         ),
         (
             "circulation_fan",
             "circulation_fan_entities",
             "climate",
             {"climate_plain", "ac_infinity"},
+            Simulation("circulation_fan", "", None, "measurement", 1, 10, 5400),
         ),
         (
             "humidifier",
             "humidifier_entities",
             "climate",
             {"climate_plain", "ac_infinity"},
-        ),
-        (
-            "dehumidifier",
-            "dehumidifier_entities",
-            "climate",
-            {"climate_plain", "ac_infinity"},
+            Simulation("humidifier", "", None, "measurement", 1, 10, 7200),
         ),
         (
             "growlight",
             "growlight_entities",
             "lighting",
             {"lighting", "ac_infinity"},
+            # In step with the light sensor's photoperiod, and reaching zero,
+            # so the intensity a dashboard shows agrees with what it senses.
+            Simulation("growlight", "", None, "measurement", 0, 10, 86400),
         ),
     )
-    dashboard_profiles = tuple(
-        profile.id for profile in PROFILES if profile.id != "source_air"
+    binary_specs = (
+        (
+            "dehumidifier",
+            "dehumidifier_entities",
+            "climate",
+            {"climate_plain", "ac_infinity"},
+            Simulation("dehumidifier", "", None, "measurement", 0, 10, 9000),
+        ),
     )
+
     roles: list[CoverageRole] = []
-    for suffix, field_name, category, native_profiles in specs:
-        assignments = tuple(
-            Assignment(
-                profile,
-                f"switch.sim_e2e_{{slug}}_{suffix}",
-                "switch",
-                Behavior.CONTROLLABLE,
-                Status.COVERED,
-                generator="template_switch",
-                setup=_setup(field_name, "list"),
-            )
-            for profile in dashboard_profiles
-            if profile not in native_profiles
+    gate_assignments: list[Assignment] = []
+
+    def _profiles(native_profiles: set[str]) -> tuple[str, ...]:
+        return tuple(
+            profile for profile in DASHBOARD_PROFILES if profile not in native_profiles
         )
+
+    for suffix, field_name, category, native_profiles, simulation in speed_specs:
+        profiles = _profiles(native_profiles)
         roles.append(
             CoverageRole(
                 f"dashboard_equipment.{suffix}",
                 category,
-                f"Passive dashboard {suffix.replace('_', ' ')}",
+                f"Simulated dashboard {suffix.replace('_', ' ')}",
                 ONE_OR_MORE,
-                assignments,
+                tuple(
+                    Assignment(
+                        profile,
+                        f"number.sim_e2e_{{slug}}_{suffix}",
+                        "number",
+                        Behavior.CONTROLLABLE,
+                        Status.COVERED,
+                        generator=SIMULATED_NUMBER,
+                        setup=_setup(field_name, "list"),
+                    )
+                    for profile in profiles
+                ),
+                simulation,
+            )
+        )
+        roles.append(
+            CoverageRole(
+                f"simulation.dashboard_{suffix}_level",
+                "internal",
+                f"Written speed for the simulated {suffix.replace('_', ' ')}",
+                EXACTLY_ONE,
+                tuple(
+                    Assignment(
+                        profile,
+                        equipment_level_entity_id(f"number.sim_e2e_{{slug}}_{suffix}"),
+                        "input_number",
+                        Behavior.CONTROLLABLE,
+                        Status.COVERED,
+                        generator=EQUIPMENT_LEVEL_INPUT,
+                    )
+                    for profile in profiles
+                ),
+                simulation,
+            )
+        )
+        gate_assignments.extend(
+            Assignment(
+                profile,
+                equipment_gate_entity_id(f"number.sim_e2e_{{slug}}_{suffix}"),
+                "input_boolean",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="input_boolean",
+            )
+            for profile in profiles
+        )
+
+    for suffix, field_name, category, native_profiles, simulation in binary_specs:
+        profiles = _profiles(native_profiles)
+        roles.append(
+            CoverageRole(
+                f"dashboard_equipment.{suffix}",
+                category,
+                f"Simulated dashboard {suffix.replace('_', ' ')}",
+                ONE_OR_MORE,
+                tuple(
+                    Assignment(
+                        profile,
+                        f"switch.sim_e2e_{{slug}}_{suffix}",
+                        "switch",
+                        Behavior.CONTROLLABLE,
+                        Status.COVERED,
+                        generator=SIMULATED_SWITCH,
+                        setup=_setup(field_name, "list"),
+                    )
+                    for profile in profiles
+                ),
+                simulation,
             )
         )
         roles.append(
             CoverageRole(
                 f"simulation.dashboard_{suffix}_state",
                 "internal",
-                f"Persistent state for the dashboard {suffix.replace('_', ' ')}",
+                f"Written state for the simulated {suffix.replace('_', ' ')}",
                 EXACTLY_ONE,
                 tuple(
                     Assignment(
-                        assignment.profile,
-                        assignment.entity_id_rule.replace("switch.", "input_boolean.", 1),
+                        profile,
+                        equipment_state_entity_id(f"switch.sim_e2e_{{slug}}_{suffix}"),
                         "input_boolean",
                         Behavior.CONTROLLABLE,
                         Status.COVERED,
                         generator="input_boolean",
                     )
-                    for assignment in assignments
+                    for profile in profiles
                 ),
             )
         )
+        gate_assignments.extend(
+            Assignment(
+                profile,
+                equipment_gate_entity_id(f"switch.sim_e2e_{{slug}}_{suffix}"),
+                "input_boolean",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="input_boolean",
+            )
+            for profile in profiles
+        )
+
+    roles.append(
+        CoverageRole(
+            EQUIPMENT_GATE_ROLE,
+            "internal",
+            "Pins one simulated device to what last wrote it",
+            ONE_OR_MORE,
+            tuple(gate_assignments),
+        )
+    )
     return tuple(roles)
 
 
@@ -1938,7 +2145,9 @@ def _manifest_entity(record: EntityRecord) -> dict[str, Any]:
     }
     simulation = record.role.simulation
     if simulation is not None and record.generator in {MIRROR_SENSOR, "waveform"}:
-        entity["unit_of_measurement"] = simulation.unit
+        # A unitless index declares no unit at all rather than an empty one:
+        # null is how both the package and the preflight say "not required".
+        entity["unit_of_measurement"] = simulation.unit or None
         entity["device_class"] = simulation.device_class
         entity["state_class"] = simulation.state_class
     if record.generator == MIRROR_SENSOR:
@@ -2108,6 +2317,17 @@ def _mirror_phase(sim: Simulation, ordinal: int) -> int:
     return (ordinal - 1) * (sim.period_seconds // 4)
 
 
+def _equipment_phase(instance_order: dict[str, int], record: EntityRecord) -> int:
+    """Offset each growspace's simulated devices from the next growspace's.
+
+    The same offset the stage telemetry uses, so a wall of dashboards never
+    animates in lockstep. Device kinds inside one growspace are told apart by
+    their periods rather than by a second offset.
+    """
+
+    return instance_order[record.slug] * 600
+
+
 def _telemetry_label(record: EntityRecord) -> str:
     """Friendly name for one simulated telemetry entity.
 
@@ -2130,8 +2350,11 @@ def _template_sensor_lines(record: EntityRecord, name: str) -> list[str]:
     lines = [
         f"      - name: {name}",
         f"        unique_id: {record.entity_id.split('.', 1)[1]}",
-        f'        unit_of_measurement: "{sim.unit}"',
     ]
+    # An index reading carries no unit; declaring an empty one would make Home
+    # Assistant treat "" as the unit and refuse to convert or group it.
+    if sim.unit:
+        lines.append(f'        unit_of_measurement: "{sim.unit}"')
     if sim.device_class:
         lines.append(f"        device_class: {sim.device_class}")
     lines += [f"        state_class: {sim.state_class}", "        state: >-"]
@@ -2209,9 +2432,18 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
         "",
         "template:",
     ]
-    stage = next(profile for profile in PROFILES if profile.id == "stage")
-    for index, instance in enumerate(stage.instances):
+    instances = [
+        instance for profile in PROFILES for instance in profile.instances
+    ]
+    for index, instance in enumerate(instances):
         phase = index * 600
+        telemetry = [
+            record
+            for record in by_slug.get(instance.slug, [])
+            if record.generator == "waveform" and record.role.simulation is not None
+        ]
+        if not telemetry:
+            continue
         lines += [
             "  # ---------------------------------------------------------------",
             f"  # e2e_{instance.slug}",
@@ -2220,11 +2452,6 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
             "      - platform: time_pattern",
             '        seconds: "/30"',
             "    sensor:",
-        ]
-        telemetry = [
-            record
-            for record in by_slug[instance.slug]
-            if record.generator == "waveform" and record.role.simulation is not None
         ]
         telemetry.sort(
             key=lambda record: record.role.simulation.state_class == "total_increasing"
@@ -2296,6 +2523,82 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
             "          action: input_boolean.turn_off",
             "          target:",
             f"            entity_id: {backing}",
+        ]
+
+    simulated_switches = [
+        record for record in active if record.generator == SIMULATED_SWITCH
+    ]
+    simulated_switches.sort(key=lambda record: instance_order[record.slug])
+    for record in simulated_switches:
+        sim = record.role.simulation
+        assert sim is not None
+        unique_id = record.entity_id.split(".", 1)[1]
+        backing = equipment_state_entity_id(record.entity_id)
+        gate = equipment_gate_entity_id(record.entity_id)
+        phase = _equipment_phase(instance_order, record)
+        duty = "%s > %s" % (
+            _sine_expression(sim.low, sim.high, sim.period_seconds, phase),
+            (sim.high + sim.low) / 2,
+        )
+        lines += [
+            f"      - name: {unique_id.replace('_', ' ')}",
+            f"        unique_id: {unique_id}",
+            "        state: >-",
+            f"          {{{{ is_state('{backing}', 'on') if is_state('{gate}', 'on')",
+            f"             else {duty} }}}}",
+            "        turn_on:",
+            "          - action: input_boolean.turn_on",
+            "            target:",
+            f"              entity_id: {backing}",
+            "          - action: input_boolean.turn_on",
+            "            target:",
+            f"              entity_id: {gate}",
+            "        turn_off:",
+            "          - action: input_boolean.turn_off",
+            "            target:",
+            f"              entity_id: {backing}",
+            "          - action: input_boolean.turn_on",
+            "            target:",
+            f"              entity_id: {gate}",
+        ]
+
+    simulated_numbers = [
+        record for record in active if record.generator == SIMULATED_NUMBER
+    ]
+    simulated_numbers.sort(key=lambda record: instance_order[record.slug])
+    if simulated_numbers:
+        lines += [
+            "  # ---------------------------------------------------------------",
+            "  # simulated 0-10 devices (free-running until written, then pinned)",
+            "  # ---------------------------------------------------------------",
+            "  - number:",
+        ]
+    for record in simulated_numbers:
+        sim = record.role.simulation
+        assert sim is not None
+        unique_id = record.entity_id.split(".", 1)[1]
+        backing = equipment_level_entity_id(record.entity_id)
+        gate = equipment_gate_entity_id(record.entity_id)
+        lines += [
+            f"      - name: {unique_id.replace('_', ' ')}",
+            f"        unique_id: {unique_id}",
+            f"        min: {EQUIPMENT_SPEED_MINIMUM}",
+            f"        max: {EQUIPMENT_SPEED_MAXIMUM}",
+            "        step: 1",
+            "        state: >-",
+            "          "
+            + _mirror_state(
+                sim, backing, gate, _equipment_phase(instance_order, record)
+            ),
+            "        set_value:",
+            "          - action: input_number.set_value",
+            "            target:",
+            f"              entity_id: {backing}",
+            "            data:",
+            '              value: "{{ value }}"',
+            "          - action: input_boolean.turn_on",
+            "            target:",
+            f"              entity_id: {gate}",
         ]
 
     percentage_fans = [
@@ -2418,8 +2721,8 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
     ]
     for record in boolean_backings:
         object_id = record.entity_id.split(".", 1)[1]
-        if record.role_id.startswith("simulation.") and object_id.startswith(
-            "sim_e2e_"
+        if record.role_id.startswith("simulation.irrigation") or record.role_id.startswith(
+            "simulation.drain"
         ):
             kind = object_id.rsplit("_", 2)[-2] + "_pump"
             name = f"sim e2e {record.slug} {kind}"
@@ -2483,7 +2786,11 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
                 f"    max: {maximum}",
                 f"    step: {step}",
                 f"    initial: {initial}",
-                f'    unit_of_measurement: "{sim.unit}"',
+                *(
+                    [f'    unit_of_measurement: "{sim.unit}"']
+                    if sim.unit
+                    else []
+                ),
                 "    mode: box",
             ]
     for record in active:
@@ -2500,10 +2807,14 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
             "    mode: slider",
         ]
     for record in active:
-        if record.generator not in {"fan_speed_input", "fan_percentage_input"}:
+        if record.generator not in {
+            "fan_speed_input",
+            "fan_percentage_input",
+            EQUIPMENT_LEVEL_INPUT,
+        }:
             continue
         object_id = record.entity_id.split(".", 1)[1]
-        maximum = 10 if record.generator == "fan_speed_input" else 100
+        maximum = 100 if record.generator == "fan_percentage_input" else 10
         lines += [
             f"  {object_id}:",
             f"    name: {object_id.replace('_', ' ')}",
@@ -2614,6 +2925,7 @@ def extract_generated_entity_ids(package_text: str) -> list[str]:
                 "- binary_sensor:",
                 "- light:",
                 "- fan:",
+                "- number:",
                 "- weather:",
             }:
                 template_domain = stripped.removeprefix("- ").removesuffix(":")

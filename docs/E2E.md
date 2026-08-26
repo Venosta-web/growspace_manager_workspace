@@ -25,49 +25,101 @@ setup manifest, and this coverage table are checked against it by
 | Role | Category | Capability profile | Entity naming rule | Domain | Cardinality | Behavior | Delivery |
 |---|---|---|---|---|---|---|---|
 | `environment.temperature` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_temperature` | `sensor` | one or more (1) | read-only | covered |
-| `environment.temperature` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_temperature` | `input_number` | one or more (1) | controllable | covered |
+| `environment.temperature` | environment | `vwc` (vwc_veg, vwc_flower) | `sensor.e2e_{slug}_temperature` | `sensor` | one or more (1) | read-only | covered |
+| `environment.temperature` | environment | `irrigation_monitored` (irrigation_monitored) | `sensor.e2e_{slug}_temperature` | `sensor` | one or more (1) | read-only | covered |
+| `environment.temperature` | environment | `irrigation_tanks` (irrigation_tanks) | `sensor.e2e_{slug}_temperature` | `sensor` | one or more (1) | read-only | covered |
+| `environment.temperature` | environment | `lighting` (lighting) | `sensor.e2e_{slug}_temperature` | `sensor` | one or more (1) | read-only | covered |
+| `environment.temperature` | environment | `vision` (vision) | `sensor.e2e_{slug}_temperature` | `sensor` | one or more (1) | read-only | covered |
 | `environment.temperature` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_temperature{ordinal_suffix}` | `sensor` | one or more (2) | read-only | covered |
 | `environment.temperature` | environment | `climate_plain` (climate_plain) | `input_number.e2e_{slug}_temperature` | `input_number` | one or more (1) | controllable | covered |
 | `environment.temperature` | environment | `ac_infinity` (ac_infinity) | `input_number.e2e_{slug}_temperature` | `input_number` | one or more (1) | controllable | covered |
 | `environment.humidity` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_humidity` | `sensor` | one or more (1) | read-only | covered |
-| `environment.humidity` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_humidity` | `input_number` | one or more (1) | controllable | covered |
+| `environment.humidity` | environment | `vwc` (vwc_veg, vwc_flower) | `sensor.e2e_{slug}_humidity` | `sensor` | one or more (1) | read-only | covered |
+| `environment.humidity` | environment | `irrigation_monitored` (irrigation_monitored) | `sensor.e2e_{slug}_humidity` | `sensor` | one or more (1) | read-only | covered |
+| `environment.humidity` | environment | `irrigation_tanks` (irrigation_tanks) | `sensor.e2e_{slug}_humidity` | `sensor` | one or more (1) | read-only | covered |
+| `environment.humidity` | environment | `lighting` (lighting) | `sensor.e2e_{slug}_humidity` | `sensor` | one or more (1) | read-only | covered |
+| `environment.humidity` | environment | `vision` (vision) | `sensor.e2e_{slug}_humidity` | `sensor` | one or more (1) | read-only | covered |
 | `environment.humidity` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_humidity{ordinal_suffix}` | `sensor` | one or more (2) | read-only | covered |
 | `environment.humidity` | environment | `climate_plain` (climate_plain) | `input_number.e2e_{slug}_humidity` | `input_number` | one or more (1) | controllable | covered |
 | `environment.humidity` | environment | `ac_infinity` (ac_infinity) | `input_number.e2e_{slug}_humidity` | `input_number` | one or more (1) | controllable | covered |
 | `environment.vpd` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_vpd` | `sensor` | one or more (1) | read-only | covered |
-| `environment.vpd` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_vpd` | `input_number` | one or more (1) | controllable | covered |
+| `environment.vpd` | environment | `vwc` (vwc_veg, vwc_flower) | `sensor.e2e_{slug}_vpd` | `sensor` | one or more (1) | read-only | covered |
+| `environment.vpd` | environment | `irrigation_monitored` (irrigation_monitored) | `sensor.e2e_{slug}_vpd` | `sensor` | one or more (1) | read-only | covered |
+| `environment.vpd` | environment | `irrigation_tanks` (irrigation_tanks) | `sensor.e2e_{slug}_vpd` | `sensor` | one or more (1) | read-only | covered |
+| `environment.vpd` | environment | `lighting` (lighting) | `sensor.e2e_{slug}_vpd` | `sensor` | one or more (1) | read-only | covered |
+| `environment.vpd` | environment | `vision` (vision) | `sensor.e2e_{slug}_vpd` | `sensor` | one or more (1) | read-only | covered |
 | `environment.vpd` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_vpd{ordinal_suffix}` | `sensor` | one or more (2) | read-only | covered |
 | `environment.vpd` | environment | `climate_plain` (climate_plain) | `input_number.e2e_{slug}_vpd` | `input_number` | one or more (1) | controllable | covered |
 | `environment.vpd` | environment | `ac_infinity` (ac_infinity) | `input_number.e2e_{slug}_vpd` | `input_number` | one or more (1) | controllable | covered |
 | `environment.co2` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_co2` | `sensor` | exactly one (1) | read-only | covered |
-| `environment.co2` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_co2` | `input_number` | exactly one (1) | controllable | covered |
+| `environment.co2` | environment | `vwc` (vwc_veg, vwc_flower) | `sensor.e2e_{slug}_co2` | `sensor` | exactly one (1) | read-only | covered |
+| `environment.co2` | environment | `irrigation_monitored` (irrigation_monitored) | `sensor.e2e_{slug}_co2` | `sensor` | exactly one (1) | read-only | covered |
+| `environment.co2` | environment | `irrigation_tanks` (irrigation_tanks) | `sensor.e2e_{slug}_co2` | `sensor` | exactly one (1) | read-only | covered |
+| `environment.co2` | environment | `lighting` (lighting) | `sensor.e2e_{slug}_co2` | `sensor` | exactly one (1) | read-only | covered |
+| `environment.co2` | environment | `climate_plain` (climate_plain) | `sensor.e2e_{slug}_co2` | `sensor` | exactly one (1) | read-only | covered |
+| `environment.co2` | environment | `ac_infinity` (ac_infinity) | `sensor.e2e_{slug}_co2` | `sensor` | exactly one (1) | read-only | covered |
+| `environment.co2` | environment | `vision` (vision) | `sensor.e2e_{slug}_co2` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.co2` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_co2{ordinal_suffix}` | `sensor` | exactly one (1) | read-only | covered |
 | `irrigation.feed_ec` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_feed_ec` | `sensor` | one or more (1) | read-only | covered |
-| `irrigation.feed_ec` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_feed_ec` | `input_number` | one or more (1) | controllable | covered |
+| `irrigation.feed_ec` | irrigation | `vwc` (vwc_veg, vwc_flower) | `sensor.e2e_{slug}_feed_ec` | `sensor` | one or more (1) | read-only | covered |
+| `irrigation.feed_ec` | irrigation | `irrigation_monitored` (irrigation_monitored) | `sensor.e2e_{slug}_feed_ec` | `sensor` | one or more (1) | read-only | covered |
+| `irrigation.feed_ec` | irrigation | `irrigation_tanks` (irrigation_tanks) | `sensor.e2e_{slug}_feed_ec` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.feed_ec` | irrigation | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_feed_ec{ordinal_suffix}` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.bulk_ec` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_bulk_ec` | `sensor` | one or more (1) | read-only | covered |
-| `irrigation.bulk_ec` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_bulk_ec` | `input_number` | one or more (1) | controllable | covered |
+| `irrigation.bulk_ec` | irrigation | `vwc` (vwc_veg, vwc_flower) | `sensor.e2e_{slug}_bulk_ec` | `sensor` | one or more (1) | read-only | covered |
+| `irrigation.bulk_ec` | irrigation | `irrigation_monitored` (irrigation_monitored) | `sensor.e2e_{slug}_bulk_ec` | `sensor` | one or more (1) | read-only | covered |
+| `irrigation.bulk_ec` | irrigation | `irrigation_tanks` (irrigation_tanks) | `sensor.e2e_{slug}_bulk_ec` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.bulk_ec` | irrigation | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_bulk_ec{ordinal_suffix}` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.pore_ec` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_pore_ec` | `sensor` | one or more (1) | read-only | covered |
-| `irrigation.pore_ec` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_pore_ec` | `input_number` | one or more (1) | controllable | covered |
+| `irrigation.pore_ec` | irrigation | `vwc` (vwc_veg, vwc_flower) | `sensor.e2e_{slug}_pore_ec` | `sensor` | one or more (1) | read-only | covered |
+| `irrigation.pore_ec` | irrigation | `irrigation_monitored` (irrigation_monitored) | `sensor.e2e_{slug}_pore_ec` | `sensor` | one or more (1) | read-only | covered |
+| `irrigation.pore_ec` | irrigation | `irrigation_tanks` (irrigation_tanks) | `sensor.e2e_{slug}_pore_ec` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.pore_ec` | irrigation | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_pore_ec{ordinal_suffix}` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.runoff_ec` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_runoff_ec` | `sensor` | one or more (1) | read-only | covered |
-| `irrigation.runoff_ec` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_runoff_ec` | `input_number` | one or more (1) | controllable | covered |
+| `irrigation.runoff_ec` | irrigation | `vwc` (vwc_veg, vwc_flower) | `sensor.e2e_{slug}_runoff_ec` | `sensor` | one or more (1) | read-only | covered |
+| `irrigation.runoff_ec` | irrigation | `irrigation_monitored` (irrigation_monitored) | `sensor.e2e_{slug}_runoff_ec` | `sensor` | one or more (1) | read-only | covered |
+| `irrigation.runoff_ec` | irrigation | `irrigation_tanks` (irrigation_tanks) | `sensor.e2e_{slug}_runoff_ec` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.runoff_ec` | irrigation | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_runoff_ec{ordinal_suffix}` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.ph` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_ph` | `sensor` | one or more (1) | read-only | covered |
-| `irrigation.ph` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_ph` | `input_number` | one or more (1) | controllable | covered |
+| `irrigation.ph` | irrigation | `vwc` (vwc_veg, vwc_flower) | `sensor.e2e_{slug}_ph` | `sensor` | one or more (1) | read-only | covered |
+| `irrigation.ph` | irrigation | `irrigation_monitored` (irrigation_monitored) | `sensor.e2e_{slug}_ph` | `sensor` | one or more (1) | read-only | covered |
+| `irrigation.ph` | irrigation | `irrigation_tanks` (irrigation_tanks) | `sensor.e2e_{slug}_ph` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.ph` | irrigation | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_ph{ordinal_suffix}` | `sensor` | one or more (1) | read-only | covered |
 | `environment.substrate_temperature` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_substrate_temperature` | `sensor` | one or more (1) | read-only | covered |
-| `environment.substrate_temperature` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_substrate_temperature` | `input_number` | one or more (1) | controllable | covered |
+| `environment.substrate_temperature` | environment | `vwc` (vwc_veg, vwc_flower) | `sensor.e2e_{slug}_substrate_temperature` | `sensor` | one or more (1) | read-only | covered |
+| `environment.substrate_temperature` | environment | `irrigation_monitored` (irrigation_monitored) | `sensor.e2e_{slug}_substrate_temperature` | `sensor` | one or more (1) | read-only | covered |
+| `environment.substrate_temperature` | environment | `irrigation_tanks` (irrigation_tanks) | `sensor.e2e_{slug}_substrate_temperature` | `sensor` | one or more (1) | read-only | covered |
+| `environment.substrate_temperature` | environment | `lighting` (lighting) | `sensor.e2e_{slug}_substrate_temperature` | `sensor` | one or more (1) | read-only | covered |
+| `environment.substrate_temperature` | environment | `climate_plain` (climate_plain) | `sensor.e2e_{slug}_substrate_temperature` | `sensor` | one or more (1) | read-only | covered |
+| `environment.substrate_temperature` | environment | `ac_infinity` (ac_infinity) | `sensor.e2e_{slug}_substrate_temperature` | `sensor` | one or more (1) | read-only | covered |
+| `environment.substrate_temperature` | environment | `vision` (vision) | `sensor.e2e_{slug}_substrate_temperature` | `sensor` | one or more (1) | read-only | covered |
 | `environment.substrate_temperature` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_substrate_temperature{ordinal_suffix}` | `sensor` | one or more (2) | read-only | covered |
 | `environment.substrate_moisture` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.substrate_moisture` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_substrate_moisture` | `input_number` | exactly one (1) | controllable | covered |
+| `environment.substrate_moisture` | environment | `irrigation_monitored` (irrigation_monitored) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
+| `environment.substrate_moisture` | environment | `irrigation_tanks` (irrigation_tanks) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
+| `environment.substrate_moisture` | environment | `lighting` (lighting) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
+| `environment.substrate_moisture` | environment | `climate_plain` (climate_plain) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
+| `environment.substrate_moisture` | environment | `ac_infinity` (ac_infinity) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
+| `environment.substrate_moisture` | environment | `vision` (vision) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.substrate_moisture` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_substrate_moisture{ordinal_suffix}` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.power` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_power` | `sensor` | one or more (1) | read-only | covered |
-| `environment.power` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_power` | `input_number` | one or more (1) | controllable | covered |
+| `environment.power` | environment | `vwc` (vwc_veg, vwc_flower) | `sensor.e2e_{slug}_power` | `sensor` | one or more (1) | read-only | covered |
+| `environment.power` | environment | `irrigation_monitored` (irrigation_monitored) | `sensor.e2e_{slug}_power` | `sensor` | one or more (1) | read-only | covered |
+| `environment.power` | environment | `irrigation_tanks` (irrigation_tanks) | `sensor.e2e_{slug}_power` | `sensor` | one or more (1) | read-only | covered |
+| `environment.power` | environment | `lighting` (lighting) | `sensor.e2e_{slug}_power` | `sensor` | one or more (1) | read-only | covered |
+| `environment.power` | environment | `climate_plain` (climate_plain) | `sensor.e2e_{slug}_power` | `sensor` | one or more (1) | read-only | covered |
+| `environment.power` | environment | `ac_infinity` (ac_infinity) | `sensor.e2e_{slug}_power` | `sensor` | one or more (1) | read-only | covered |
+| `environment.power` | environment | `vision` (vision) | `sensor.e2e_{slug}_power` | `sensor` | one or more (1) | read-only | covered |
 | `environment.power` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_power{ordinal_suffix}` | `sensor` | one or more (1) | read-only | covered |
 | `environment.energy` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_energy` | `sensor` | one or more (1) | read-only | covered |
-| `environment.energy` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_energy` | `input_number` | one or more (1) | controllable | covered |
+| `environment.energy` | environment | `vwc` (vwc_veg, vwc_flower) | `sensor.e2e_{slug}_energy` | `sensor` | one or more (1) | read-only | covered |
+| `environment.energy` | environment | `irrigation_monitored` (irrigation_monitored) | `sensor.e2e_{slug}_energy` | `sensor` | one or more (1) | read-only | covered |
+| `environment.energy` | environment | `irrigation_tanks` (irrigation_tanks) | `sensor.e2e_{slug}_energy` | `sensor` | one or more (1) | read-only | covered |
+| `environment.energy` | environment | `lighting` (lighting) | `sensor.e2e_{slug}_energy` | `sensor` | one or more (1) | read-only | covered |
+| `environment.energy` | environment | `climate_plain` (climate_plain) | `sensor.e2e_{slug}_energy` | `sensor` | one or more (1) | read-only | covered |
+| `environment.energy` | environment | `ac_infinity` (ac_infinity) | `sensor.e2e_{slug}_energy` | `sensor` | one or more (1) | read-only | covered |
+| `environment.energy` | environment | `vision` (vision) | `sensor.e2e_{slug}_energy` | `sensor` | one or more (1) | read-only | covered |
 | `environment.energy` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_energy{ordinal_suffix}` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.drain_volume` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_drain_volume` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.drain_volume` | irrigation | `irrigation_monitored` (irrigation_monitored) | `input_number.e2e_{slug}_drain_volume` | `input_number` | one or more (1) | controllable | covered |
@@ -76,6 +128,13 @@ setup manifest, and this coverage table are checked against it by
 | `irrigation.tank_level` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_irrigation_tank` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.tank_level` | irrigation | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_irrigation_tank` | `input_number` | one or more (1) | controllable | covered |
 | `irrigation.tank_level` | irrigation | `irrigation_tanks` (irrigation_tanks) | `input_number.e2e_{slug}_irrigation_tank{ordinal_suffix}` | `input_number` | one or more (2) | controllable | covered |
+| `environment.light` | lighting | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_light` | `sensor` | one or more (1) | read-only | covered |
+| `environment.light` | lighting | `vwc` (vwc_veg, vwc_flower) | `sensor.e2e_{slug}_light` | `sensor` | one or more (1) | read-only | covered |
+| `environment.light` | lighting | `irrigation_monitored` (irrigation_monitored) | `sensor.e2e_{slug}_light` | `sensor` | one or more (1) | read-only | covered |
+| `environment.light` | lighting | `irrigation_tanks` (irrigation_tanks) | `sensor.e2e_{slug}_light` | `sensor` | one or more (1) | read-only | covered |
+| `environment.light` | lighting | `climate_plain` (climate_plain) | `sensor.e2e_{slug}_light` | `sensor` | one or more (1) | read-only | covered |
+| `environment.light` | lighting | `ac_infinity` (ac_infinity) | `sensor.e2e_{slug}_light` | `sensor` | one or more (1) | read-only | covered |
+| `environment.light` | lighting | `vision` (vision) | `sensor.e2e_{slug}_light` | `sensor` | one or more (1) | read-only | covered |
 | `environment.light` | lighting | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_light{ordinal_suffix}` | `sensor` | one or more (2) | read-only | covered |
 | `irrigation.irrigation_pump` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `switch.sim_e2e_{slug}_irrigation_pump` | `switch` | exactly one (1) | controllable | covered |
 | `irrigation.irrigation_pump` | irrigation | `vwc` (vwc_veg, vwc_flower) | `switch.sim_e2e_{slug}_irrigation_pump` | `switch` | exactly one (1) | controllable | covered |
@@ -132,48 +191,62 @@ setup manifest, and this coverage table are checked against it by
 | `simulation.dehumidifier_switch_state` | internal | `climate_plain` (climate_plain) | `input_boolean.e2e_{slug}_dehumidifier_switch` | `input_boolean` | exactly one (1) | controllable | covered |
 | `simulation.circulation_percentage_value` | internal | `climate_plain` (climate_plain) | `input_number.e2e_{slug}_circulation_fan_percentage_value` | `input_number` | exactly one (1) | controllable | covered |
 | `simulation.exhaust_percentage_value` | internal | `climate_plain` (climate_plain) | `input_number.e2e_{slug}_exhaust_fan_percentage_value` | `input_number` | exactly one (1) | controllable | covered |
-| `dashboard_equipment.exhaust_fan` | climate | `stage` (veg, clone, mother, flower, dry, cure) | `switch.sim_e2e_{slug}_exhaust_fan` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.exhaust_fan` | climate | `vwc` (vwc_veg, vwc_flower) | `switch.sim_e2e_{slug}_exhaust_fan` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.exhaust_fan` | climate | `telemetry_multi` (telemetry_multi) | `switch.sim_e2e_{slug}_exhaust_fan` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.exhaust_fan` | climate | `irrigation_monitored` (irrigation_monitored) | `switch.sim_e2e_{slug}_exhaust_fan` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.exhaust_fan` | climate | `irrigation_tanks` (irrigation_tanks) | `switch.sim_e2e_{slug}_exhaust_fan` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.exhaust_fan` | climate | `lighting` (lighting) | `switch.sim_e2e_{slug}_exhaust_fan` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.exhaust_fan` | climate | `vision` (vision) | `switch.sim_e2e_{slug}_exhaust_fan` | `switch` | one or more (1) | controllable | covered |
-| `simulation.dashboard_exhaust_fan_state` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_boolean.sim_e2e_{slug}_exhaust_fan` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_exhaust_fan_state` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_exhaust_fan` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_exhaust_fan_state` | internal | `telemetry_multi` (telemetry_multi) | `input_boolean.sim_e2e_{slug}_exhaust_fan` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_exhaust_fan_state` | internal | `irrigation_monitored` (irrigation_monitored) | `input_boolean.sim_e2e_{slug}_exhaust_fan` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_exhaust_fan_state` | internal | `irrigation_tanks` (irrigation_tanks) | `input_boolean.sim_e2e_{slug}_exhaust_fan` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_exhaust_fan_state` | internal | `lighting` (lighting) | `input_boolean.sim_e2e_{slug}_exhaust_fan` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_exhaust_fan_state` | internal | `vision` (vision) | `input_boolean.sim_e2e_{slug}_exhaust_fan` | `input_boolean` | exactly one (1) | controllable | covered |
-| `dashboard_equipment.circulation_fan` | climate | `stage` (veg, clone, mother, flower, dry, cure) | `switch.sim_e2e_{slug}_circulation_fan` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.circulation_fan` | climate | `vwc` (vwc_veg, vwc_flower) | `switch.sim_e2e_{slug}_circulation_fan` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.circulation_fan` | climate | `telemetry_multi` (telemetry_multi) | `switch.sim_e2e_{slug}_circulation_fan` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.circulation_fan` | climate | `irrigation_monitored` (irrigation_monitored) | `switch.sim_e2e_{slug}_circulation_fan` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.circulation_fan` | climate | `irrigation_tanks` (irrigation_tanks) | `switch.sim_e2e_{slug}_circulation_fan` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.circulation_fan` | climate | `lighting` (lighting) | `switch.sim_e2e_{slug}_circulation_fan` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.circulation_fan` | climate | `vision` (vision) | `switch.sim_e2e_{slug}_circulation_fan` | `switch` | one or more (1) | controllable | covered |
-| `simulation.dashboard_circulation_fan_state` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_boolean.sim_e2e_{slug}_circulation_fan` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_circulation_fan_state` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_circulation_fan` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_circulation_fan_state` | internal | `telemetry_multi` (telemetry_multi) | `input_boolean.sim_e2e_{slug}_circulation_fan` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_circulation_fan_state` | internal | `irrigation_monitored` (irrigation_monitored) | `input_boolean.sim_e2e_{slug}_circulation_fan` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_circulation_fan_state` | internal | `irrigation_tanks` (irrigation_tanks) | `input_boolean.sim_e2e_{slug}_circulation_fan` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_circulation_fan_state` | internal | `lighting` (lighting) | `input_boolean.sim_e2e_{slug}_circulation_fan` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_circulation_fan_state` | internal | `vision` (vision) | `input_boolean.sim_e2e_{slug}_circulation_fan` | `input_boolean` | exactly one (1) | controllable | covered |
-| `dashboard_equipment.humidifier` | climate | `stage` (veg, clone, mother, flower, dry, cure) | `switch.sim_e2e_{slug}_humidifier` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.humidifier` | climate | `vwc` (vwc_veg, vwc_flower) | `switch.sim_e2e_{slug}_humidifier` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.humidifier` | climate | `telemetry_multi` (telemetry_multi) | `switch.sim_e2e_{slug}_humidifier` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.humidifier` | climate | `irrigation_monitored` (irrigation_monitored) | `switch.sim_e2e_{slug}_humidifier` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.humidifier` | climate | `irrigation_tanks` (irrigation_tanks) | `switch.sim_e2e_{slug}_humidifier` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.humidifier` | climate | `lighting` (lighting) | `switch.sim_e2e_{slug}_humidifier` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.humidifier` | climate | `vision` (vision) | `switch.sim_e2e_{slug}_humidifier` | `switch` | one or more (1) | controllable | covered |
-| `simulation.dashboard_humidifier_state` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_boolean.sim_e2e_{slug}_humidifier` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_humidifier_state` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_humidifier` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_humidifier_state` | internal | `telemetry_multi` (telemetry_multi) | `input_boolean.sim_e2e_{slug}_humidifier` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_humidifier_state` | internal | `irrigation_monitored` (irrigation_monitored) | `input_boolean.sim_e2e_{slug}_humidifier` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_humidifier_state` | internal | `irrigation_tanks` (irrigation_tanks) | `input_boolean.sim_e2e_{slug}_humidifier` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_humidifier_state` | internal | `lighting` (lighting) | `input_boolean.sim_e2e_{slug}_humidifier` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_humidifier_state` | internal | `vision` (vision) | `input_boolean.sim_e2e_{slug}_humidifier` | `input_boolean` | exactly one (1) | controllable | covered |
+| `dashboard_equipment.exhaust_fan` | climate | `stage` (veg, clone, mother, flower, dry, cure) | `number.sim_e2e_{slug}_exhaust_fan` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.exhaust_fan` | climate | `vwc` (vwc_veg, vwc_flower) | `number.sim_e2e_{slug}_exhaust_fan` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.exhaust_fan` | climate | `telemetry_multi` (telemetry_multi) | `number.sim_e2e_{slug}_exhaust_fan` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.exhaust_fan` | climate | `irrigation_monitored` (irrigation_monitored) | `number.sim_e2e_{slug}_exhaust_fan` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.exhaust_fan` | climate | `irrigation_tanks` (irrigation_tanks) | `number.sim_e2e_{slug}_exhaust_fan` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.exhaust_fan` | climate | `lighting` (lighting) | `number.sim_e2e_{slug}_exhaust_fan` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.exhaust_fan` | climate | `vision` (vision) | `number.sim_e2e_{slug}_exhaust_fan` | `number` | one or more (1) | controllable | covered |
+| `simulation.dashboard_exhaust_fan_level` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_number.sim_e2e_{slug}_exhaust_fan_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_exhaust_fan_level` | internal | `vwc` (vwc_veg, vwc_flower) | `input_number.sim_e2e_{slug}_exhaust_fan_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_exhaust_fan_level` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_exhaust_fan_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_exhaust_fan_level` | internal | `irrigation_monitored` (irrigation_monitored) | `input_number.sim_e2e_{slug}_exhaust_fan_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_exhaust_fan_level` | internal | `irrigation_tanks` (irrigation_tanks) | `input_number.sim_e2e_{slug}_exhaust_fan_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_exhaust_fan_level` | internal | `lighting` (lighting) | `input_number.sim_e2e_{slug}_exhaust_fan_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_exhaust_fan_level` | internal | `vision` (vision) | `input_number.sim_e2e_{slug}_exhaust_fan_level` | `input_number` | exactly one (1) | controllable | covered |
+| `dashboard_equipment.circulation_fan` | climate | `stage` (veg, clone, mother, flower, dry, cure) | `number.sim_e2e_{slug}_circulation_fan` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.circulation_fan` | climate | `vwc` (vwc_veg, vwc_flower) | `number.sim_e2e_{slug}_circulation_fan` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.circulation_fan` | climate | `telemetry_multi` (telemetry_multi) | `number.sim_e2e_{slug}_circulation_fan` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.circulation_fan` | climate | `irrigation_monitored` (irrigation_monitored) | `number.sim_e2e_{slug}_circulation_fan` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.circulation_fan` | climate | `irrigation_tanks` (irrigation_tanks) | `number.sim_e2e_{slug}_circulation_fan` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.circulation_fan` | climate | `lighting` (lighting) | `number.sim_e2e_{slug}_circulation_fan` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.circulation_fan` | climate | `vision` (vision) | `number.sim_e2e_{slug}_circulation_fan` | `number` | one or more (1) | controllable | covered |
+| `simulation.dashboard_circulation_fan_level` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_number.sim_e2e_{slug}_circulation_fan_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_circulation_fan_level` | internal | `vwc` (vwc_veg, vwc_flower) | `input_number.sim_e2e_{slug}_circulation_fan_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_circulation_fan_level` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_circulation_fan_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_circulation_fan_level` | internal | `irrigation_monitored` (irrigation_monitored) | `input_number.sim_e2e_{slug}_circulation_fan_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_circulation_fan_level` | internal | `irrigation_tanks` (irrigation_tanks) | `input_number.sim_e2e_{slug}_circulation_fan_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_circulation_fan_level` | internal | `lighting` (lighting) | `input_number.sim_e2e_{slug}_circulation_fan_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_circulation_fan_level` | internal | `vision` (vision) | `input_number.sim_e2e_{slug}_circulation_fan_level` | `input_number` | exactly one (1) | controllable | covered |
+| `dashboard_equipment.humidifier` | climate | `stage` (veg, clone, mother, flower, dry, cure) | `number.sim_e2e_{slug}_humidifier` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.humidifier` | climate | `vwc` (vwc_veg, vwc_flower) | `number.sim_e2e_{slug}_humidifier` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.humidifier` | climate | `telemetry_multi` (telemetry_multi) | `number.sim_e2e_{slug}_humidifier` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.humidifier` | climate | `irrigation_monitored` (irrigation_monitored) | `number.sim_e2e_{slug}_humidifier` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.humidifier` | climate | `irrigation_tanks` (irrigation_tanks) | `number.sim_e2e_{slug}_humidifier` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.humidifier` | climate | `lighting` (lighting) | `number.sim_e2e_{slug}_humidifier` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.humidifier` | climate | `vision` (vision) | `number.sim_e2e_{slug}_humidifier` | `number` | one or more (1) | controllable | covered |
+| `simulation.dashboard_humidifier_level` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_number.sim_e2e_{slug}_humidifier_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_humidifier_level` | internal | `vwc` (vwc_veg, vwc_flower) | `input_number.sim_e2e_{slug}_humidifier_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_humidifier_level` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_humidifier_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_humidifier_level` | internal | `irrigation_monitored` (irrigation_monitored) | `input_number.sim_e2e_{slug}_humidifier_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_humidifier_level` | internal | `irrigation_tanks` (irrigation_tanks) | `input_number.sim_e2e_{slug}_humidifier_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_humidifier_level` | internal | `lighting` (lighting) | `input_number.sim_e2e_{slug}_humidifier_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_humidifier_level` | internal | `vision` (vision) | `input_number.sim_e2e_{slug}_humidifier_level` | `input_number` | exactly one (1) | controllable | covered |
+| `dashboard_equipment.growlight` | lighting | `stage` (veg, clone, mother, flower, dry, cure) | `number.sim_e2e_{slug}_growlight` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.growlight` | lighting | `vwc` (vwc_veg, vwc_flower) | `number.sim_e2e_{slug}_growlight` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.growlight` | lighting | `telemetry_multi` (telemetry_multi) | `number.sim_e2e_{slug}_growlight` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.growlight` | lighting | `irrigation_monitored` (irrigation_monitored) | `number.sim_e2e_{slug}_growlight` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.growlight` | lighting | `irrigation_tanks` (irrigation_tanks) | `number.sim_e2e_{slug}_growlight` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.growlight` | lighting | `climate_plain` (climate_plain) | `number.sim_e2e_{slug}_growlight` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.growlight` | lighting | `vision` (vision) | `number.sim_e2e_{slug}_growlight` | `number` | one or more (1) | controllable | covered |
+| `simulation.dashboard_growlight_level` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_number.sim_e2e_{slug}_growlight_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_growlight_level` | internal | `vwc` (vwc_veg, vwc_flower) | `input_number.sim_e2e_{slug}_growlight_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_growlight_level` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_growlight_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_growlight_level` | internal | `irrigation_monitored` (irrigation_monitored) | `input_number.sim_e2e_{slug}_growlight_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_growlight_level` | internal | `irrigation_tanks` (irrigation_tanks) | `input_number.sim_e2e_{slug}_growlight_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_growlight_level` | internal | `climate_plain` (climate_plain) | `input_number.sim_e2e_{slug}_growlight_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_growlight_level` | internal | `vision` (vision) | `input_number.sim_e2e_{slug}_growlight_level` | `input_number` | exactly one (1) | controllable | covered |
 | `dashboard_equipment.dehumidifier` | climate | `stage` (veg, clone, mother, flower, dry, cure) | `switch.sim_e2e_{slug}_dehumidifier` | `switch` | one or more (1) | controllable | covered |
 | `dashboard_equipment.dehumidifier` | climate | `vwc` (vwc_veg, vwc_flower) | `switch.sim_e2e_{slug}_dehumidifier` | `switch` | one or more (1) | controllable | covered |
 | `dashboard_equipment.dehumidifier` | climate | `telemetry_multi` (telemetry_multi) | `switch.sim_e2e_{slug}_dehumidifier` | `switch` | one or more (1) | controllable | covered |
@@ -188,20 +261,41 @@ setup manifest, and this coverage table are checked against it by
 | `simulation.dashboard_dehumidifier_state` | internal | `irrigation_tanks` (irrigation_tanks) | `input_boolean.sim_e2e_{slug}_dehumidifier` | `input_boolean` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_dehumidifier_state` | internal | `lighting` (lighting) | `input_boolean.sim_e2e_{slug}_dehumidifier` | `input_boolean` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_dehumidifier_state` | internal | `vision` (vision) | `input_boolean.sim_e2e_{slug}_dehumidifier` | `input_boolean` | exactly one (1) | controllable | covered |
-| `dashboard_equipment.growlight` | lighting | `stage` (veg, clone, mother, flower, dry, cure) | `switch.sim_e2e_{slug}_growlight` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.growlight` | lighting | `vwc` (vwc_veg, vwc_flower) | `switch.sim_e2e_{slug}_growlight` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.growlight` | lighting | `telemetry_multi` (telemetry_multi) | `switch.sim_e2e_{slug}_growlight` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.growlight` | lighting | `irrigation_monitored` (irrigation_monitored) | `switch.sim_e2e_{slug}_growlight` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.growlight` | lighting | `irrigation_tanks` (irrigation_tanks) | `switch.sim_e2e_{slug}_growlight` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.growlight` | lighting | `climate_plain` (climate_plain) | `switch.sim_e2e_{slug}_growlight` | `switch` | one or more (1) | controllable | covered |
-| `dashboard_equipment.growlight` | lighting | `vision` (vision) | `switch.sim_e2e_{slug}_growlight` | `switch` | one or more (1) | controllable | covered |
-| `simulation.dashboard_growlight_state` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_boolean.sim_e2e_{slug}_growlight` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_growlight_state` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_growlight` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_growlight_state` | internal | `telemetry_multi` (telemetry_multi) | `input_boolean.sim_e2e_{slug}_growlight` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_growlight_state` | internal | `irrigation_monitored` (irrigation_monitored) | `input_boolean.sim_e2e_{slug}_growlight` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_growlight_state` | internal | `irrigation_tanks` (irrigation_tanks) | `input_boolean.sim_e2e_{slug}_growlight` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_growlight_state` | internal | `climate_plain` (climate_plain) | `input_boolean.sim_e2e_{slug}_growlight` | `input_boolean` | exactly one (1) | controllable | covered |
-| `simulation.dashboard_growlight_state` | internal | `vision` (vision) | `input_boolean.sim_e2e_{slug}_growlight` | `input_boolean` | exactly one (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_boolean.sim_e2e_{slug}_exhaust_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_exhaust_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `telemetry_multi` (telemetry_multi) | `input_boolean.sim_e2e_{slug}_exhaust_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `irrigation_monitored` (irrigation_monitored) | `input_boolean.sim_e2e_{slug}_exhaust_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `irrigation_tanks` (irrigation_tanks) | `input_boolean.sim_e2e_{slug}_exhaust_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `lighting` (lighting) | `input_boolean.sim_e2e_{slug}_exhaust_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `vision` (vision) | `input_boolean.sim_e2e_{slug}_exhaust_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_boolean.sim_e2e_{slug}_circulation_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_circulation_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `telemetry_multi` (telemetry_multi) | `input_boolean.sim_e2e_{slug}_circulation_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `irrigation_monitored` (irrigation_monitored) | `input_boolean.sim_e2e_{slug}_circulation_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `irrigation_tanks` (irrigation_tanks) | `input_boolean.sim_e2e_{slug}_circulation_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `lighting` (lighting) | `input_boolean.sim_e2e_{slug}_circulation_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `vision` (vision) | `input_boolean.sim_e2e_{slug}_circulation_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_boolean.sim_e2e_{slug}_humidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_humidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `telemetry_multi` (telemetry_multi) | `input_boolean.sim_e2e_{slug}_humidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `irrigation_monitored` (irrigation_monitored) | `input_boolean.sim_e2e_{slug}_humidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `irrigation_tanks` (irrigation_tanks) | `input_boolean.sim_e2e_{slug}_humidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `lighting` (lighting) | `input_boolean.sim_e2e_{slug}_humidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `vision` (vision) | `input_boolean.sim_e2e_{slug}_humidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_boolean.sim_e2e_{slug}_growlight_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_growlight_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `telemetry_multi` (telemetry_multi) | `input_boolean.sim_e2e_{slug}_growlight_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `irrigation_monitored` (irrigation_monitored) | `input_boolean.sim_e2e_{slug}_growlight_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `irrigation_tanks` (irrigation_tanks) | `input_boolean.sim_e2e_{slug}_growlight_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `climate_plain` (climate_plain) | `input_boolean.sim_e2e_{slug}_growlight_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `vision` (vision) | `input_boolean.sim_e2e_{slug}_growlight_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_boolean.sim_e2e_{slug}_dehumidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_dehumidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `telemetry_multi` (telemetry_multi) | `input_boolean.sim_e2e_{slug}_dehumidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `irrigation_monitored` (irrigation_monitored) | `input_boolean.sim_e2e_{slug}_dehumidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `irrigation_tanks` (irrigation_tanks) | `input_boolean.sim_e2e_{slug}_dehumidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `lighting` (lighting) | `input_boolean.sim_e2e_{slug}_dehumidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `vision` (vision) | `input_boolean.sim_e2e_{slug}_dehumidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `ac_infinity.circulation.mode_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `select.e2e_{slug}_circulation_active_mode` | `select` | exactly one (1) | controllable | covered |
 | `ac_infinity.circulation.speed_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `number.e2e_{slug}_circulation_speed` | `number` | exactly one (1) | controllable | covered |
 | `ac_infinity.exhaust.mode_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `select.e2e_{slug}_exhaust_active_mode` | `select` | exactly one (1) | controllable | covered |

@@ -48,11 +48,40 @@ GROWSPACE_CARD=/path/to/card-worktree \
 | `vision` | 1 | Two deterministic local-file cameras and Vision Checkup scheduling |
 | `source_air` | global | Writable lung-room temperature/humidity and offline outdoor weather |
 
-The generated package currently exposes 256 contract entities: 115 sensors, 64
-input numbers, 30 input booleans, 25 switches, six numbers, five selects, two
+The generated package currently exposes 516 contract entities: 204 sensors, 108
+input booleans, 92 input numbers, 58 numbers, 38 switches, five selects, two
 fans, two humidifiers, two times, two cameras, one binary sensor, one light, and
 one weather entity. The generated table in [E2E.md](E2E.md) maps every concrete
 family to its owning role, profile, domain, cardinality, and write behavior.
+
+## Every dashboard is a live one
+
+Every growspace carries the full environmental set — temperature, humidity, VPD,
+CO₂, substrate temperature and moisture, power, energy and a 0-10 light index —
+as free-running waveform sensors, so no dashboard opens onto an empty or flat
+chart. A profile that owns irrigation hardware carries the water readings too:
+feed/bulk/pore/runoff EC, pH, and whichever of flow, drain volume and tank level
+its hardware truthfully measures. A profile whose *tests* drive a reading keeps a
+writable `input_number` there instead — Crop Steering's substrate moisture and
+tank guard, the monitored profile's flow and drain volume, the plain-climate
+profile's temperature/humidity/VPD.
+
+The five device chips are simulated the same way. Exhaust fan, circulation fan,
+humidifier and grow light are 0-10 `number` entities — the numeric Fan Entity
+Mode the backend's `NumberDriver` speaks and the card fixes its device axis to,
+rather than a percentage or an on/off switch that would draw a flat line. The
+dehumidifier stays binary, because that is how the card charts it, and cycles
+rather than sitting still. Each free-runs on a waveform until something writes
+it, then holds that value; `input_boolean.sim_e2e_<slug>_<device>_manual` is the
+gate that records the difference. It is per *device*, not per growspace like the
+telemetry gate: a test pins a growspace's readings together, but devices are
+written one at a time, and a shared gate would freeze the other four the moment
+one was touched. `./scripts/e2e preflight` releases every gate after exercising
+the write path, so the demo keeps moving.
+
+Profiles with faithful hardware keep it: `climate_plain` still exposes its
+percentage fan, numeric fan and switch trio, and `ac_infinity` still exposes its
+five real port bundles.
 
 ## What the preflight proves
 
