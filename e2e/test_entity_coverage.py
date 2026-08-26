@@ -69,18 +69,18 @@ class EntityCoverageContractTest(unittest.TestCase):
         self.assertEqual(
             counts,
             {
-                "sensor": 115,
-                "input_number": 64,
-                "input_boolean": 95,
+                "sensor": 204,
+                "input_number": 92,
+                "input_boolean": 108,
                 "binary_sensor": 1,
                 "light": 1,
                 "fan": 2,
                 "humidifier": 2,
                 "camera": 2,
                 "select": 5,
-                "number": 6,
+                "number": 58,
                 "time": 2,
-                "switch": 90,
+                "switch": 38,
                 "weather": 1,
             },
         )
@@ -134,18 +134,11 @@ class EntityCoverageContractTest(unittest.TestCase):
         }
 
         monitored = profiles["irrigation_monitored"]["services"]
-        self.assertEqual(
-            set(monitored["configure_environment"]),
-            {
-                "drain_volume_sensors",
-                "irrigation_flow_sensors",
-                "exhaust_fan_entities",
-                "circulation_fan_entities",
-                "humidifier_entities",
-                "dehumidifier_entities",
-                "growlight_entities",
-            },
-        )
+        monitored_environment = monitored["configure_environment"]
+        # Measured at the pump: flow and drain volume, and deliberately no tank.
+        self.assertIn("drain_volume_sensors", monitored_environment)
+        self.assertIn("irrigation_flow_sensors", monitored_environment)
+        self.assertNotIn("irrigation_tanks", monitored_environment)
         self.assertEqual(
             set(monitored["set_irrigation_settings"]),
             {"irrigation_pump_entity", "drain_pump_entity"},
@@ -281,7 +274,12 @@ class EntityCoverageContractTest(unittest.TestCase):
         for entity_id in configured:
             entity = entities[entity_id]
             self.assertEqual(entity["domain"], "sensor", entity_id)
-            self.assertTrue(entity["unit_of_measurement"], entity_id)
+            # Light is a 0-10 intensity index and declares no unit; every other
+            # category is a physical quantity and must name one.
+            if entity_id.rsplit("_", 1)[0].endswith("_light"):
+                self.assertIsNone(entity["unit_of_measurement"], entity_id)
+            else:
+                self.assertTrue(entity["unit_of_measurement"], entity_id)
             self.assertIn(
                 entity["state_class"], {"measurement", "total_increasing"}, entity_id
             )
@@ -305,7 +303,6 @@ class EntityCoverageContractTest(unittest.TestCase):
                 "humidity",
                 "carbon_dioxide",
                 "moisture",
-                "illuminance",
                 "power",
                 "energy",
             },
@@ -346,7 +343,11 @@ class EntityCoverageContractTest(unittest.TestCase):
     def test_pinned_and_free_running_values_share_one_gate(self) -> None:
         package = render_ha_package()
         gate = "input_boolean.sim_e2e_telemetry_multi_manual_telemetry"
-        block = package.split("# e2e_telemetry_multi — ", 1)[1].split("# pumps", 1)[0]
+        block = (
+            package.split("# e2e_telemetry_multi — ", 1)[1]
+            .split("\n  - trigger:", 1)[1]
+            .split("\n  # ---", 1)[0]
+        )
 
         # Every mirrored sensor re-renders when the gate or any backing input is
         # written, so a pinned value is visible immediately rather than at the
@@ -528,7 +529,7 @@ class EntityCoverageContractTest(unittest.TestCase):
         )
         self.assertEqual(
             environment["growlight_entities"],
-            ["switch.sim_e2e_climate_plain_growlight"],
+            ["number.sim_e2e_climate_plain_growlight"],
         )
         for singular in (
             "circulation_fan_entity",
@@ -540,8 +541,13 @@ class EntityCoverageContractTest(unittest.TestCase):
             "vpd_sensor",
         ):
             self.assertNotIn(singular, environment)
+        # A climate profile waters nothing, so it carries no plumbing, and only
+        # the vision profile owns cameras.
         for unrelated in (
             "irrigation_tanks",
+            "irrigation_flow_sensors",
+            "drain_volume_sensors",
+            "ph_sensors",
             "camera_entities",
         ):
             self.assertNotIn(unrelated, environment)
@@ -746,25 +752,40 @@ class EntityCoverageContractTest(unittest.TestCase):
             if profile["profile"] == "vision"
         )
 
+        environment = profile["services"]["configure_environment"]
+        self.assertEqual(environment["snapshot_interval_hours"], 6)
         self.assertEqual(
-            profile["services"]["configure_environment"],
+            environment["camera_entities"],
+            ["camera.e2e_vision_1", "camera.e2e_vision_2"],
+        )
+        # The cameras are what this profile is about; its equipment and
+        # telemetry are the simulated set every dashboard carries.
+        self.assertEqual(
             {
-                "snapshot_interval_hours": 6,
-                "exhaust_fan_entities": ["switch.sim_e2e_vision_exhaust_fan"],
+                field: environment[field]
+                for field in (
+                    "exhaust_fan_entities",
+                    "circulation_fan_entities",
+                    "humidifier_entities",
+                    "dehumidifier_entities",
+                    "growlight_entities",
+                )
+            },
+            {
+                "exhaust_fan_entities": ["number.sim_e2e_vision_exhaust_fan"],
                 "circulation_fan_entities": [
-                    "switch.sim_e2e_vision_circulation_fan"
+                    "number.sim_e2e_vision_circulation_fan"
                 ],
-                "humidifier_entities": ["switch.sim_e2e_vision_humidifier"],
-                "dehumidifier_entities": [
-                    "switch.sim_e2e_vision_dehumidifier"
-                ],
-                "growlight_entities": ["switch.sim_e2e_vision_growlight"],
-                "camera_entities": [
-                    "camera.e2e_vision_1",
-                    "camera.e2e_vision_2",
-                ],
+                "humidifier_entities": ["number.sim_e2e_vision_humidifier"],
+                "dehumidifier_entities": ["switch.sim_e2e_vision_dehumidifier"],
+                "growlight_entities": ["number.sim_e2e_vision_growlight"],
             },
         )
+        self.assertEqual(
+            environment["temperature_sensor"], "sensor.e2e_vision_temperature"
+        )
+        self.assertEqual(environment["light_sensors"], ["sensor.e2e_vision_light"])
+        self.assertNotIn("irrigation_tanks", environment)
         self.assertEqual(
             profile["services"]["update_vision_checkup_config"],
             {

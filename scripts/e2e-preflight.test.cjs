@@ -92,6 +92,14 @@ test('requires manifest global settings on the single integration entry', () => 
   assert.deepEqual(validateGlobalSettings(manifest, [{ options: { ...entry.options, units: 'imperial' } }]), [
     'global settings: units is "imperial", expected "metric"',
   ]);
+
+  // The options flow nests install-wide fields; both shapes must validate.
+  const nested = { options: { global_settings: { units: 'metric', location: 'indoor' } } };
+  assert.deepEqual(validateGlobalSettings(manifest, [nested]), []);
+  assert.deepEqual(
+    validateGlobalSettings(manifest, [{ options: { global_settings: { units: 'metric' } } }]),
+    ['global settings: location is undefined, expected "indoor"'],
+  );
 });
 
 test('requires one correctly bound dashboard and one resource per manifest profile', () => {
