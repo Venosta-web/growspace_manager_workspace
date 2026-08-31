@@ -2,7 +2,7 @@
 
 You are in the **workspace hub**, not in a product repo. This directory holds the
 development runtime, the multi-root VS Code workspace, and the shared scripts.
-The actual code lives in two sibling repositories.
+The product code lives in three sibling repositories.
 
 ## Map
 
@@ -10,6 +10,7 @@ The actual code lives in two sibling repositories.
 ~/dev/
 ├── growspace_manager/               Python — HA custom integration   (git repo)
 ├── lovelace-growspace-manager-card/ Lit/TS — Lovelace card           (git repo)
+├── growspace_manager_vision/        Python — stateless vision service (git repo)
 ├── core/                            HA Core checkout — REFERENCE ONLY, never edit
 └── growspace_manager_workspace/     ← you are here                   (the hub)
     ├── growspace.code-workspace     multi-root VS Code workspace
@@ -20,8 +21,8 @@ The actual code lives in two sibling repositories.
     └── worktrees/                   matched cross-repo agent worktrees
 ```
 
-**Each repo has its own upstream-maintained `AGENTS.md`.** Read the one for the
-repo you are changing — it is canonical and it wins over anything here. Notably
+**Each product repo has its own upstream-maintained `AGENTS.md`.** Read the one for
+the repo you are changing — it is canonical and it wins over anything here. Notably
 it documents conventions this hub must respect:
 
 - The main checkout is **shared by concurrent agent sessions**; a pre-commit
@@ -252,9 +253,9 @@ for the decision, the measurements, and the hub-heals/card-detects boundary.
 
 ## Cross-repo contract
 
-The two repos are coupled through HA services, WebSocket commands, and the zod
-schemas in `card/src/schemas/api-schema.ts`. A change to any payload shape is
-**one logical feature across both repos**:
+The integration and card are coupled through HA services, WebSocket commands, and the
+zod schemas in `card/src/schemas/api-schema.ts`. A change to any payload shape is
+**one logical feature across both repositories**:
 
 ```
 backend impl → backend test → contract fixture → card impl → card test
@@ -262,6 +263,13 @@ backend impl → backend test → contract fixture → card impl → card test
 
 The backend side must land first — the card cannot call a service that does not
 exist. See `docs/CONTRACT.md`.
+
+Growspace Vision owns the stateless HTTP service contract under
+`../growspace_manager_vision/contracts/growspace-vision/`. The hub remains the
+cross-repository roadmap and issue tracker; service context, ADRs, research, fixtures,
+and contract tests belong in the Vision repository. A change spanning Vision and Home
+Assistant must update the Vision contract first, then the integration client and its
+tests, and finally the card when the user-facing shape changes.
 
 ## Don't
 
@@ -274,7 +282,7 @@ exist. See `docs/CONTRACT.md`.
 - **Don't commit the card's build output.** `dist/*.js` is git-ignored upstream
   as of `a39faf67 chore(release): untrack built bundle`.
 - **Don't work from a stale checkout.** `git fetch` and compare against
-  `origin/main` before concluding anything is broken — these repos move fast.
+  `origin/main` before concluding anything is broken — the product repos move fast.
 - **Don't start a second thing on :8123.** `./scripts/ha dev up` refuses rather
   than silently losing the race.
 - **Don't drive the runtime from a hub worktree.** `docker-compose.yml` resolves

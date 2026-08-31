@@ -1,12 +1,14 @@
 # Growspace development workspace
 
-Hub for developing the **growspace_manager** Home Assistant integration and its
-**Lovelace card** together, with a real HA runtime whose files live on the host.
+Cross-repository hub for the **growspace_manager** Home Assistant integration, its
+**Lovelace card**, and the **Growspace Vision** service, with a real HA runtime whose
+files live on the host.
 
 ```
 ~/dev/
 ├── growspace_manager/               integration   (git repo)
 ├── lovelace-growspace-manager-card/ card          (git repo)
+├── growspace_manager_vision/        vision service (git repo)
 ├── core/                            HA Core — reference only
 └── growspace_manager_workspace/     ← this hub
 ```
@@ -17,7 +19,9 @@ Hub for developing the **growspace_manager** Home Assistant integration and its
 code ~/dev/growspace_manager_workspace/growspace.code-workspace
 ```
 
-One window, four roots, four independent git histories.
+One window, five roots, five independent git histories. The workspace hub remains the
+cross-repository runtime, roadmap, and issue tracker; product artifacts live in their
+own repositories.
 
 ## Start the dev loop
 
@@ -44,7 +48,7 @@ and leaves an unchanged bundle alone. See `scripts/stamp-card-resource.cjs`.
 
 | | URL | Config on host | Source mounted? | Purpose |
 |---|---|---|---|---|
-| **dev** | http://localhost:8123 | `ha-dev/` | yes, both repos | daily development |
+| **dev** | http://localhost:8123 | `ha-dev/` | backend + card | daily development |
 | **test** | http://localhost:8124 | `ha-test/` | **no** | clean HACS install check |
 
 Start the release-test instance with `./scripts/ha test up`.
@@ -54,6 +58,8 @@ Start the release-test instance with `./scripts/ha test up`.
 ```bash
 ./scripts/check all fast     # ruff+mypy+pytest, eslint+tsc+vitest
 ./scripts/check all full     # + coverage + production build
+# Growspace Vision V1 contract
+python3 -m unittest discover -s ../growspace_manager_vision/tests -v
 ```
 
 ## Parallel agent work
@@ -137,5 +143,5 @@ dependencies.
   `ha-dev/home-assistant.log` directly instead of `docker exec`.
 - `./scripts/ha dev reset` wipes `.storage/` and the DB back to onboarding while
   keeping `configuration.yaml`.
-- Agent instructions: `AGENTS.md` here and in each repo, imported by `CLAUDE.md`.
+- Agent instructions: `AGENTS.md` here and in each product repo, imported by `CLAUDE.md`.
   Change `AGENTS.md`, never the copy.

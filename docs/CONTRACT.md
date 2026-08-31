@@ -2,7 +2,9 @@
 
 > This document governs `growspace_manager` ⇄ Lovelace card payloads. The separate,
 > stateless `growspace_manager` ⇄ Growspace Vision HTTP boundary is specified by the
-> versioned [Growspace Vision contract](../contracts/growspace-vision/v1/README.md).
+> versioned [Growspace Vision contract][vision-contract].
+
+[vision-contract]: https://github.com/Venosta-web/growspace_manager_vision/tree/main/contracts/growspace-vision/v1
 
 The integration and the card are separate repos with separate release cycles,
 but they are one product. Everything they agree on crosses this boundary:
