@@ -13,9 +13,9 @@ but they are one product. Everything they agree on crosses this boundary:
 growspace_manager (Python)                 lovelace card (TypeScript)
 ──────────────────────────                 ──────────────────────────
 services.yaml           ──────────────▶    services/api/*.ts  (callService)
-websocket_api handlers  ──────────────▶    services/api/*.ts  (callWS)
+websocket_api handlers  ──────────────▶    slices/*/schema.ts + index.ts
 entity ids / attributes ──────────────▶    store atoms
-response payloads       ──────────────▶    schemas/api-schema.ts  (zod)
+response payloads       ──────────────▶    owning slice schema (zod)
 ```
 
 > **Upstream already has tooling for this.** The card ships
@@ -40,7 +40,12 @@ zod validation error nobody sees until you open the dashboard.
 4. **Frontend schema** — `src/schemas/api-schema.ts` updated to match.
 5. **Frontend implementation + test** — consumes the new shape.
 
-The backend must land first; the card cannot call a service that does not exist.
+The backend contract must exist first; the card cannot invent a service or wire
+shape. A breaking producer cutover may need three releases: additive backend
+contract and fixtures, a [backward-safe card change](#backward-safe-card-change),
+then backend activation. That still follows the five steps above—the card implements
+an already-tested backend contract—but avoids a window in which the installed card
+cannot display newly produced data.
 
 Use a matched worktree pair so both sides are on the same branch:
 
@@ -50,9 +55,53 @@ cd ~/dev/growspace_manager_workspace/worktrees/<name>/backend
 claude --add-dir ../card
 ```
 
-Worktrees branch from **`origin/prerelease`** by default — upstream's stated
-base for architecture and refactor work. Override with `BASE=main`. The card
-repo has no `prerelease`, so it falls back to `origin/main` automatically.
+The backend branch must start at fresh **`origin/prerelease`**, and the card branch at
+fresh **`origin/dev`**, following each product repo's canonical `AGENTS.md`. Verify
+both after the helper runs; a fallback branch selected by workspace tooling does not
+override a target repo's base-branch rule.
+
+### Backward-safe card change
+
+A card phase may release before a backend behaviour cutover only when it treats the
+new command and every new field as optional, capability-detects them, falls back to
+the released wire shape, and proves that fallback against the latest published
+backend fixture. Passing only against the leading backend branch is not proof.
+
+## Vision Checkup V1 migration
+
+The accepted result shape, compatibility policy and complete file-level plan live in
+[`growspace_manager` ADR 0043][vision-migration-adr]. The load-bearing sequence is:
+
+1. **Additive backend foundation:** add `vision_models.py` and `vision_client.py`;
+   implement the evidence store and pure comparison/fusion seams; add cached service
+   status and integration-wide automatic/manual connection configuration; register
+   `get_vision_status` and `get_vision_history_v2`; keep the cloud-era producer live.
+2. **Backend executable contract:** generate
+   `vision_status_response.json`, `vision_history_response.json` and
+   `trigger_vision_checkup_response.json` beside `growspace_payload.json`. History is
+   a `result_schema` union of `evidence_v1` Vision Checkup envelopes and
+   `legacy_cloud_v1` rows; trigger keeps its legacy keys and adds the V1 envelope.
+3. **Dual-contract card:** update `src/slices/camera/schema.ts` and `index.ts`, then
+   extend `.github/workflows/contract-fixture.yml` and
+   `tests/contract/contract-fixture.test.ts` to validate every fixture against both
+   the current backend `prerelease` branch and latest published backend release. The
+   card calls V1 when available and otherwise preserves the legacy path.
+4. **Card presentation and configuration:** carry read-only status/model data through
+   `vision-tab.viewmodel.ts` and `config-vision-tab.ts`; replace the severity-only
+   projection in `snapshots-dialog.viewmodel.ts` and `snapshots-dialog.ts` with
+   capture evidence plus a visibly marked legacy branch. Endpoint and token never
+   cross into the card.
+5. **Backend cutover:** refactor `vision_checkup_scheduler.py` to persist a checkup,
+   fan out one local analysis per camera, compare, fuse, optionally explain and store.
+   Stop appending the legacy list and stop the cloud severity notification path. An
+   unavailable local service never falls back to the cloud-only producer.
+
+`limit` and `total` count checkups, not captures. Existing legacy rows remain frozen
+and readable but never participate in V1 baselines, fusion, trends or training. The
+three-phase sequence is mandatory: cutting the producer over in step 1 would make new
+results invisible to the released card.
+
+[vision-migration-adr]: https://github.com/Venosta-web/growspace_manager/blob/prerelease/docs/adr/0043-vision-checkups-migrate-through-versioned-capture-contracts.md
 
 ## Breaking-change checklist
 
@@ -71,9 +120,9 @@ Before merging anything that touches the boundary, confirm:
 
 | Seam | Backend | Frontend |
 |---|---|---|
-| Services | `custom_components/growspace_manager/services.yaml` | `src/services/api/` |
-| WebSocket | `websocket_api` handlers | `BaseAPI.callWS` |
-| Validation | — | `src/schemas/api-schema.ts` (~187 schemas) |
+| Services | `custom_components/growspace_manager/services.yaml` | owning slice action |
+| WebSocket | `custom_components/growspace_manager/websocket/` | owning slice `index.ts` |
+| Validation | contract fixtures | owning slice `schema.ts` |
 | State | coordinator → entities | nanostores atoms |
 
 ## Verifying the live contract
