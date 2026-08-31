@@ -1,5 +1,9 @@
 # The backend ⇄ frontend contract
 
+> This document governs `growspace_manager` ⇄ Lovelace card payloads. The separate,
+> stateless `growspace_manager` ⇄ Growspace Vision HTTP boundary is specified by the
+> versioned [Growspace Vision contract](../contracts/growspace-vision/v1/README.md).
+
 The integration and the card are separate repos with separate release cycles,
 but they are one product. Everything they agree on crosses this boundary:
 
