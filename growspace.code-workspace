@@ -1,5 +1,5 @@
 {
-  // Multi-root workspace: one window, four roots, four independent git repos.
+  // Multi-root workspace: one window, five roots, five independent git repos.
   // Open with:  code ~/dev/growspace_manager_workspace/growspace.code-workspace
   "folders": [
     {
@@ -13,6 +13,10 @@
     {
       "name": "🎴 FRONTEND — lovelace card",
       "path": "../lovelace-growspace-manager-card"
+    },
+    {
+      "name": "👁 VISION — growspace_manager_vision",
+      "path": "../growspace_manager_vision"
     },
     {
       "name": "📖 HA CORE (reference, read-only)",
@@ -134,6 +138,14 @@
         "type": "shell",
         "command": "./scripts/check card fast",
         "options": { "cwd": "${workspaceFolder:⚙ WORKSPACE (runtime + scripts)}" },
+        "group": "test",
+        "problemMatcher": []
+      },
+      {
+        "label": "Vision: contract checks",
+        "type": "shell",
+        "command": "python3 -m unittest discover -s tests -v",
+        "options": { "cwd": "${workspaceFolder:👁 VISION — growspace_manager_vision}" },
         "group": "test",
         "problemMatcher": []
       },
