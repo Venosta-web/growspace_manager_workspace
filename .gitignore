@@ -44,6 +44,8 @@ ha-test/custom_components/
 
 # --- local credentials ---
 .ha-token
+vision-dev/*
+!vision-dev/.gitkeep
 
 # --- agent worktrees (they are real checkouts, not workspace content) ---
 worktrees/

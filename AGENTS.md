@@ -17,6 +17,7 @@ The product code lives in three sibling repositories.
     ├── docker-compose.yml           HA dev + release-test runtimes
     ├── ha-dev/                      dev instance config — ON THE HOST
     ├── ha-test/                     clean instance for HACS verification
+    ├── vision-dev/                  local Vision App options — ON THE HOST
     ├── scripts/{ha,check,feature}
     └── worktrees/                   matched cross-repo agent worktrees
 ```
@@ -49,7 +50,14 @@ the host path instead.
 ./scripts/ha dev restart   # full restart (manifest/import changes need this)
 ./scripts/ha dev reset     # wipe .storage + DB, back to onboarding
 ./scripts/ha test up       # http://localhost:8124 — virgin config, HACS test
+./scripts/vision build     # build the locked native amd64 Vision App image
+./scripts/vision smoke     # analyze both deterministic camera fixtures
 ```
+
+`ha dev up|restart` starts the production Vision App image before Home
+Assistant and waits for its health check. The App is available to host
+automation at `http://127.0.0.1:8099` and to Home Assistant at
+`http://vision-dev:8099`; `ha test` remains isolated from it.
 
 The dev instance mounts:
 
@@ -58,8 +66,9 @@ The dev instance mounts:
 | `../growspace_manager/custom_components/growspace_manager` | `/config/custom_components/growspace_manager` | `GROWSPACE_BACKEND_SRC` |
 | `../lovelace-growspace-manager-card/dist` | `/config/www/community/lovelace-growspace-manager-card` (ro) | `GROWSPACE_CARD_DIST` |
 | `./ha-dev` | `/config` | — |
+| `./vision-dev` | `/data` on the Vision App (ro) | — |
 
-Both source mounts default to the **main** checkout. A worktree is served by
+The backend and card source mounts default to the **main** checkout. A worktree is served by
 setting its override on `./scripts/ha dev restart`, run from the main hub
 checkout — which is the only way to exercise a worktree's own code against
 :8123, since the runtime otherwise keeps serving the main checkout while you
@@ -70,6 +79,15 @@ GROWSPACE_BACKEND_SRC=~/dev/growspace_manager/.worktrees/<name>/custom_component
 GROWSPACE_CARD_DIST=./worktrees/<name>/card/dist \
   ./scripts/ha dev restart
 ```
+
+Vision runs the exact App image rather than a live source mount. `./scripts/vision
+build` delegates to `../growspace_manager_vision`; select a Vision worktree with
+`GROWSPACE_VISION_SRC` while building and select another local tag at runtime with
+`GROWSPACE_VISION_IMAGE`. The first `ha dev up|restart` creates a random App token in
+gitignored `vision-dev/options.json`; later starts preserve it, `./scripts/vision
+token` prints it for local configuration, and `ha dev reset` removes it with the Home
+Assistant state. `./scripts/e2e smoke` proves both tracked Local File camera frames
+complete real Vision Analyses before the browser specs run.
 
 The card is **code-split**: a thin `growspace-manager-card.js` entry plus ~16
 lazy `growspace-[name]-[hash].js` chunks. The whole `dist/` directory is
