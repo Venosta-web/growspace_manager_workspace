@@ -15,8 +15,8 @@ INSTANCE="${1:-dev}"
 CMD="${2:-}"
 
 case "$INSTANCE" in
-  dev)  SVC=ha-dev;  CTR=growspace-ha-dev;  PORT=8123; PROFILE=() ;;
-  test) SVC=ha-test; CTR=growspace-ha-test; PORT=8124; PROFILE=(--profile test) ;;
+  dev)  SVC=ha-dev;  CTR=growspace-ha-dev;  PORT=8123; PROFILE=(); RUNTIME_SERVICES=(vision-dev) ;;
+  test) SVC=ha-test; CTR=growspace-ha-test; PORT=8124; PROFILE=(--profile test); RUNTIME_SERVICES=() ;;
   *)    echo "usage: $0 {dev|test} <command>" >&2; exit 2 ;;
 esac
 
@@ -81,6 +81,11 @@ stamp_card_resource() {
   node "$WS/scripts/stamp-card-resource.cjs" "$SVC"
 }
 
+prepare_runtime_services() {
+  [ "$INSTANCE" = dev ] || return 0
+  "$WS/scripts/vision" prepare
+}
+
 case "$CMD" in
   up)
     # Fail early and loudly if something else already owns the port —
@@ -91,21 +96,23 @@ case "$CMD" in
       echo "       Free it first (e.g. docker stop $owner) then re-run." >&2
       exit 1
     fi
+    prepare_runtime_services
     stamp_card_resource
     dc up -d "$SVC"
     echo "→ $INSTANCE starting at http://localhost:$PORT"
     echo "  config on host: $WS/ha-$INSTANCE"
     ;;
-  down)     dc stop "$SVC" ;;
+  down)     dc stop "$SVC" "${RUNTIME_SERVICES[@]}" ;;
   restart)
     # Stop first, so the resource stamp lands in a .storage no running HA is
     # holding open. `up --force-recreate` would stop it anyway; making that
     # explicit is what buys the ordering.
-    dc stop "$SVC" 2>/dev/null || true
+    dc stop "$SVC" "${RUNTIME_SERVICES[@]}" 2>/dev/null || true
+    prepare_runtime_services
     stamp_card_resource
     # Recreate rather than merely restarting so bind mounts resolve the current
     # host path/inode. Rollup deletes and recreates the card's dist/ directory.
-    dc up -d --force-recreate "$SVC"
+    dc up -d --force-recreate "$SVC" "${RUNTIME_SERVICES[@]}"
     echo "→ recreated $CTR"
     ;;
   logs)     docker logs -f --tail 200 "$CTR" ;;
@@ -164,10 +171,11 @@ case "$CMD" in
     # Nuke instance state but keep configuration.yaml and friends.
     read -r -p "Delete .storage/, DB and logs for '$INSTANCE'? [y/N] " ans
     [ "$ans" = "y" ] || { echo "aborted"; exit 0; }
-    dc stop "$SVC" 2>/dev/null || true
+    dc stop "$SVC" "${RUNTIME_SERVICES[@]}" 2>/dev/null || true
     rm -rf "$WS/ha-$INSTANCE/.storage" \
            "$WS/ha-$INSTANCE"/home-assistant*.db* \
            "$WS/ha-$INSTANCE"/home-assistant.log*
+    [ "$INSTANCE" != dev ] || "$WS/scripts/vision" reset
     echo "→ '$INSTANCE' reset to a fresh onboarding state"
     ;;
 

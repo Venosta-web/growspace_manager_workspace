@@ -6,8 +6,14 @@ Growspace Manager E2E environment:
 
 ```bash
 cd ~/dev/growspace_manager_workspace
+./scripts/vision build
 ./scripts/e2e provision
 ```
+
+The build command delegates to the Vision repository's locked native-amd64 App image
+pipeline. Set `GROWSPACE_VISION_SRC=/path/to/vision-worktree` to build an App branch;
+set `GROWSPACE_VISION_IMAGE=<local-tag>` when starting the runtime if the pipeline used
+a non-default tag.
 
 `provision` is idempotent. It regenerates the Home Assistant package and card
 setup manifest from `e2e/entity_coverage.py`, builds the selected card, recreates
@@ -18,11 +24,18 @@ live preflight. A second
 run performs the same verification but creates no additional growspaces,
 plants, entities, devices, resources, or dashboards.
 
+Recreating Home Assistant also starts the local Vision App and waits until its
+unauthenticated health endpoint is ready. Its generated App options live in the
+gitignored host file `vision-dev/options.json`, while the service is reachable only on
+loopback port 8099 from the host and as `http://vision-dev:8099` from Home Assistant.
+
 The command reads the token from `HA_ACCESS_TOKEN` or the workspace's
 gitignored `.ha-token`. Run `./scripts/ha dev token` once after onboarding. It
 creates the card's gitignored `tests/e2e/.env.test` from the checked-in example
 when needed and writes all resolved growspace IDs and dashboard paths itself.
 There is no manual entity assignment or dashboard editing step.
+The separate local App bearer token is created automatically and remains stable across
+restarts; `./scripts/vision token` prints it when the integration or a test needs it.
 
 To exercise worktree code against the main runtime, run the command from the
 main workspace checkout and select the paired repositories explicitly:
@@ -45,7 +58,7 @@ GROWSPACE_CARD=/path/to/card-worktree \
 | `lighting` | 1 | Plain switch/light grow lights and automatic light-cycle tracking |
 | `climate_plain` | 1 | Percentage, numeric, and binary fans plus HA humidifiers |
 | `ac_infinity` | 1 | Five faithful AC Infinity port bundles and grow-light scheduling |
-| `vision` | 1 | Two deterministic local-file cameras and Vision Checkup scheduling |
+| `vision` | 1 | Two deterministic local-file cameras, real local Vision Analyses, and Vision Checkup scheduling |
 | `source_air` | global | Writable lung-room temperature/humidity and offline outdoor weather |
 
 The generated package currently exposes 516 contract entities: 204 sensors, 108
@@ -109,9 +122,11 @@ The focused capability smoke set is:
 ./scripts/e2e smoke
 ```
 
-It runs multi-sensor aggregation, both irrigation hardware profiles, plain
-climate control, grow lights/light-cycle tracking, AC Infinity ports, cameras,
-and source-air scenarios. `./scripts/e2e full` runs every existing E2E spec.
+It first submits both simulated camera JPEGs to the real authenticated Vision App and
+requires analyzed 384-value embeddings. It then runs multi-sensor aggregation, both
+irrigation hardware profiles, plain climate control, grow lights/light-cycle tracking,
+AC Infinity ports, cameras, and source-air browser scenarios. `./scripts/e2e full` runs
+every existing browser E2E spec.
 
 Typical local runtimes are 2–4 minutes for provision plus preflight, 3–8 minutes
 for the focused smoke set, and 25–45 minutes for the coordinator-heavy full
@@ -119,8 +134,8 @@ suite. Hardware speed and real coordinator polling windows dominate the latter.
 
 ## Clean reset and no-op proof
 
-Reset is deliberately explicit because it removes Home Assistant authentication
-along with the database and storage registries:
+Reset is deliberately explicit because it removes Home Assistant authentication,
+the local Vision App token, the database, and the storage registries:
 
 ```bash
 ./scripts/ha dev reset
@@ -138,9 +153,8 @@ global options and growspace configuration.
 
 ## Deliberate exclusions
 
-This environment stays deterministic and offline. It does not provision or call
-Niimbot label printing, AI conversation/vision agents, cloud inference, remote
-weather providers, notification destinations, or other credentialed third-party
-services. The local-file camera fixtures stop at the no-agent Vision Checkup
-availability gate. HACS installation testing remains the separate `ha test`
-release workflow on port 8124.
+This environment stays deterministic and offline. It runs the bundled local Vision App
+but does not provision or call Niimbot label printing, AI conversation agents, cloud
+inference, remote weather providers, notification destinations, or other credentialed
+third-party services. HACS installation testing remains the separate `ha test` release
+workflow on port 8124.

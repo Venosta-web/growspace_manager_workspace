@@ -429,6 +429,11 @@ six-hour snapshot interval, and configures a representative Vision Checkup
 schedule. Manual snapshots need no AI agent; the no-AI checkup case stops at
 the integration's availability gate before any external request.
 
+The development runtime also starts the production Growspace Vision App image with
+host-owned options. `./scripts/vision smoke` sends these same two JPEGs through the
+authenticated `/analyze` boundary and requires an analyzed 384-value embedding from
+each; `./scripts/e2e smoke` runs that black-box check before its browser scenarios.
+
 Both frames are drawn by `./scripts/gen-e2e-camera-assets`, not photographed:
 640x480 grow-tent scenes built from seeded noise, mylar streaks and procedural
 fan leaves under a camera HUD.

@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# Control the host-owned Growspace Vision development state.
+#
+#   ./scripts/vision prepare  create App options when they do not exist
+#   ./scripts/vision token    print the current local bearer token
+#   ./scripts/vision reset    remove generated App options
+#   ./scripts/vision smoke    analyze both deterministic camera fixtures
+#   ./scripts/vision build    build the native amd64 App image
+set -euo pipefail
+
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+STATE_DIR="${GROWSPACE_VISION_STATE_DIR:-$WS/vision-dev}"
+VISION_SRC="${GROWSPACE_VISION_SRC:-$WS/../growspace_manager_vision}"
+OPTIONS_FILE="$STATE_DIR/options.json"
+SERVICE_ENV_FILE="$STATE_DIR/service.env"
+COMMAND="${1:-}"
+
+read_token() {
+  python3 - "$OPTIONS_FILE" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as options_file:
+    options = json.load(options_file)
+token = options.get("access_token")
+if not isinstance(token, str) or not token:
+    raise SystemExit(f"{sys.argv[1]} has no non-empty access_token")
+print(token)
+PY
+}
+
+write_service_env() {
+  local token="$1" tmp="$SERVICE_ENV_FILE.tmp"
+  case "$token" in
+    *$'\n'*|*$'\r'*) echo "Growspace Vision token must not contain a newline" >&2; return 1 ;;
+  esac
+  umask 077
+  printf 'GROWSPACE_VISION_TOKEN=%s\n' "$token" >"$tmp"
+  mv "$tmp" "$SERVICE_ENV_FILE"
+}
+
+case "$COMMAND" in
+  prepare)
+    mkdir -p "$STATE_DIR"
+    if [ -f "$OPTIONS_FILE" ]; then
+      token="$(read_token)"
+      write_service_env "$token"
+      chmod 600 "$OPTIONS_FILE" "$SERVICE_ENV_FILE"
+      echo "→ preserving Growspace Vision options at $OPTIONS_FILE"
+      exit 0
+    fi
+
+    token="${GROWSPACE_VISION_TOKEN:-}"
+    if [ -z "$token" ]; then
+      token="$(openssl rand -hex 32)"
+    fi
+    tmp="$OPTIONS_FILE.tmp"
+    trap 'rm -f "$tmp"' EXIT
+    umask 077
+    VISION_TOKEN_TO_WRITE="$token" python3 -c \
+      'import json, os; print(json.dumps({"access_token": os.environ["VISION_TOKEN_TO_WRITE"]}))' \
+      >"$tmp"
+    mv "$tmp" "$OPTIONS_FILE"
+    trap - EXIT
+    write_service_env "$token"
+    echo "→ created Growspace Vision options at $OPTIONS_FILE"
+    ;;
+  token)
+    read_token
+    ;;
+  reset)
+    rm -f "$OPTIONS_FILE" "$SERVICE_ENV_FILE"
+    echo "→ reset Growspace Vision options at $OPTIONS_FILE"
+    ;;
+  smoke)
+    token="$(read_token)"
+    case "$token" in
+      *$'\n'*|*$'\r'*) echo "Growspace Vision token must not contain a newline" >&2; exit 1 ;;
+    esac
+
+    base_url="${GROWSPACE_VISION_BASE_URL:-http://127.0.0.1:${GROWSPACE_VISION_PORT:-8099}}"
+    frame_dir="${GROWSPACE_VISION_CAMERA_DIR:-$WS/ha-dev/www/e2e-camera-assets}"
+    smoke_dir="$(mktemp -d "${TMPDIR:-/tmp}/growspace-vision-smoke.XXXXXX")"
+    trap 'rm -rf "$smoke_dir"' EXIT
+    auth_header="$smoke_dir/authorization-header"
+    umask 077
+    printf 'Authorization: Bearer %s\n' "$token" >"$auth_header"
+
+    health="$(curl --noproxy '*' --fail --silent --show-error "$base_url/health")"
+    VISION_HEALTH_RESPONSE="$health" python3 -c \
+      'import json, os; response=json.loads(os.environ["VISION_HEALTH_RESPONSE"]); raise SystemExit(0 if response.get("status") == "ready" else "Growspace Vision is not ready")'
+
+    for ordinal in 1 2; do
+      camera_id="camera.e2e_vision_$ordinal"
+      frame="$frame_dir/e2e_vision_$ordinal.jpg"
+      metadata="$smoke_dir/metadata-$ordinal.json"
+      [ -f "$frame" ] || { echo "missing simulated camera frame: $frame" >&2; exit 1; }
+      cat >"$metadata" <<JSON
+{"schema_version":1,"camera_id":"$camera_id","growspace_id":"e2e-vision","captured_at":"2026-08-31T08:30:00Z","light_state":"on","model_id":"dinov2-vit-s-14-int8-onnx","model_version":"1.0.0"}
+JSON
+
+      response="$(curl --noproxy '*' --fail --silent --show-error \
+        --header "@$auth_header" \
+        --form "metadata=@$metadata;type=application/json" \
+        --form "image=@$frame;type=image/jpeg" \
+        "$base_url/analyze")"
+      VISION_ANALYZE_RESPONSE="$response" python3 - "$camera_id" <<'PY'
+import json
+import os
+import sys
+
+response = json.loads(os.environ["VISION_ANALYZE_RESPONSE"])
+embedding = response.get("embedding") or {}
+values = embedding.get("values") or []
+if response.get("status") != "analyzed":
+    raise SystemExit(f"{sys.argv[1]} was not analyzed: {response.get('status')}")
+if embedding.get("dimension") != 384 or len(values) != 384:
+    raise SystemExit(f"{sys.argv[1]} returned an invalid embedding")
+print(f"{sys.argv[1]}: analyzed (dimension 384)")
+PY
+    done
+    ;;
+  build)
+    build_script="$VISION_SRC/scripts/build-app-images.sh"
+    [ -x "$build_script" ] || {
+      echo "Growspace Vision App build script not found at $build_script" >&2
+      exit 1
+    }
+    "$build_script" amd64
+    ;;
+  *)
+    echo "usage: $0 {prepare|token|reset|smoke|build}" >&2
+    exit 2
+    ;;
+esac
