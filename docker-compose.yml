@@ -1,7 +1,7 @@
 # Growspace development runtime.
 #
 # Design rule: NOTHING lives only inside a container. Every path HA reads or
-# writes is a host bind mount under this workspace or one of the two repos,
+# writes is a host bind mount under this workspace or one of the product repos,
 # so Claude Code, Codex, ripgrep, your editor and your browser all see the
 # same bytes. That is the whole point of this file.
 #
@@ -24,6 +24,33 @@ x-ha-common: &ha-common
 
 services:
   # ---------------------------------------------------------------------
+  # VISION DEV — the production App image with host-owned App options.
+  # ---------------------------------------------------------------------
+  vision-dev:
+    image: ${GROWSPACE_VISION_IMAGE:-growspace-vision:1.0.0-amd64}
+    pull_policy: never
+    container_name: growspace-vision-dev
+    restart: unless-stopped
+    read_only: true
+    env_file:
+      - path: ./vision-dev/service.env
+        required: false
+        format: raw
+    ports:
+      - "127.0.0.1:${GROWSPACE_VISION_PORT:-8099}:8099"
+    volumes:
+      - ./vision-dev:/data:ro
+    tmpfs:
+      - /run:rw,exec,nosuid,size=16m
+      - /tmp:rw,noexec,nosuid,size=16m
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8099/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 2s
+
+  # ---------------------------------------------------------------------
   # DEV — the instance you develop against all day.
   # ---------------------------------------------------------------------
   ha-dev:
@@ -31,6 +58,9 @@ services:
     container_name: growspace-ha-dev
     ports:
       - "8123:8123"
+    depends_on:
+      vision-dev:
+        condition: service_healthy
     volumes:
       # Whole config dir on the host: .storage/, logs, DB, www — all visible.
       - ./ha-dev:/config
