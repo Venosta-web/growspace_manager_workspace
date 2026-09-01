@@ -164,6 +164,8 @@ case "$COMMAND" in
     run_preflight
     ;;
   smoke)
+    heading "analyze both deterministic cameras with Growspace Vision"
+    "$WS/scripts/vision" smoke
     run_specs \
       specs/multi-sensor-telemetry.spec.ts \
       specs/irrigation-hardware-profiles.spec.ts \
