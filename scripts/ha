@@ -4,7 +4,7 @@
 #   ./scripts/ha dev  up|down|restart|logs|reload|shell|url|token|reset
 #   ./scripts/ha test up|down|restart|logs|shell|url|reset
 #
-# "dev"  = localhost:8123, source bind-mounted live from both repos
+# "dev"  = localhost:8123, source bind-mounted live from the integrations + card
 # "test" = localhost:8124, virgin config for HACS release verification
 set -euo pipefail
 
@@ -22,10 +22,26 @@ esac
 
 dc() { docker compose "${PROFILE[@]}" "$@"; }
 
+# TC ticket #112 owns the first custom-component scaffold. Keep the runtime
+# usable before that lands by mounting an empty host-owned directory; as soon as
+# the main TC checkout has the component, select it automatically. An explicit
+# GROWSPACE_TC_SRC always wins and is how a TC worktree is served at :8123.
+prepare_tc_source() {
+  [ "$INSTANCE" = dev ] || return 0
+  [ -z "${GROWSPACE_TC_SRC:-}" ] || return 0
+  local main_tc="$WS/../growspace_manager_tc/custom_components/growspace_manager_tc"
+  if [ -d "$main_tc" ]; then
+    export GROWSPACE_TC_SRC="$main_tc"
+  else
+    export GROWSPACE_TC_SRC="$WS/ha-dev/custom_components/growspace_manager_tc"
+    mkdir -p "$GROWSPACE_TC_SRC"
+  fi
+}
+
 # The runtime belongs to the main hub checkout, never to a worktree of it.
 #
-# docker-compose.yml mounts ../growspace_manager and
-# ../lovelace-growspace-manager-card *relative to the compose file*, and both
+# docker-compose.yml mounts ../growspace_manager, ../growspace_manager_tc and
+# ../lovelace-growspace-manager-card *relative to the compose file*, and all
 # checkouts produce the same Compose project and container names. Run this from
 # a hub worktree and Compose does not start a second stack — it recreates the
 # shared one with that worktree's siblings mounted instead. Those have no built
@@ -47,10 +63,11 @@ require_main_checkout() {
   echo "       Running it here would repoint the shared :$PORT container at this" >&2
   echo "       worktree's siblings and its empty ha-$INSTANCE/ config." >&2
   echo >&2
-  echo "       To serve a worktree's own card bundle or integration, run from the" >&2
+  echo "       To serve worktree sources, run from the" >&2
   echo "       main checkout with the source overrides — ha-$INSTANCE/ stays correct:" >&2
   echo "         GROWSPACE_CARD_DIST=$WS/../lovelace-growspace-manager-card/dist \\" >&2
   echo "         GROWSPACE_BACKEND_SRC=<worktree>/custom_components/growspace_manager \\" >&2
+  echo "         GROWSPACE_TC_SRC=<tc-worktree>/custom_components/growspace_manager_tc \\" >&2
   echo "           $main/scripts/ha $INSTANCE restart" >&2
   exit 1
 }
@@ -58,6 +75,8 @@ require_main_checkout() {
 case "$CMD" in
   up|down|restart|reload|reset) require_main_checkout ;;
 esac
+
+prepare_tc_source
 
 # Cache-bust the dev instance's Lovelace resources before HA reads them.
 #

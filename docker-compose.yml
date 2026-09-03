@@ -74,13 +74,18 @@ services:
       # keep serving the main checkout while you tested the wrong code.
       - ${GROWSPACE_BACKEND_SRC:-../growspace_manager/custom_components/growspace_manager}:/config/custom_components/growspace_manager
 
+      # Optional Tissue Culture companion integration. scripts/ha selects the
+      # main TC checkout once its scaffold exists; until then this points at an
+      # empty host-owned placeholder. Override it to serve a TC worktree.
+      - ${GROWSPACE_TC_SRC:-./ha-dev/custom_components/growspace_manager_tc}:/config/custom_components/growspace_manager_tc
+
       # The card's rollup output, mounted at the exact path HACS would use.
       # `npm run watch` writes dist/ -> file is live -> hard-refresh browser.
       - ${GROWSPACE_CARD_DIST:-../lovelace-growspace-manager-card/dist}:/config/www/community/lovelace-growspace-manager-card:ro
 
   # ---------------------------------------------------------------------
   # TEST — clean-room release verification. Deliberately NO source mounts.
-  # Install both repos through HACS here before you tag a release.
+  # Install release candidates through HACS here before you tag a release.
   # ---------------------------------------------------------------------
   ha-test:
     <<: *ha-common

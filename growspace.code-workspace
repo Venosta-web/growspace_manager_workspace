@@ -1,5 +1,5 @@
 {
-  // Multi-root workspace: one window, five roots, five independent git repos.
+  // Multi-root workspace: one window, six roots, six independent git repos.
   // Open with:  code ~/dev/growspace_manager_workspace/growspace.code-workspace
   "folders": [
     {
@@ -17,6 +17,10 @@
     {
       "name": "👁 VISION — growspace_manager_vision",
       "path": "../growspace_manager_vision"
+    },
+    {
+      "name": "🧪 TC — growspace_manager_tc",
+      "path": "../growspace_manager_tc"
     },
     {
       "name": "📖 HA CORE (reference, read-only)",
@@ -137,6 +141,14 @@
         "label": "Frontend: fast checks",
         "type": "shell",
         "command": "./scripts/check card fast",
+        "options": { "cwd": "${workspaceFolder:⚙ WORKSPACE (runtime + scripts)}" },
+        "group": "test",
+        "problemMatcher": []
+      },
+      {
+        "label": "TC: fast checks",
+        "type": "shell",
+        "command": "./scripts/check tc fast",
         "options": { "cwd": "${workspaceFolder:⚙ WORKSPACE (runtime + scripts)}" },
         "group": "test",
         "problemMatcher": []
