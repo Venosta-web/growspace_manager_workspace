@@ -232,8 +232,29 @@ Everything else it refuses, with no flag to override: the main checkouts, the
 worktree you are standing in, `.claude/worktrees/` agent sessions, anything with
 modified tracked files, and any landed worktree that *contains* one of those —
 Codex nests a repository's worktree inside the hub's, and `rm -rf` on the outer
-directory does not consult the inner one's status. Run it from a `post-merge`
-hook or a timer if you want it automatic.
+directory does not consult the inner one's status.
+To be reminded without remembering, install the nudge once:
+
+```bash
+./scripts/install-hooks              # post-merge + post-rewrite, all five repos
+./scripts/install-hooks --uninstall
+```
+
+The hook **reports and never deletes** — it fires on every pull with nobody
+necessarily watching, and collecting is a decision that wants a human at the
+keyboard. It prints one line naming the command when something has landed, and
+is silent when nothing has. It runs `--offline`, because the `gh` lookup is a
+network round trip per repository (~6 s) and a pull should not wait for it; the
+count then misses squash merges, says so, and the real command finds them.
+
+Both hooks, because `git pull --rebase` never fires `post-merge`; `post-rewrite`
+covers that path and filters out the `git commit --amend` it also fires on. The
+installed hook calls the **main** hub checkout, never the checkout that
+installed it — a worktree is ephemeral, this tool deletes them, and a hook
+pointing into a deleted directory breaks every pull. Install from a worktree and
+the hook stays quietly inert until that branch lands in the main checkout. A
+`post-merge` this did not write (pre-commit can claim the same name) is reported
+as a collision, never clobbered.
 
 For a Codex-managed worktree of this hub, select the checked-in **growspace
 workspace** local environment instead. It creates the matched three-repository

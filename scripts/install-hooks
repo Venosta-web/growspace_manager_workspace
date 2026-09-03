@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# Install the worktree-gc nudge into every checkout the hub sweeps.
+#
+#   ./scripts/install-hooks              install (or refresh) the hooks
+#   ./scripts/install-hooks --uninstall  remove the ones we installed
+#
+# The hook REPORTS; it never deletes. It fires on every pull, with nobody
+# necessarily watching, and collecting worktrees and branches is a decision that
+# wants a human at the keyboard — so it prints one line naming the command and
+# gets out of the way. It is silent when there is nothing to collect, because a
+# hook that speaks up for no reason is a hook you learn to scroll past.
+#
+# It runs `--offline`, which skips the `gh` lookup: that lookup is one network
+# round trip per repository — about six seconds here — and a `git pull` should
+# not wait for it. The cost is that squash-merged branches are invisible to the
+# count, so the line says so and the real command finds them.
+#
+# TWO HOOKS, because `git pull --rebase` does not fire post-merge. post-rewrite
+# covers that path; it also fires on `git commit --amend`, which the hook body
+# filters out.
+#
+# The hook calls the MAIN hub checkout, never the checkout that installed it: a
+# worktree is ephemeral — this very tool deletes them — and a hook pointing into
+# a deleted directory breaks every pull. Install from a worktree and the hook is
+# therefore inert until the branch carrying worktree-gc lands in the main
+# checkout, which it detects and stays quiet about rather than erroring on.
+#
+# It refuses to overwrite a hook it did not write. If `pre-commit` later claims
+# one of these (`pre-commit install -t post-merge`), this reports the collision
+# rather than clobbering it, and the two can be reconciled by hand.
+set -euo pipefail
+
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+HUB="$(git -C "$WS" rev-parse --path-format=absolute --git-common-dir)"
+HUB="$(cd "$(dirname "$HUB")" && pwd -P)"
+
+SENTINEL="growspace-hub: worktree-gc nudge"
+HOOKS=(post-merge post-rewrite)
+UNINSTALL=0
+case "${1:-}" in
+  "")            ;;
+  --uninstall)   UNINSTALL=1 ;;
+  -h|--help)     sed -n '2,6p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 0 ;;
+  *)             echo "unknown option: $1" >&2; exit 2 ;;
+esac
+
+body() {
+  cat <<HOOK
+#!/usr/bin/env sh
+# $SENTINEL
+# Installed by $HUB/scripts/install-hooks — re-run it to refresh, or run it
+# with --uninstall to remove. This reports; it never deletes.
+
+# post-rewrite fires on \`git commit --amend\` as well as on rebase, and an
+# amend cannot have landed anything. (post-merge passes 1/0 here, never amend.)
+[ "\$1" = amend ] && exit 0
+
+# Inert rather than noisy when the hub checkout has no worktree-gc yet.
+[ -x "$HUB/scripts/worktree-gc" ] || exit 0
+
+"$HUB/scripts/worktree-gc" --summary --offline --branches || true
+HOOK
+}
+
+collisions=0
+installed=0
+removed=0
+
+while IFS=$'\t' read -r name repo; do
+  dir="$(git -C "$repo" rev-parse --path-format=absolute --git-path hooks)"
+  for hook in "${HOOKS[@]}"; do
+    file="$dir/$hook"
+    if [ "$UNINSTALL" -eq 1 ]; then
+      if [ -f "$file" ] && grep -qF "$SENTINEL" "$file"; then
+        rm -f "$file"
+        echo "removed  $hook  ($name)"
+        removed=$((removed + 1))
+      fi
+      continue
+    fi
+    if [ -f "$file" ] && ! grep -qF "$SENTINEL" "$file"; then
+      echo "SKIPPED  $hook  ($name) — a hook we did not write is already there:"
+      echo "         $file"
+      collisions=$((collisions + 1))
+      continue
+    fi
+    mkdir -p "$dir"
+    body > "$file"
+    chmod +x "$file"
+    echo "installed $hook  ($name)"
+    installed=$((installed + 1))
+  done
+done < <("$WS/scripts/growspace-repos")
+
+if [ "$UNINSTALL" -eq 1 ]; then
+  printf '\n✓ removed %d hook(s).\n' "$removed"
+  exit 0
+fi
+
+printf '\n✓ installed %d hook(s) across the sweep.\n' "$installed"
+printf 'They report after a pull; nothing is ever deleted without you asking:\n'
+printf '  ./scripts/worktree-gc --prune --branches --untracked\n'
+[ "$collisions" -eq 0 ] || exit 1

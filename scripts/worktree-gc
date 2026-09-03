@@ -5,6 +5,7 @@
 #   ./scripts/worktree-gc --prune            remove the merged, clean ones
 #   ./scripts/worktree-gc --prune --untracked  also those dirty only with junk
 #   ./scripts/worktree-gc --prune --branches   delete the landed branches too
+#   ./scripts/worktree-gc --summary --offline  one line, no network — for hooks
 #
 # A branch outlives its worktree, so `--branches` runs a second pass over the
 # refs themselves, after any worktree removal — a branch still checked out
@@ -59,6 +60,8 @@ HUB="$(cd "$(dirname "$HUB")" && pwd -P)"
 PRUNE=0
 UNTRACKED=0
 BRANCHES_TOO=0
+OFFLINE=0
+SUMMARY=0
 
 # The merged-pull-request list costs a network round trip per repository, and
 # the branch pass needs the same answer the worktree pass did.
@@ -69,19 +72,22 @@ for arg in "$@"; do
     --prune)     PRUNE=1 ;;
     --untracked) UNTRACKED=1 ;;
     --branches)  BRANCHES_TOO=1 ;;
+    --offline)   OFFLINE=1 ;;
+    --summary)   SUMMARY=1 ;;
     -h|--help)   sed -n '2,9p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 0 ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
 done
 
-repos() { # name<TAB>path, for every sibling checkout that exists
-  local name path
-  for name in growspace_manager growspace_manager_tc growspace_manager_vision \
-              lovelace-growspace-manager-card; do
-    path="$HUB/../$name"
-    [ -d "$path/.git" ] && printf '%s\t%s\n' "$name" "$(cd "$path" && pwd -P)"
-  done
-  printf '%s\t%s\n' "$(basename "$HUB")" "$HUB"
+if [ "$SUMMARY" -eq 1 ] && [ "$PRUNE" -eq 1 ]; then
+  echo "--summary is a report; it does not combine with --prune." >&2
+  echo "Deleting worktrees and branches wants a human at the keyboard, and a" >&2
+  echo "hook runs on every pull without one." >&2
+  exit 2
+fi
+
+repos() { # name<TAB>path, for every checkout the hub tooling sweeps
+  "$WS/scripts/growspace-repos"
 }
 
 integration_refs() { # repo -> the upstream branches a landed commit can sit on
@@ -93,6 +99,7 @@ integration_refs() { # repo -> the upstream branches a landed commit can sit on
 
 merged_prs() { # repo path -> "branch<TAB>merged head sha", one per line
   local repo="$1" slug
+  [ "$OFFLINE" -eq 0 ] || return 0
   command -v gh >/dev/null || return 0
   slug="$(git -C "$repo" remote get-url origin 2>/dev/null \
           | sed -E 's#^.*github\.com[:/]##; s#\.git$##')" || return 0
@@ -236,8 +243,12 @@ report() { # title, array lines
   done
 }
 
-command -v gh >/dev/null && gh auth status >/dev/null 2>&1 \
-  || echo "note: gh unavailable — squash-merged branches will read as unlanded"
+if [ "$SUMMARY" -eq 0 ]; then
+  [ "$OFFLINE" -eq 1 ] \
+    && echo "note: --offline — squash-merged branches will read as unlanded" \
+    || command -v gh >/dev/null && gh auth status >/dev/null 2>&1 \
+    || echo "note: gh unavailable — squash-merged branches will read as unlanded"
+fi
 
 if [ "$BRANCHES_TOO" -eq 1 ]; then
   freed=()
@@ -246,6 +257,17 @@ if [ "$BRANCHES_TOO" -eq 1 ]; then
     [ "$freed_branch" = "(detached)" ] || freed+=("$freed_branch")
   done
   collect_branches ${freed[@]+"${freed[@]}"}
+fi
+
+if [ "$SUMMARY" -eq 1 ]; then
+  if [ "${#LANDED[@]}" -gt 0 ] || [ "${#LANDED_BRANCHES[@]}" -gt 0 ]; then
+    printf 'worktree-gc: %d worktree(s), %d branch(es) have landed%s\n' \
+      "${#LANDED[@]}" "${#LANDED_BRANCHES[@]}" \
+      "$([ "$OFFLINE" -eq 1 ] && echo " (offline count — gh may find more)")"
+    printf '            collect them with: %s --prune --branches --untracked\n' \
+      "${BASH_SOURCE[0]}"
+  fi
+  exit 0
 fi
 
 report "landed — removable" ${LANDED[@]+"${LANDED[@]}"}
