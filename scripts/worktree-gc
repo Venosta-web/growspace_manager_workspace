@@ -4,6 +4,13 @@
 #   ./scripts/worktree-gc                    report only — the default
 #   ./scripts/worktree-gc --prune            remove the merged, clean ones
 #   ./scripts/worktree-gc --prune --untracked  also those dirty only with junk
+#   ./scripts/worktree-gc --prune --branches   delete the landed branches too
+#
+# A branch outlives its worktree, so `--branches` runs a second pass over the
+# refs themselves, after any worktree removal — a branch still checked out
+# somewhere is never a candidate, and doing this pass last means a branch
+# freed by this very run is collected in the same run rather than the next.
+# `main`, `dev` and `prerelease` are excluded by name whatever their state.
 #
 # GitHub cannot do this for you. A merge happens on a runner in the cloud; the
 # worktree is a directory on this laptop, and no workflow can reach it. Merge
@@ -51,10 +58,17 @@ HUB="$(cd "$(dirname "$HUB")" && pwd -P)"
 
 PRUNE=0
 UNTRACKED=0
+BRANCHES_TOO=0
+
+# The merged-pull-request list costs a network round trip per repository, and
+# the branch pass needs the same answer the worktree pass did.
+CACHE="$(mktemp -d)"
+trap 'rm -rf "$CACHE"' EXIT
 for arg in "$@"; do
   case "$arg" in
     --prune)     PRUNE=1 ;;
     --untracked) UNTRACKED=1 ;;
+    --branches)  BRANCHES_TOO=1 ;;
     -h|--help)   sed -n '2,9p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 0 ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
@@ -77,14 +91,15 @@ integration_refs() { # repo -> the upstream branches a landed commit can sit on
   done
 }
 
-merged_prs() { # repo path -> branch names with a MERGED PR, one per line
+merged_prs() { # repo path -> "branch<TAB>merged head sha", one per line
   local repo="$1" slug
   command -v gh >/dev/null || return 0
   slug="$(git -C "$repo" remote get-url origin 2>/dev/null \
           | sed -E 's#^.*github\.com[:/]##; s#\.git$##')" || return 0
   [ -n "$slug" ] || return 0
   gh pr list -R "$slug" --state merged --limit 1000 \
-     --json headRefName --jq '.[].headRefName' 2>/dev/null || true
+     --json headRefName,headRefOid \
+     --jq '.[] | [.headRefName, .headRefOid] | @tsv' 2>/dev/null || true
 }
 
 # Removal happens deepest path first: a Codex-managed set nests a repo's
@@ -96,7 +111,8 @@ SKIPPED=()
 
 while IFS=$'\t' read -r name repo; do
   mapfile -t refs < <(integration_refs "$repo")
-  mapfile -t squashed < <(merged_prs "$repo")
+  merged_prs "$repo" > "$CACHE/$name.prs"
+  mapfile -t squashed < "$CACHE/$name.prs"
   main_checkout="$repo"
 
   path=""; branch=""; head=""; detached=0; prunable=0
@@ -120,7 +136,9 @@ while IFS=$'\t' read -r name repo; do
       done
       if [ -z "$why" ] && [ -n "$branch" ]; then
         for merged in ${squashed[@]+"${squashed[@]}"}; do
-          [ "$merged" = "$branch" ] && { why="PR merged (squashed)"; break; }
+          IFS=$'\t' read -r merged_branch merged_oid <<<"$merged"
+          [ "$merged_branch" = "$branch" ] || continue
+          [ "$merged_oid" = "$head" ] && { why="PR merged (squashed)"; break; }
         done
       fi
       if [ -z "$why" ]; then
@@ -164,6 +182,48 @@ for held in ${HELD[@]+"${HELD[@]}"}; do
   LANDED=(${keep[@]+"${keep[@]}"})
 done
 
+# Branches the same two signals say have landed. A worktree about to be removed
+# by this run counts as already gone, so the pair is collected together rather
+# than a run apart; anything still checked out elsewhere is left alone, and so
+# are the integration branches themselves.
+LANDED_BRANCHES=()   # repo<TAB>path<TAB>branch<TAB>sha<TAB>why
+collect_branches() {
+  local freed=("$@")
+  local name repo branch sha oid ref why held h f blocked
+  while IFS=$'\t' read -r name repo; do
+    mapfile -t refs < <(integration_refs "$repo")
+    mapfile -t held < <(git -C "$repo" worktree list --porcelain \
+                        | sed -n 's#^branch refs/heads/##p')
+    while IFS=$'\t' read -r branch sha oid; do
+      case "$branch" in main|master|dev|prerelease) continue ;; esac
+      # Checked out somewhere, unless that somewhere is a worktree this run is
+      # about to remove.
+      blocked=0
+      for h in ${held[@]+"${held[@]}"}; do
+        [ "$h" = "$branch" ] || continue
+        blocked=1
+        for f in ${freed[@]+"${freed[@]}"}; do
+          [ "$f" = "$branch" ] && blocked=0
+        done
+      done
+      [ "$blocked" -eq 0 ] || continue
+      why=""
+      for ref in ${refs[@]+"${refs[@]}"}; do
+        if git -C "$repo" merge-base --is-ancestor "$branch" "$ref" 2>/dev/null; then
+          why="contained in ${ref#origin/}"; break
+        fi
+      done
+      if [ -z "$why" ] \
+         && grep -qxF "$branch"$'\t'"$oid" "$CACHE/$name.prs" 2>/dev/null; then
+        why="PR merged (squashed)"
+      fi
+      [ -n "$why" ] || continue
+      LANDED_BRANCHES+=("$name"$'\t'"$repo"$'\t'"$branch"$'\t'"$sha"$'\t'"$why")
+    done < <(git -C "$repo" for-each-ref \
+             --format='%(refname:short)%09%(objectname:short)%09%(objectname)' refs/heads)
+  done < <(repos)
+}
+
 report() { # title, array lines
   local title="$1"; shift
   [ "$#" -gt 0 ] || return 0
@@ -179,13 +239,34 @@ report() { # title, array lines
 command -v gh >/dev/null && gh auth status >/dev/null 2>&1 \
   || echo "note: gh unavailable — squash-merged branches will read as unlanded"
 
+if [ "$BRANCHES_TOO" -eq 1 ]; then
+  freed=()
+  for line in ${LANDED[@]+"${LANDED[@]}"}; do
+    IFS=$'\t' read -r _ _ freed_branch _ <<<"$line"
+    [ "$freed_branch" = "(detached)" ] || freed+=("$freed_branch")
+  done
+  collect_branches ${freed[@]+"${freed[@]}"}
+fi
+
 report "landed — removable" ${LANDED[@]+"${LANDED[@]}"}
 report "held back" ${HELD[@]+"${HELD[@]}"}
 report "skipped" ${SKIPPED[@]+"${SKIPPED[@]}"}
 
+if [ "$BRANCHES_TOO" -eq 1 ] && [ "${#LANDED_BRANCHES[@]}" -gt 0 ]; then
+  printf '\n── landed branches — deletable (%d)\n' "${#LANDED_BRANCHES[@]}"
+  for line in "${LANDED_BRANCHES[@]}"; do
+    IFS=$'\t' read -r name _ branch sha why <<<"$line"
+    printf '   %-52s %-24s %s  %s\n' "$branch" "$why" "$sha" "$name"
+  done
+fi
+
 if [ "$PRUNE" -eq 0 ]; then
   printf '\n%d worktree(s) can be removed. Re-run with --prune to do it.\n' "${#LANDED[@]}"
-  printf 'Branches are never deleted; only the working directories go.\n'
+  if [ "$BRANCHES_TOO" -eq 1 ]; then
+    printf '%d branch(es) would be deleted with them.\n' "${#LANDED_BRANCHES[@]}"
+  else
+    printf 'Branches are never deleted; pass --branches to collect those too.\n'
+  fi
   exit 0
 fi
 
@@ -214,4 +295,19 @@ while IFS=$'\t' read -r name repo; do
   git -C "$repo" worktree prune
 done < <(repos)
 
-printf '\n✓ removed %d worktree(s). Branches kept.\n' "${#LANDED[@]}"
+deleted=0
+for line in ${LANDED_BRANCHES[@]+"${LANDED_BRANCHES[@]}"}; do
+  IFS=$'\t' read -r name repo branch sha why <<<"$line"
+  # -D rather than -d: a squash-merged branch is an ancestor of nothing, so the
+  # safe delete would refuse exactly the branches that most need collecting.
+  # The abbreviated object name is printed instead, and restores the ref with
+  # `git -C <repo> branch <name> <sha>` for as long as gc leaves it reachable.
+  if git -C "$repo" branch -D "$branch" >/dev/null 2>&1; then
+    printf 'deleted %-52s was %s  (%s)\n' "$branch" "$sha" "$name"
+    deleted=$((deleted + 1))
+  else
+    printf 'kept    %-52s git refused to delete it  (%s)\n' "$branch" "$name"
+  fi
+done
+
+printf '\n✓ removed %d worktree(s), deleted %d branch(es).\n' "${#LANDED[@]}" "$deleted"
