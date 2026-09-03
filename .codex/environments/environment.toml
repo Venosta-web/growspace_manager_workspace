@@ -24,6 +24,18 @@ command = "./scripts/codex-worktree precommit"
 platform = "linux"
 
 [[actions]]
+name = "TC checks"
+icon = "tool"
+command = "./scripts/codex-worktree check tc fast"
+platform = "linux"
+
+[[actions]]
+name = "TC pre-commit"
+icon = "tool"
+command = "./scripts/codex-worktree tc-precommit"
+platform = "linux"
+
+[[actions]]
 name = "Card checks"
 icon = "tool"
 command = "./scripts/codex-worktree check card fast"

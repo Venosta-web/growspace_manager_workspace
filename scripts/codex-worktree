@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Create and address the matched backend/card pair used by a Codex-managed
+# Create and address the matched backend/TC/card set used by a Codex-managed
 # worktree of this workspace hub.
 set -euo pipefail
 
@@ -8,6 +8,7 @@ HUB_COMMON_GIT_DIR="$(git -C "$HUB_WORKTREE" rev-parse --path-format=absolute --
 LOCAL_HUB="$(dirname "$HUB_COMMON_GIT_DIR")"
 DEV_ROOT="$(dirname "$LOCAL_HUB")"
 BACKEND_REPO="$DEV_ROOT/growspace_manager"
+TC_REPO="$DEV_ROOT/growspace_manager_tc"
 CARD_REPO="$DEV_ROOT/lovelace-growspace-manager-card"
 
 WORKTREE_KEY="$(printf '%s' "$HUB_WORKTREE" | sha256sum | cut -c1-12)"
@@ -16,6 +17,8 @@ BRANCH="codex/$NAME"
 PAIR_ROOT="$HUB_WORKTREE/worktrees/$NAME"
 BACKEND_CONTAINER="$PAIR_ROOT/growspace_manager"
 BACKEND_WORKTREE="$BACKEND_CONTAINER/.worktrees/backend"
+TC_CONTAINER="$PAIR_ROOT/growspace_manager_tc"
+TC_WORKTREE="$TC_CONTAINER/.worktrees/tc"
 CARD_WORKTREE="$PAIR_ROOT/card"
 
 require_repo() {
@@ -65,20 +68,32 @@ link_node_modules() {
   "$HUB_WORKTREE/scripts/card-node-modules" "$CARD_REPO" "$CARD_WORKTREE"
 }
 
-# This pair owns the path upstream's hooks resolve — `../../.venv` from
+# This managed set owns the path upstream's hooks resolve — `../../.venv` from
 # $BACKEND_WORKTREE is $BACKEND_CONTAINER/.venv — so it gets a real private
 # venv rather than a link into the main checkout. uv hardlinks from its cache,
 # so that costs ~7.9 MiB and ~0.4 s warm, and it is the only way to contain
 # `uv venv --clear`, which through a link destroys the lender's venv instead.
 # See docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md.
 prepare_backend_venv() {
-  "$HUB_WORKTREE/scripts/backend-venv" "$BACKEND_REPO" "$BACKEND_WORKTREE"
+  "$HUB_WORKTREE/scripts/backend-venv" "$BACKEND_REPO" "$BACKEND_WORKTREE" backend
+}
+
+prepare_tc_venv() {
+  # Ticket #112 owns the initial TC Python scaffold. Until requirements.txt
+  # exists, create the correctly placed worktree and let a later setup rerun
+  # materialize its private environment.
+  if [ ! -f "$TC_WORKTREE/requirements.txt" ]; then
+    echo "→ TC checkout has no requirements.txt yet; deferring its venv until the scaffold lands"
+    return 0
+  fi
+  "$HUB_WORKTREE/scripts/backend-venv" "$TC_REPO" "$TC_WORKTREE" tc
 }
 
 setup_pair() {
-  local backend_base card_base
+  local backend_base tc_base card_base
 
   require_repo "$BACKEND_REPO"
+  require_repo "$TC_REPO"
   require_repo "$CARD_REPO"
   # Not because this pair runs it — it builds its own — but because that venv
   # is where the uv binary and the hub's documented setup live.
@@ -92,17 +107,22 @@ setup_pair() {
   }
 
   backend_base="$(resolve_base "$BACKEND_REPO" "${CODEX_BACKEND_BASE:-prerelease}")"
+  tc_base="$(resolve_base "$TC_REPO" "${CODEX_TC_BASE:-main}")"
   card_base="$(resolve_base "$CARD_REPO" "${CODEX_CARD_BASE:-dev}")"
 
-  mkdir -p "$BACKEND_CONTAINER" "$PAIR_ROOT/.cache"
+  mkdir -p "$BACKEND_CONTAINER" "$TC_CONTAINER" "$PAIR_ROOT/.cache"
   add_worktree "$BACKEND_REPO" "$BACKEND_WORKTREE" "$backend_base"
+  add_worktree "$TC_REPO" "$TC_WORKTREE" "$tc_base"
   add_worktree "$CARD_REPO" "$CARD_WORKTREE" "$card_base"
   ln -sfn "$BACKEND_WORKTREE" "$PAIR_ROOT/backend"
+  ln -sfn "$TC_WORKTREE" "$PAIR_ROOT/tc"
   prepare_backend_venv
+  prepare_tc_venv
   link_node_modules
 
   printf 'Matched Codex worktrees ready on %s\n' "$BRANCH"
   printf '  backend: %s\n' "$BACKEND_WORKTREE"
+  printf '  tc:      %s\n' "$TC_WORKTREE"
   printf '  card:    %s\n' "$CARD_WORKTREE"
   printf '  pair:    %s\n' "$PAIR_ROOT"
 }
@@ -111,6 +131,7 @@ run_check() {
   local target="${1:-all}" level="${2:-fast}"
   setup_pair >/dev/null
   export GROWSPACE_BACKEND="$BACKEND_WORKTREE"
+  export GROWSPACE_TC="$TC_WORKTREE"
   export GROWSPACE_CARD="$CARD_WORKTREE"
   export PRE_COMMIT_HOME="$PAIR_ROOT/.cache/pre-commit"
   export PYTHONDONTWRITEBYTECODE=1
@@ -132,9 +153,22 @@ run_card_precommit() {
   exec "$BACKEND_REPO/.venv/bin/pre-commit" run --all-files
 }
 
+run_tc_precommit() {
+  setup_pair >/dev/null
+  local runner="$TC_WORKTREE/.venv/bin/pre-commit"
+  # The documentation-only repository intentionally has no venv yet. Borrow
+  # the backend checkout's pre-commit executable until TC's scaffold exists;
+  # pre-commit still reads hooks and configuration from the TC checkout.
+  [ -x "$runner" ] || runner="$BACKEND_REPO/.venv/bin/pre-commit"
+  export PRE_COMMIT_HOME="$PAIR_ROOT/.cache/pre-commit"
+  export PYTHONDONTWRITEBYTECODE=1
+  cd "$TC_WORKTREE"
+  exec "$runner" run --all-files
+}
+
 # Point the shared dev runtime at a card dist/ and wait for it to serve again.
 # scripts/ha refuses to run from a worktree — the compose file resolves ha-dev/
-# and the backend mount relative to itself — so drive the main checkout's copy
+# and integration mounts relative to itself — so drive the main checkout's copy
 # and override only the card bundle.
 remount_card_dist() {
   local dist="$1" code
@@ -180,15 +214,17 @@ case "${1:-setup}" in
   path) printf '%s\n' "$PAIR_ROOT" ;;
   check) shift; run_check "$@" ;;
   precommit) run_precommit ;;
+  tc-precommit) run_tc_precommit ;;
   card-precommit) run_card_precommit ;;
   card-e2e) run_card_e2e ;;
   status)
     setup_pair >/dev/null
     git -C "$BACKEND_WORKTREE" status --short --branch
+    git -C "$TC_WORKTREE" status --short --branch
     git -C "$CARD_WORKTREE" status --short --branch
     ;;
   *)
-    echo "usage: $0 {setup|path|status|precommit|card-precommit|card-e2e|check [backend|card|all] [fast|full]}" >&2
+    echo "usage: $0 {setup|path|status|precommit|tc-precommit|card-precommit|card-e2e|check [backend|tc|card|all] [fast|full]}" >&2
     exit 2
     ;;
 esac

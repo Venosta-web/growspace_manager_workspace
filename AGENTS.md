@@ -11,7 +11,7 @@ The product code lives in four sibling repositories.
 ├── growspace_manager/               Python — HA custom integration   (git repo)
 ├── lovelace-growspace-manager-card/ Lit/TS — Lovelace card           (git repo)
 ├── growspace_manager_vision/        Python — stateless vision service (git repo)
-├── growspace_manager_tc/            Python — optional TC integration (git repo; no hub check/worktree wiring yet)
+├── growspace_manager_tc/            Python — optional TC integration (git repo)
 ├── core/                            HA Core checkout — REFERENCE ONLY, never edit
 └── growspace_manager_workspace/     ← you are here                   (the hub)
     ├── growspace.code-workspace     multi-root VS Code workspace
@@ -65,18 +65,22 @@ The dev instance mounts:
 | Host | Container | Override |
 |---|---|---|
 | `../growspace_manager/custom_components/growspace_manager` | `/config/custom_components/growspace_manager` | `GROWSPACE_BACKEND_SRC` |
+| `../growspace_manager_tc/custom_components/growspace_manager_tc` | `/config/custom_components/growspace_manager_tc` | `GROWSPACE_TC_SRC` |
 | `../lovelace-growspace-manager-card/dist` | `/config/www/community/lovelace-growspace-manager-card` (ro) | `GROWSPACE_CARD_DIST` |
 | `./ha-dev` | `/config` | — |
 | `./vision-dev` | `/data` on the Vision App (ro) | — |
 
-The backend and card source mounts default to the **main** checkout. A worktree is served by
-setting its override on `./scripts/ha dev restart`, run from the main hub
-checkout — which is the only way to exercise a worktree's own code against
-:8123, since the runtime otherwise keeps serving the main checkout while you
-believe you are testing your branch:
+The integration and card source mounts default to the **main** checkouts. Before
+TC's initial scaffold exists, its slot is an empty host-owned directory under
+`ha-dev/custom_components/`; `scripts/ha` switches to the main TC checkout as
+soon as the component exists. A worktree is served by setting its override on
+`./scripts/ha dev restart`, run from the main hub checkout — which is the only
+way to exercise a worktree's own code against :8123, since the runtime otherwise
+keeps serving the main checkout while you believe you are testing your branch:
 
 ```bash
 GROWSPACE_BACKEND_SRC=~/dev/growspace_manager/.worktrees/<name>/custom_components/growspace_manager \
+GROWSPACE_TC_SRC=~/dev/growspace_manager_tc/.worktrees/<name>/custom_components/growspace_manager_tc \
 GROWSPACE_CARD_DIST=./worktrees/<name>/card/dist \
   ./scripts/ha dev restart
 ```
@@ -148,26 +152,29 @@ missing `docker` is a printed no-op. `ha test` (:8124) is untouched.
 
 ```bash
 ./scripts/check backend fast|full
+./scripts/check tc      fast|full
 ./scripts/check card    fast|full
 ./scripts/check all     fast|full
 ```
 
 These are the exact commands to run — do not improvise venv paths or test flags.
+Until issue #112 adds TC's `requirements.txt`, `check all` reports that the TC
+slot is skipped; explicit `check tc` refuses because there is no runnable suite.
 
-`check` prints the two checkouts it resolved before it runs anything, because it
-is not necessarily validating the tree you are sitting in. It takes
-`GROWSPACE_BACKEND` / `GROWSPACE_CARD` when set — `codex-worktree check` sets
-both — and otherwise falls back to the **main** checkouts. Run `./scripts/check
-card` from a `scripts/feature` worktree and, without that variable, it reports
-green about the main checkout; it now says so in the header and prints the
-invocation that would check yours instead.
+`check` prints the checkouts it resolved before it runs anything, because it is
+not necessarily validating the tree you are sitting in. It takes
+`GROWSPACE_BACKEND` / `GROWSPACE_TC` / `GROWSPACE_CARD` when set —
+`codex-worktree check` sets all three — and otherwise falls back to the **main**
+checkouts. Run `./scripts/check card` from a `scripts/feature` worktree and,
+without that variable, it reports green about the main checkout; it now says so
+in the header and prints the invocation that would check yours instead.
 
-Both halves refuse before any stage runs if the checkout they resolved would be
+All targets refuse before any stage runs if the checkout they resolved would be
 validated against the wrong dependencies.
 
-A backend check refuses if `<checkout>/.venv` does not realize that checkout's
-`requirements.txt` — asked as an offline `uv pip install --dry-run` against
-Home Assistant's own constraints, which costs about 0.1 s and names the
+A backend or TC check refuses if `<checkout>/.venv` does not realize that
+checkout's `requirements.txt` — asked as an offline `uv pip install --dry-run`
+against Home Assistant's own constraints, which costs about 0.1 s and names the
 requirement that is unmet. This catches a worktree whose branch moved its pins,
 a shared venv nobody rebuilt after the pins moved on `prerelease`, and an
 environment that has drifted out from under both.
@@ -187,30 +194,31 @@ Never run two agents in the same checkout. Create a matched worktree pair:
 
 ```bash
 ./scripts/feature new irrigation-v2      # both repos, branch feature/irrigation-v2
+./scripts/feature new culture-lines --tc # TC + card, same branch in both repos
+./scripts/feature new shared-change --all # backend + TC + card
 ./scripts/feature list
 ./scripts/feature rm  irrigation-v2
 ```
 
 For a Codex-managed worktree of this hub, select the checked-in **growspace
-workspace** local environment instead. It creates the matched pair during
-setup; use `./scripts/codex-worktree path` to locate it and
+workspace** local environment instead. It creates the matched three-repository
+set during setup; use `./scripts/codex-worktree path` to locate it and
 `./scripts/codex-worktree check ...` to validate it. Do not create a second
 pair with `scripts/feature` in the same task. Card browser tests use an exact
 localhost/loopback allowlist. E2E credentials are never copied automatically;
 place the ignored `tests/e2e/.env.test` in the managed card worktree explicitly
 when E2E is required.
 
-**The backend worktree must live at `growspace_manager/.worktrees/<name>`.**
-Upstream's pre-commit hooks are declared as `entry: ../../.venv/bin/pytest`
-(and the same for mypy). That relative path resolves to the repo venv only from
-exactly that depth. From the main checkout it resolves to `~/dev/.venv`, which
-does not exist, so the pytest and mypy hooks fail and **every commit from the
-main checkout is rejected**. This is the "worktree guard" upstream's AGENTS.md
-refers to; it is a side effect of the path, not a separate check.
+**Backend and TC worktrees must live at `<repo>/.worktrees/<name>`.** Their
+pre-commit hooks resolve Python tools through `../../.venv/bin/...`; that path
+reaches the repo venv only from exactly that depth. From a main checkout it
+resolves to `~/dev/.venv`, which does not exist, so Python hooks fail and every
+commit from the protected checkout is rejected. This is a side effect of the
+path, not a separate check.
 
-`./scripts/feature` creates it in the right place and symlinks it to
-`worktrees/<name>/backend` for the paired view. Run backend tests from a
-worktree as `../../.venv/bin/pytest tests/ -q`.
+`./scripts/feature` creates Python worktrees at the required depth and symlinks
+them to `worktrees/<name>/backend` or `worktrees/<name>/tc` for the paired view.
+Run their tests from a worktree as `../../.venv/bin/pytest tests/ -q`.
 
 That same `../../.venv` decides which Python environment the worktree runs, and
 where the worktree sits decides who owns it — which is why the two setup paths
@@ -220,26 +228,30 @@ behave differently:
 |---|---|---|
 | `growspace_manager/.worktrees/<name>` (`scripts/feature`) | the main checkout's venv | **verifies** it realizes the branch's `requirements.txt`, and refuses if not |
 | `<pair>/growspace_manager/.worktrees/backend` (`scripts/codex-worktree`) | a hub-owned path | builds a **private venv** there |
+| `growspace_manager_tc/.worktrees/<name>` (`scripts/feature --tc`) | the main TC checkout's venv | **verifies** it realizes the branch's `requirements.txt`, and refuses if not |
+| `<pair>/growspace_manager_tc/.worktrees/tc` (`scripts/codex-worktree`) | a hub-owned path | builds a **private venv** there |
 
-`scripts/backend-venv` is the one implementation; both paths call it, and both
-then point the worktree's own `.venv` at whichever environment the hooks will
-use, so `./scripts/check backend` cannot validate a different one.
+`scripts/backend-venv` is the shared implementation for both Python repositories;
+all setup paths call it, and both then point the worktree's own `.venv` at
+whichever environment the hooks will use, so `./scripts/check backend` and
+`./scripts/check tc` cannot validate a different one.
 
-Backend worktrees do **not** share a venv the way card worktrees share
-`node_modules`, and the reversal is measured rather than stylistic: `uv` installs
-by hardlinking from a content-addressed cache, so a private venv costs ~7.9 MiB
-of unique disk and ~0.4 s warm, against the card's 465 MB. Sharing buys nothing
-and costs a footgun npm does not have — `uv venv --clear` through a symlinked
-`.venv` does not convert the worktree to a private environment the way `npm ci`
-does, it **destroys the lender's**, and so does every other install verb, because
-pip and uv follow the symlink to the real `sys.prefix`. See
+Codex-managed backend and TC worktrees do **not** share a venv the way card
+worktrees share `node_modules`, and the reversal is measured rather than
+stylistic: `uv` installs by hardlinking from a content-addressed cache, so a
+private venv costs ~7.9 MiB of unique disk and ~0.4 s warm, against the card's
+465 MB. Sharing buys nothing and costs a footgun npm does not have — `uv venv
+--clear` through a symlinked `.venv` does not convert the worktree to a private
+environment the way `npm ci` does, it **destroys the lender's**, and so does
+every other install verb, because pip and uv follow the symlink to the real
+`sys.prefix`. See
 [`docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md`](docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md).
 
-A `scripts/feature` pair therefore cannot carry a backend dependency change:
-its hook path *is* the main checkout's venv, so there is nothing to redirect and
-a private venv in the worktree would be read by nothing. Take pin changes on a
-Codex-managed pair, or rebuild the shared venv deliberately — every other
-worktree's guard re-checks it on the next run.
+A `scripts/feature` pair therefore cannot carry a backend or TC dependency
+change: its hook path *is* the corresponding main checkout's venv, so there is
+nothing to redirect and a private venv in the worktree would be read by nothing.
+Take pin changes on a Codex-managed set, or rebuild the shared venv deliberately
+— every other worktree's guard re-checks it on the next run.
 
 The card has no such constraint — its hooks are `npm run ...` — but how it gets
 `node_modules` depends on who created the worktree. The vocabulary, used
@@ -295,8 +307,9 @@ one way from `growspace_manager` into TC as opaque IDs with display-name snapsho
 graduation crosses back only through Growspace Manager's public service. TC owns its
 WebSocket contract, which the card consumes through its lazy TC chunk. Land TC
 contract fixtures and tests before the corresponding card schema, implementation,
-and tests. Until the hub gains a TC slot, create and validate TC worktrees from the TC
-repository itself; `./scripts/check` does not cover them.
+and tests. Use `./scripts/feature new <name> --tc` for a matched TC+card pair,
+`./scripts/check tc fast|full` for its Python suite, and `GROWSPACE_TC_SRC` on a
+main-hub `./scripts/ha dev restart` to serve a TC worktree against :8123.
 
 ## Don't
 
@@ -313,9 +326,9 @@ repository itself; `./scripts/check` does not cover them.
 - **Don't start a second thing on :8123.** `./scripts/ha dev up` refuses rather
   than silently losing the race.
 - **Don't drive the runtime from a hub worktree.** `docker-compose.yml` resolves
-  `ha-dev/` and both source mounts *relative to itself*, and a worktree yields
+  `ha-dev/` and the source mounts *relative to itself*, and a worktree yields
   the same Compose project and container names — so it does not start a second
   stack the port guard would catch, it recreates the shared one against that
   worktree's unbuilt siblings and empty config. `./scripts/ha` refuses; to serve
   a worktree's bundle or integration, run it from the main checkout with
-  `GROWSPACE_CARD_DIST` / `GROWSPACE_BACKEND_SRC`.
+  `GROWSPACE_CARD_DIST` / `GROWSPACE_BACKEND_SRC` / `GROWSPACE_TC_SRC`.

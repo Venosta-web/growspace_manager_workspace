@@ -1,14 +1,15 @@
 # Growspace development workspace
 
 Cross-repository hub for the **growspace_manager** Home Assistant integration, its
-**Lovelace card**, and the **Growspace Vision** service, with a real HA runtime whose
-files live on the host.
+optional **Tissue Culture companion**, **Lovelace card**, and **Growspace Vision**
+service, with a real HA runtime whose files live on the host.
 
 ```
 ~/dev/
 ├── growspace_manager/               integration   (git repo)
 ├── lovelace-growspace-manager-card/ card          (git repo)
 ├── growspace_manager_vision/        vision service (git repo)
+├── growspace_manager_tc/            TC integration  (git repo)
 ├── core/                            HA Core — reference only
 └── growspace_manager_workspace/     ← this hub
 ```
@@ -19,7 +20,7 @@ files live on the host.
 code ~/dev/growspace_manager_workspace/growspace.code-workspace
 ```
 
-One window, five roots, five independent git histories. The workspace hub remains the
+One window, six roots, six independent git histories. The workspace hub remains the
 cross-repository runtime, roadmap, and issue tracker; product artifacts live in their
 own repositories.
 
@@ -58,6 +59,7 @@ Start the release-test instance with `./scripts/ha test up`.
 ```bash
 ./scripts/check all fast     # ruff+mypy+pytest, eslint+tsc+vitest
 ./scripts/check all full     # + coverage + production build
+./scripts/check tc fast      # TC's own pytest suite
 # Growspace Vision V1 contract
 python3 -m unittest discover -s ../growspace_manager_vision/tests -v
 ```
@@ -66,6 +68,7 @@ python3 -m unittest discover -s ../growspace_manager_vision/tests -v
 
 ```bash
 ./scripts/feature new irrigation-v2     # matched worktrees in BOTH repos
+./scripts/feature new culture-lines --tc # matched TC + card worktrees
 ./scripts/feature list
 ./scripts/feature rm irrigation-v2
 ```
@@ -81,19 +84,21 @@ Never run two agents in the same checkout.
 ### Codex managed worktrees
 
 Select the checked-in **growspace workspace** local environment when starting a
-Codex worktree task. Its setup creates an isolated matched pair on the same
-`codex/codex-<id>` branch, using `prerelease` for the backend and `dev` for the
-card. The pair and its mutable caches stay under `worktrees/codex-<id>/`; the
-existing backend venv and card `node_modules` are reused through links rather
-than copied or reinstalled when their lockfiles agree.
+Codex worktree task. Its setup creates isolated backend, TC, and card worktrees
+on the same `codex/codex-<id>` branch, using `prerelease` for the backend, `main`
+for TC, and `dev` for the card. The set and its mutable caches stay under
+`worktrees/codex-<id>/`; each Python worktree gets a private venv while the card
+reuses `node_modules` through a guarded link when its lockfile agrees.
 
-The environment actions run the normal checks against the matched pair. From a
+The environment actions run the normal checks against the matched set. From a
 terminal, the equivalent commands are:
 
 ```bash
 ./scripts/codex-worktree status
 ./scripts/codex-worktree precommit
 ./scripts/codex-worktree check backend fast
+./scripts/codex-worktree check tc fast
+./scripts/codex-worktree tc-precommit
 ./scripts/codex-worktree card-precommit
 ./scripts/codex-worktree card-e2e
 ./scripts/codex-worktree check all full

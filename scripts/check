@@ -4,6 +4,8 @@
 #
 #   ./scripts/check backend fast     ruff + mypy + targeted pytest
 #   ./scripts/check backend full     + whole pytest suite w/ coverage
+#   ./scripts/check tc      fast     pytest
+#   ./scripts/check tc      full     + coverage
 #   ./scripts/check card    fast     eslint + tsc + prettier + tokens + vitest
 #   ./scripts/check card    full     + coverage + contract fixture + build + HACS
 #   ./scripts/check all     fast|full
@@ -13,15 +15,18 @@ set -uo pipefail
 
 WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND="${GROWSPACE_BACKEND:-$WS/../growspace_manager}"
+TC="${GROWSPACE_TC:-$WS/../growspace_manager_tc}"
 CARD="${GROWSPACE_CARD:-$WS/../lovelace-growspace-manager-card}"
-# Normalize both, so every path this script prints or compares is the one a
+# Normalize all of them, so every path this script prints or compares is the one a
 # reader would recognize. The defaults are `$WS/../<repo>`, which never equals
 # the same directory's real path as a string — and the checkout comparison below
 # is a string comparison. A missing tree keeps its raw value for the report.
 abspath() { (cd "$1" 2>/dev/null && pwd) || printf '%s\n' "$1"; }
 BACKEND="$(abspath "$BACKEND")"
+TC="$(abspath "$TC")"
 CARD="$(abspath "$CARD")"
 PY="$BACKEND/.venv/bin/python"
+TC_PY="$TC/.venv/bin/python"
 
 TARGET="${1:-all}"
 LEVEL="${2:-fast}"
@@ -59,6 +64,19 @@ check_backend() {
   fi
 }
 
+check_tc() {
+  [ -x "$TC_PY" ] || { echo "ERROR: venv missing at $TC_PY — see the TC repo's AGENTS.md" >&2; RC=1; return; }
+  cd "$TC"
+  # Mirror the TC repository's Tests workflow: its own pytest suite, with
+  # coverage in the full lane. Repository-file linting remains pre-commit's job.
+  if [ "$LEVEL" = full ]; then
+    run "TC pytest (full + coverage)" "$TC_PY" -m pytest tests/ \
+      --cov=custom_components.growspace_manager_tc --cov-report=term-missing -q
+  else
+    run "TC pytest" "$TC_PY" -m pytest tests/ -q
+  fi
+}
+
 check_card() {
   cd "$CARD"
   # Stages below mirror .github/workflows/lint.yml's job, in its order, so a
@@ -87,7 +105,7 @@ check_workspace_e2e() {
   run "workspace E2E tooling tests" node --test scripts/e2e-ensure-integration.test.cjs \
     scripts/e2e-preflight.test.cjs \
     scripts/gen-e2e-dashboards.test.cjs scripts/stamp-card-resource.test.cjs \
-    scripts/vision-runtime.test.cjs
+    scripts/tc-tooling.test.cjs scripts/vision-runtime.test.cjs
 }
 
 # The dependency tree a card check is about to validate is not necessarily the
@@ -152,10 +170,10 @@ guard_card_deps() {
   printf '   %-9s shared from %s (lock %s)\n' "deps:" "$lender" "${ours:0:12}"
 }
 
-# The Python environment a backend check is about to run is not necessarily the
-# one this branch declares. Every backend worktree runs `../../.venv` — that is
-# upstream's pre-commit hook path — and whether that venv still realizes the
-# worktree's own requirements.txt is an agreement made once, at worktree setup.
+# The Python environment a backend or TC check is about to run is not necessarily
+# the one that branch declares. Their worktrees resolve hooks through
+# `../../.venv`, and whether that venv still realizes the worktree's own
+# requirements.txt is an agreement made once, at worktree setup.
 # See docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md.
 #
 # Unlike the card, there is no lockfile to compare byte-for-byte and no reason to
@@ -165,15 +183,16 @@ guard_card_deps() {
 #
 # This refuses; it never repairs. Rebuilding a venv is a decision about every
 # worktree that shares it, which a validation command has no standing to make.
-guard_backend_venv() {
-  local venv="$BACKEND/.venv" py uv requirements constraints plan candidate
+guard_python_venv() {
+  local kind="$1" checkout="$2" venv py uv requirements constraints plan candidate
 
+  venv="$checkout/.venv"
   py="$venv/bin/python"
-  requirements="$BACKEND/requirements.txt"
+  requirements="$checkout/requirements.txt"
 
   if [ ! -x "$py" ]; then
-    refuse "no backend venv at $venv" \
-           "see the backend repo's CLAUDE.md for the two-phase install"
+    refuse "no $kind venv at $venv" \
+           "see the $kind repo's AGENTS.md for its environment setup"
     return 1
   fi
   [ -f "$requirements" ] || { refuse "missing $requirements"; return 1; }
@@ -195,7 +214,7 @@ guard_backend_venv() {
   if ! constraints="$("$py" -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")' 2>/dev/null)"; then
     refuse "homeassistant is not importable from $venv" \
            "the venv does not realize $requirements at all" \
-           "rebuild it — see the backend repo's CLAUDE.md"
+           "rebuild it — see the $kind repo's AGENTS.md"
     return 1
   fi
 
@@ -206,11 +225,11 @@ guard_backend_venv() {
     return 0
   fi
 
-  refuse "backend environment drift — refusing to validate $BACKEND" \
+  refuse "$kind environment drift — refusing to validate $checkout" \
          "$venv does not realize $requirements" \
          "green here would describe a dependency set this branch does not declare" \
          "if this venv is shared, rebuilding it affects every worktree that runs it" \
-         "rebuild — see the backend repo's CLAUDE.md, or re-run the hub setup that created this worktree"
+         "rebuild — see the $kind repo's AGENTS.md, or re-run the hub setup that created this worktree"
   # uv already says exactly which requirement is unmet; relay it verbatim rather
   # than paraphrasing, but drop the interpreter preamble that is not the news.
   printf '%s\n' "$plan" | grep -v '^Using Python' | sed 's/^/  │ /' >&2
@@ -218,14 +237,18 @@ guard_backend_venv() {
 }
 
 case "$TARGET" in
-  backend|card|all) ;;
-  *) echo "usage: $0 {backend|card|all} {fast|full}" >&2; exit 2 ;;
+  backend|tc|card|all) ;;
+  *) echo "usage: $0 {backend|tc|card|all} {fast|full}" >&2; exit 2 ;;
+esac
+case "$LEVEL" in
+  fast|full) ;;
+  *) echo "usage: $0 {backend|tc|card|all} {fast|full}" >&2; exit 2 ;;
 esac
 
-# Say which trees are being validated. BACKEND/CARD are overridable by
+# Say which trees are being validated. All product roots are overridable by
 # environment (codex-worktree sets them to point at a managed pair), so a green
 # run only means something once you know what it was green against — an
-# inherited GROWSPACE_BACKEND/GROWSPACE_CARD would otherwise silently check a
+# inherited GROWSPACE_BACKEND/GROWSPACE_TC/GROWSPACE_CARD would otherwise check a
 # different checkout than the one you are sitting in.
 show_tree() {
   local label="$1" path="$2" var="$3" resolved
@@ -260,23 +283,40 @@ warn_foreign_checkout() {
 }
 
 printf '\033[1;36m━━ checking\033[0m %s / %s\n' "$TARGET" "$LEVEL"
-if [ "$TARGET" != card ]; then
-  show_tree backend: "$BACKEND" GROWSPACE_BACKEND
-  warn_foreign_checkout backend "$BACKEND" GROWSPACE_BACKEND
-fi
-if [ "$TARGET" != backend ]; then
-  show_tree card: "$CARD" GROWSPACE_CARD
-  warn_foreign_checkout card "$CARD" GROWSPACE_CARD
-fi
+case "$TARGET" in
+  backend)
+    show_tree backend: "$BACKEND" GROWSPACE_BACKEND
+    warn_foreign_checkout backend "$BACKEND" GROWSPACE_BACKEND
+    ;;
+  tc)
+    show_tree tc: "$TC" GROWSPACE_TC
+    warn_foreign_checkout tc "$TC" GROWSPACE_TC
+    ;;
+  card)
+    show_tree card: "$CARD" GROWSPACE_CARD
+    warn_foreign_checkout card "$CARD" GROWSPACE_CARD
+    ;;
+  all)
+    show_tree backend: "$BACKEND" GROWSPACE_BACKEND
+    warn_foreign_checkout backend "$BACKEND" GROWSPACE_BACKEND
+    show_tree tc: "$TC" GROWSPACE_TC
+    warn_foreign_checkout tc "$TC" GROWSPACE_TC
+    show_tree card: "$CARD" GROWSPACE_CARD
+    warn_foreign_checkout card "$CARD" GROWSPACE_CARD
+    ;;
+esac
 
 # Before any stage runs — including the backend half of `all`, which would
 # otherwise spend a whole pytest suite on its way to a card refusal.
 GUARDED=0
-[ "$TARGET" = backend ] || {
+[ "$TARGET" != card ] && [ "$TARGET" != all ] || {
   "$WS/scripts/check-e2e-coverage" --card-root "$CARD" || GUARDED=1
 }
-[ "$TARGET" != card ] && { guard_backend_venv || GUARDED=1; }
-[ "$TARGET" != backend ] && { guard_card_deps || GUARDED=1; }
+[ "$TARGET" != backend ] && [ "$TARGET" != all ] || { guard_python_venv backend "$BACKEND" || GUARDED=1; }
+if [ "$TARGET" = tc ] || { [ "$TARGET" = all ] && [ -f "$TC/requirements.txt" ]; }; then
+  guard_python_venv tc "$TC" || GUARDED=1
+fi
+[ "$TARGET" != card ] && [ "$TARGET" != all ] || { guard_card_deps || GUARDED=1; }
 if [ "$GUARDED" -ne 0 ]; then
   printf '\n\033[1;31m✗ %s / %s — refusing to run\033[0m\n' "$TARGET" "$LEVEL"
   exit 1
@@ -284,8 +324,19 @@ fi
 
 case "$TARGET" in
   backend) check_workspace_e2e; check_backend ;;
+  tc)      check_tc ;;
   card)    check_workspace_e2e; check_card ;;
-  all)     check_workspace_e2e; check_backend; check_card ;;
+  all)
+    check_workspace_e2e
+    check_backend
+    if [ -f "$TC/requirements.txt" ]; then
+      check_tc
+    else
+      hdr "TC checks"
+      printf 'skipped — TC Python scaffold has not landed yet\n'
+    fi
+    check_card
+    ;;
 esac
 
 if [ $RC -eq 0 ]; then
