@@ -70,10 +70,10 @@ The dev instance mounts:
 | `./ha-dev` | `/config` | — |
 | `./vision-dev` | `/data` on the Vision App (ro) | — |
 
-The integration and card source mounts default to the **main** checkouts. Before
-TC's initial scaffold exists, its slot is an empty host-owned directory under
-`ha-dev/custom_components/`; `scripts/ha` switches to the main TC checkout as
-soon as the component exists. A worktree is served by setting its override on
+The integration and card source mounts default to the **main** checkouts; TC's
+falls back to an empty host-owned directory under `ha-dev/custom_components/`
+when that checkout is missing its component, so a hub without a TC clone still
+starts. A worktree is served by setting its override on
 `./scripts/ha dev restart`, run from the main hub checkout — which is the only
 way to exercise a worktree's own code against :8123, since the runtime otherwise
 keeps serving the main checkout while you believe you are testing your branch:
@@ -158,8 +158,6 @@ missing `docker` is a printed no-op. `ha test` (:8124) is untouched.
 ```
 
 These are the exact commands to run — do not improvise venv paths or test flags.
-Until issue #112 adds TC's `requirements.txt`, `check all` reports that the TC
-slot is skipped; explicit `check tc` refuses because there is no runnable suite.
 
 `check` prints the checkouts it resolved before it runs anything, because it is
 not necessarily validating the tree you are sitting in. It takes

@@ -140,6 +140,55 @@ test("check tc refuses dependency drift before running any validation stage", (t
   );
 });
 
+test("check all validates TC rather than skipping it", (t) => {
+  // Before the TC scaffold landed, `all` skipped the slot whenever the checkout
+  // had no requirements.txt. Now that every TC checkout carries one, an absent
+  // file means a stale or broken tree — and silence about it would let `all`
+  // report green while validating two repositories out of three.
+  const { root, hub } = fixture(t);
+  const backend = path.join(root, "growspace_manager");
+  const tc = path.join(root, "growspace_manager_tc");
+  const card = path.join(root, "lovelace-growspace-manager-card");
+  copyScript("check", hub);
+  executable(
+    path.join(hub, "scripts", "check-e2e-coverage"),
+    "#!/usr/bin/env bash\nexit 0\n",
+  );
+
+  const fakePython =
+    "#!/usr/bin/env bash\n" +
+    'if [ "${1:-}" = "-c" ]; then echo /tmp/package_constraints.txt; exit 0; fi\n';
+  const fakeUv = '#!/usr/bin/env bash\necho "Would make no changes"\n';
+
+  // A backend and a card whose guards pass, so the only refusal is TC's.
+  fs.mkdirSync(backend, { recursive: true });
+  fs.writeFileSync(
+    path.join(backend, "requirements.txt"),
+    "homeassistant==2026.8.0\n",
+  );
+  executable(path.join(backend, ".venv", "bin", "python"), fakePython);
+  executable(path.join(backend, ".venv", "bin", "uv"), fakeUv);
+  fs.mkdirSync(path.join(card, "node_modules"), { recursive: true });
+
+  // A TC checkout that exists but carries no requirements.txt.
+  executable(path.join(tc, ".venv", "bin", "python"), fakePython);
+
+  const result = spawnSync(path.join(hub, "scripts", "check"), ["all", "fast"], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      GROWSPACE_BACKEND: backend,
+      GROWSPACE_TC: tc,
+      GROWSPACE_CARD: card,
+    },
+  });
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /missing .*growspace_manager_tc\/requirements\.txt/);
+  assert.match(result.stdout, /refusing to run/);
+  assert.doesNotMatch(result.stdout, /skipped/);
+});
+
 test("feature --tc creates a hook-depth TC worktree paired with the card", (t) => {
   const { root, hub } = fixture(t);
   const tc = path.join(root, "growspace_manager_tc");
@@ -250,7 +299,7 @@ test("Codex setup gives TC a private-venv-compatible worktree depth", (t) => {
   );
 });
 
-test("the dev runtime reserves a host-owned TC mount before the scaffold exists", (t) => {
+test("the dev runtime reserves a host-owned TC mount when the checkout is absent", (t) => {
   const { hub } = fixture(t);
   copyScript("ha", hub);
 
