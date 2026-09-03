@@ -2,7 +2,7 @@
 
 You are in the **workspace hub**, not in a product repo. This directory holds the
 development runtime, the multi-root VS Code workspace, and the shared scripts.
-The product code lives in three sibling repositories.
+The product code lives in four sibling repositories.
 
 ## Map
 
@@ -11,6 +11,7 @@ The product code lives in three sibling repositories.
 ├── growspace_manager/               Python — HA custom integration   (git repo)
 ├── lovelace-growspace-manager-card/ Lit/TS — Lovelace card           (git repo)
 ├── growspace_manager_vision/        Python — stateless vision service (git repo)
+├── growspace_manager_tc/            Python — optional TC integration (git repo; no hub check/worktree wiring yet)
 ├── core/                            HA Core checkout — REFERENCE ONLY, never edit
 └── growspace_manager_workspace/     ← you are here                   (the hub)
     ├── growspace.code-workspace     multi-root VS Code workspace
@@ -288,6 +289,14 @@ cross-repository roadmap and issue tracker; service context, ADRs, research, fix
 and contract tests belong in the Vision repository. A change spanning Vision and Home
 Assistant must update the Vision contract first, then the integration client and its
 tests, and finally the card when the user-facing shape changes.
+
+Growspace Manager TC is an optional companion integration. Phenotype identity flows
+one way from `growspace_manager` into TC as opaque IDs with display-name snapshots;
+graduation crosses back only through Growspace Manager's public service. TC owns its
+WebSocket contract, which the card consumes through its lazy TC chunk. Land TC
+contract fixtures and tests before the corresponding card schema, implementation,
+and tests. Until the hub gains a TC slot, create and validate TC worktrees from the TC
+repository itself; `./scripts/check` does not cover them.
 
 ## Don't
 
