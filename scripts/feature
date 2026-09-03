@@ -96,17 +96,13 @@ case "${1:-}" in
       TW="$TC/.worktrees/$NAME"
       add_wt "$TC" "$TW" "$BRANCH"
       ln -sfn "$TW" "$ROOT/$NAME/tc"
-      if [ -f "$TW/requirements.txt" ]; then
-        "$WS/scripts/backend-venv" "$TC" "$TW" tc || {
-          echo >&2
-          echo "The TC worktree exists at $TW but has no usable environment." >&2
-          echo "Fix the venv above, then re-run; or discard it with:" >&2
-          echo "  ./scripts/feature rm $NAME" >&2
-          exit 1
-        }
-      else
-        echo "→ TC checkout has no requirements.txt yet; deferring its venv until the scaffold lands"
-      fi
+      "$WS/scripts/backend-venv" "$TC" "$TW" tc || {
+        echo >&2
+        echo "The TC worktree exists at $TW but has no usable environment." >&2
+        echo "Fix the venv above, then re-run; or discard it with:" >&2
+        echo "  ./scripts/feature rm $NAME" >&2
+        exit 1
+      }
     fi
 
     if [ "$WANT_CARD" -eq 1 ]; then
@@ -124,8 +120,7 @@ case "${1:-}" in
     if [ -e "$ROOT/$NAME/tc" ]; then
       echo "   tc:      $TC/.worktrees/$NAME"
       echo "            (also at $ROOT/$NAME/tc)"
-      [ ! -f "$TC/.worktrees/$NAME/requirements.txt" ] || \
-        echo "            tests:  ../../.venv/bin/pytest tests/ -q"
+      echo "            tests:  ../../.venv/bin/pytest tests/ -q"
     fi
     [ -d "$ROOT/$NAME/card" ] && echo "   card:    $ROOT/$NAME/card"
     echo

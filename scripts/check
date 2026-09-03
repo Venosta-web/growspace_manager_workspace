@@ -314,9 +314,7 @@ GUARDED=0
   "$WS/scripts/check-e2e-coverage" --card-root "$CARD" || GUARDED=1
 }
 [ "$TARGET" != backend ] && [ "$TARGET" != all ] || { guard_python_venv backend "$BACKEND" || GUARDED=1; }
-if [ "$TARGET" = tc ] || { [ "$TARGET" = all ] && [ -f "$TC/requirements.txt" ]; }; then
-  guard_python_venv tc "$TC" || GUARDED=1
-fi
+[ "$TARGET" != tc ] && [ "$TARGET" != all ] || { guard_python_venv tc "$TC" || GUARDED=1; }
 [ "$TARGET" != card ] && [ "$TARGET" != all ] || { guard_card_deps || GUARDED=1; }
 if [ "$GUARDED" -ne 0 ]; then
   printf '\n\033[1;31m✗ %s / %s — refusing to run\033[0m\n' "$TARGET" "$LEVEL"
@@ -330,12 +328,7 @@ case "$TARGET" in
   all)
     check_workspace_e2e
     check_backend
-    if [ -f "$TC/requirements.txt" ]; then
-      check_tc
-    else
-      hdr "TC checks"
-      printf 'skipped — TC Python scaffold has not landed yet\n'
-    fi
+    check_tc
     check_card
     ;;
 esac
