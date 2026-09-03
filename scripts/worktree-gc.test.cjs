@@ -49,11 +49,13 @@ function fixture(t, { merged = [] } = {}) {
 
   const hub = clones.growspace_manager_workspace;
   fs.mkdirSync(path.join(hub, "scripts"), { recursive: true });
-  fs.copyFileSync(
-    path.join(SOURCE_ROOT, "scripts", "worktree-gc"),
-    path.join(hub, "scripts", "worktree-gc"),
-  );
-  fs.chmodSync(path.join(hub, "scripts", "worktree-gc"), 0o755);
+  for (const script of ["worktree-gc", "growspace-repos"]) {
+    fs.copyFileSync(
+      path.join(SOURCE_ROOT, "scripts", script),
+      path.join(hub, "scripts", script),
+    );
+    fs.chmodSync(path.join(hub, "scripts", script), 0o755);
+  }
 
   // An offline `gh`, reading the merged-pull-request table the test declares.
   const bin = path.join(root, "bin");
