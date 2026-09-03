@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # Matched cross-repo git worktrees for parallel agent work.
 #
-# A growspace feature almost always spans both repos, so a worktree in only one
-# of them is a trap: the agent edits the backend and silently type-checks the
-# card from its base branch. This creates BOTH sides on the same branch name.
+# A growspace feature normally spans a Python integration and the card, so a
+# worktree in only one of them is a trap: the agent edits one side and silently
+# validates the card from its base branch. The default remains backend + card;
+# --tc creates the TC + card pair on the same branch name.
 #
 #   ./scripts/feature new  irrigation-v2 [--backend-only|--card-only]
+#   ./scripts/feature new  culture-lines --tc
+#   ./scripts/feature new  shared-contract --all
 #   ./scripts/feature list
 #   ./scripts/feature rm   irrigation-v2
 #
@@ -13,13 +16,14 @@
 #
 #   growspace_manager/.worktrees/<name>          real backend worktree
 #   worktrees/<name>/backend  -> symlink to it   paired view
+#   growspace_manager_tc/.worktrees/<name>       real TC worktree
+#   worktrees/<name>/tc       -> symlink to it   paired view
 #   worktrees/<name>/card                        real card worktree
 #
-# The backend worktree MUST live at <repo>/.worktrees/<name>, because upstream's
-# pre-commit hooks are defined as `entry: ../../.venv/bin/pytest`. That relative
-# path only resolves to the repo venv from exactly that depth. From anywhere
-# else — including the main checkout — pytest and mypy hooks fail and every
-# commit is rejected. `.worktrees/` is already gitignored upstream.
+# The backend and TC worktrees MUST live at <repo>/.worktrees/<name>, because
+# their pre-commit hooks resolve Python tools through `../../.venv/bin/...`.
+# That relative path only resolves to the repo venv from exactly that depth.
+# `.worktrees/` is gitignored in the Python repositories.
 #
 # That same path decides which Python environment the worktree runs: from this
 # layout `../../.venv` is the MAIN checkout's venv, so the sharing is structural
@@ -34,6 +38,7 @@ set -euo pipefail
 
 WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND="$WS/../growspace_manager"
+TC="$WS/../growspace_manager_tc"
 CARD="$WS/../lovelace-growspace-manager-card"
 ROOT="$WS/worktrees"
 BASE="${BASE:-prerelease}"
@@ -55,9 +60,24 @@ case "${1:-}" in
     NAME="${2:?feature name required}"
     BRANCH="feature/$NAME"
     SCOPE="${3:-both}"
+    WANT_BACKEND=0
+    WANT_CARD=0
+    WANT_TC=0
+    case "$SCOPE" in
+      both)                    WANT_BACKEND=1; WANT_CARD=1 ;;
+      --backend-only)          WANT_BACKEND=1 ;;
+      --card-only)             WANT_CARD=1 ;;
+      --tc|--tc-card)          WANT_TC=1; WANT_CARD=1 ;;
+      --tc-only)               WANT_TC=1 ;;
+      --all)                   WANT_BACKEND=1; WANT_TC=1; WANT_CARD=1 ;;
+      *)
+        echo "usage: $0 new <name> [--backend-only|--card-only|--tc|--tc-only|--all]" >&2
+        exit 2
+        ;;
+    esac
     mkdir -p "$ROOT/$NAME"
 
-    if [ "$SCOPE" != "--card-only" ]; then
+    if [ "$WANT_BACKEND" -eq 1 ]; then
       BW="$BACKEND/.worktrees/$NAME"
       add_wt "$BACKEND" "$BW" "$BRANCH"
       ln -sfn "$BW" "$ROOT/$NAME/backend"
@@ -72,7 +92,24 @@ case "${1:-}" in
       }
     fi
 
-    if [ "$SCOPE" != "--backend-only" ]; then
+    if [ "$WANT_TC" -eq 1 ]; then
+      TW="$TC/.worktrees/$NAME"
+      add_wt "$TC" "$TW" "$BRANCH"
+      ln -sfn "$TW" "$ROOT/$NAME/tc"
+      if [ -f "$TW/requirements.txt" ]; then
+        "$WS/scripts/backend-venv" "$TC" "$TW" tc || {
+          echo >&2
+          echo "The TC worktree exists at $TW but has no usable environment." >&2
+          echo "Fix the venv above, then re-run; or discard it with:" >&2
+          echo "  ./scripts/feature rm $NAME" >&2
+          exit 1
+        }
+      else
+        echo "→ TC checkout has no requirements.txt yet; deferring its venv until the scaffold lands"
+      fi
+    fi
+
+    if [ "$WANT_CARD" -eq 1 ]; then
       add_wt "$CARD" "$ROOT/$NAME/card" "$BRANCH"
       "$WS/scripts/card-node-modules" "$CARD" "$ROOT/$NAME/card"
     fi
@@ -84,14 +121,20 @@ case "${1:-}" in
       echo "            (also at $ROOT/$NAME/backend)"
       echo "            tests:  ../../.venv/bin/pytest tests/ -q"
     fi
+    if [ -e "$ROOT/$NAME/tc" ]; then
+      echo "   tc:      $TC/.worktrees/$NAME"
+      echo "            (also at $ROOT/$NAME/tc)"
+      [ ! -f "$TC/.worktrees/$NAME/requirements.txt" ] || \
+        echo "            tests:  ../../.venv/bin/pytest tests/ -q"
+    fi
     [ -d "$ROOT/$NAME/card" ] && echo "   card:    $ROOT/$NAME/card"
     echo
-    echo "Cross-repo agent with both roots in context:"
-    echo "   cd $ROOT/$NAME/backend && claude --add-dir ../card"
+    echo "Cross-repo roots are grouped under: $ROOT/$NAME"
     ;;
 
   list)
     echo "── backend ──"; git -C "$BACKEND" worktree list
+    echo; echo "── TC ──";      git -C "$TC"      worktree list
     echo; echo "── card ──";  git -C "$CARD"    worktree list
     ;;
 
@@ -99,11 +142,14 @@ case "${1:-}" in
     NAME="${2:?feature name required}"
     [ -L "$ROOT/$NAME/card/node_modules" ] && unlink "$ROOT/$NAME/card/node_modules"
     [ -L "$BACKEND/.worktrees/$NAME/.venv" ] && unlink "$BACKEND/.worktrees/$NAME/.venv"
+    [ -L "$TC/.worktrees/$NAME/.venv" ] && unlink "$TC/.worktrees/$NAME/.venv"
     rm -f "$ROOT/$NAME/backend"
+    rm -f "$ROOT/$NAME/tc"
     git -C "$BACKEND" worktree remove --force "$BACKEND/.worktrees/$NAME" 2>/dev/null || true
+    git -C "$TC"      worktree remove --force "$TC/.worktrees/$NAME"           2>/dev/null || true
     git -C "$CARD"    worktree remove --force "$ROOT/$NAME/card"          2>/dev/null || true
     rmdir "$ROOT/$NAME" 2>/dev/null || true
-    git -C "$BACKEND" worktree prune; git -C "$CARD" worktree prune
+    git -C "$BACKEND" worktree prune; git -C "$TC" worktree prune; git -C "$CARD" worktree prune
     echo "✓ removed worktrees for '$NAME' (branches kept)"
     ;;
 
