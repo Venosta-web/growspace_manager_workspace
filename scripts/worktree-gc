@@ -1,0 +1,217 @@
+#!/usr/bin/env bash
+# Remove local worktrees whose branch has already landed upstream.
+#
+#   ./scripts/worktree-gc                    report only — the default
+#   ./scripts/worktree-gc --prune            remove the merged, clean ones
+#   ./scripts/worktree-gc --prune --untracked  also those dirty only with junk
+#
+# GitHub cannot do this for you. A merge happens on a runner in the cloud; the
+# worktree is a directory on this laptop, and no workflow can reach it. Merge
+# state therefore has to be *pulled* from the local side, which is what this
+# does — run it by hand, from a git hook, or from a timer.
+#
+# WHAT COUNTS AS LANDED. Two independent signals, because upstream merges both
+# ways: a worktree's HEAD being an ancestor of origin/main, origin/dev or
+# origin/prerelease catches merge commits, and a MERGED pull request for its
+# branch catches squashes, whose commits are never ancestors of anything. When
+# `gh` is missing or unauthenticated only the first signal runs, so squashed
+# branches are reported as unlanded — conservative, never the reverse.
+#
+# WHAT IT REFUSES TO TOUCH, always, with no flag to override:
+#
+#   - a main checkout, and the worktree this run is standing in
+#   - anything under a `.claude/worktrees/` path — those are live agent
+#     sessions, and their branch being merged says nothing about whether the
+#     session is still using the directory
+#   - a worktree with modified *tracked* files, landed or not. Untracked files
+#     are build fallout (`.cache/`, `dist/`, new screenshots); modified tracked
+#     files are somebody's work in progress, and this tool will not be the
+#     thing that loses it.
+#   - a worktree that *contains* one of the above. Codex nests a repository's
+#     worktree inside the hub's, so a landed outer directory can sit on top of
+#     unlanded work in a different repository; removing it recursively deletes
+#     that work while the report claims to be holding it back. Containment is
+#     therefore rechecked after classification, not before.
+#
+# THE SYMLINKS ARE THE DANGEROUS PART. A hub-managed card worktree's
+# `node_modules` is one symlink into the MAIN checkout's 465 MB tree, and a
+# backend worktree's `.venv` is a symlink into the main checkout's environment.
+# `git worktree remove` unlinks rather than descends, but the cost of being
+# wrong is the main checkout, so every link is unlinked explicitly first — the
+# same order `scripts/feature rm` uses.
+set -euo pipefail
+
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+HERE="$(pwd -P)"
+
+# Sibling checkouts hang off the MAIN hub checkout, not off $WS — run this from
+# a hub worktree and $WS/.. is `worktrees/`, where no sibling repository lives.
+HUB="$(git -C "$WS" rev-parse --path-format=absolute --git-common-dir)"
+HUB="$(cd "$(dirname "$HUB")" && pwd -P)"
+
+PRUNE=0
+UNTRACKED=0
+for arg in "$@"; do
+  case "$arg" in
+    --prune)     PRUNE=1 ;;
+    --untracked) UNTRACKED=1 ;;
+    -h|--help)   sed -n '2,9p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 0 ;;
+    *) echo "unknown option: $arg" >&2; exit 2 ;;
+  esac
+done
+
+repos() { # name<TAB>path, for every sibling checkout that exists
+  local name path
+  for name in growspace_manager growspace_manager_tc growspace_manager_vision \
+              lovelace-growspace-manager-card; do
+    path="$HUB/../$name"
+    [ -d "$path/.git" ] && printf '%s\t%s\n' "$name" "$(cd "$path" && pwd -P)"
+  done
+  printf '%s\t%s\n' "$(basename "$HUB")" "$HUB"
+}
+
+integration_refs() { # repo -> the upstream branches a landed commit can sit on
+  local repo ref
+  for ref in origin/main origin/dev origin/prerelease; do
+    git -C "$1" rev-parse --verify --quiet "$ref" >/dev/null && echo "$ref"
+  done
+}
+
+merged_prs() { # repo path -> branch names with a MERGED PR, one per line
+  local repo="$1" slug
+  command -v gh >/dev/null || return 0
+  slug="$(git -C "$repo" remote get-url origin 2>/dev/null \
+          | sed -E 's#^.*github\.com[:/]##; s#\.git$##')" || return 0
+  [ -n "$slug" ] || return 0
+  gh pr list -R "$slug" --state merged --limit 1000 \
+     --json headRefName --jq '.[].headRefName' 2>/dev/null || true
+}
+
+# Removal happens deepest path first: a Codex-managed set nests a repo's
+# worktree inside the hub's, and removing the outer one first would leave the
+# inner registered against a directory that no longer exists.
+LANDED=()   # repo<TAB>path<TAB>branch<TAB>why
+HELD=()     # repo<TAB>path<TAB>branch<TAB>why
+SKIPPED=()
+
+while IFS=$'\t' read -r name repo; do
+  mapfile -t refs < <(integration_refs "$repo")
+  mapfile -t squashed < <(merged_prs "$repo")
+  main_checkout="$repo"
+
+  path=""; branch=""; head=""; detached=0; prunable=0
+  flush() {
+    [ -n "$path" ] || return 0
+    local label="${branch:-(detached)}"
+    if [ "$prunable" -eq 1 ] || [ ! -d "$path" ]; then
+      SKIPPED+=("$name"$'\t'"$path"$'\t'"$label"$'\t'"gone — git worktree prune")
+    elif [ "$path" = "$main_checkout" ]; then
+      :
+    elif [ "$path" = "$HERE" ] || [ "${HERE#"$path"/}" != "$HERE" ]; then
+      SKIPPED+=("$name"$'\t'"$path"$'\t'"$label"$'\t'"this run is standing in it")
+    elif [[ "$path" == */.claude/worktrees/* ]]; then
+      SKIPPED+=("$name"$'\t'"$path"$'\t'"$label"$'\t'"live agent session")
+    else
+      local why=""
+      for ref in ${refs[@]+"${refs[@]}"}; do
+        if git -C "$repo" merge-base --is-ancestor "$head" "$ref" 2>/dev/null; then
+          why="contained in ${ref#origin/}"; break
+        fi
+      done
+      if [ -z "$why" ] && [ -n "$branch" ]; then
+        for merged in ${squashed[@]+"${squashed[@]}"}; do
+          [ "$merged" = "$branch" ] && { why="PR merged (squashed)"; break; }
+        done
+      fi
+      if [ -z "$why" ]; then
+        HELD+=("$name"$'\t'"$path"$'\t'"$label"$'\t'"not landed upstream")
+      elif [ -n "$(git -C "$path" diff --name-only HEAD 2>/dev/null)" ]; then
+        HELD+=("$name"$'\t'"$path"$'\t'"$label"$'\t'"$why, but has uncommitted changes")
+      elif [ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ] && [ "$UNTRACKED" -eq 0 ]; then
+        HELD+=("$name"$'\t'"$path"$'\t'"$label"$'\t'"$why, untracked files — pass --untracked")
+      else
+        LANDED+=("$name"$'\t'"$path"$'\t'"$label"$'\t'"$why")
+      fi
+    fi
+    path=""; branch=""; head=""; detached=0; prunable=0
+  }
+
+  while IFS= read -r line; do
+    case "$line" in
+      "worktree "*) flush; path="${line#worktree }" ;;
+      "HEAD "*)     head="${line#HEAD }" ;;
+      "branch "*)   branch="${line#branch refs/heads/}" ;;
+      "detached")   detached=1 ;;
+      "prunable"*)  prunable=1 ;;
+    esac
+  done < <(git -C "$repo" worktree list --porcelain)
+  flush
+done < <(repos)
+
+# A landed worktree is only removable if nothing held back lives beneath it:
+# `rm -rf` on the parent does not consult the child's status.
+for held in ${HELD[@]+"${HELD[@]}"}; do
+  IFS=$'\t' read -r _ held_path _ _ <<<"$held"
+  keep=()
+  for candidate in ${LANDED[@]+"${LANDED[@]}"}; do
+    IFS=$'\t' read -r c_name c_path c_branch c_why <<<"$candidate"
+    if [ "${held_path#"$c_path"/}" != "$held_path" ]; then
+      HELD+=("$c_name"$'\t'"$c_path"$'\t'"$c_branch"$'\t'"$c_why, but contains held-back work")
+    else
+      keep+=("$candidate")
+    fi
+  done
+  LANDED=(${keep[@]+"${keep[@]}"})
+done
+
+report() { # title, array lines
+  local title="$1"; shift
+  [ "$#" -gt 0 ] || return 0
+  printf '\n── %s (%d)\n' "$title" "$#"
+  local line
+  for line in "$@"; do
+    IFS=$'\t' read -r name path branch why <<<"$line"
+    printf '   %-52s %s\n' "$branch" "$why"
+    printf '   %s%s\n' "      " "$path"
+  done
+}
+
+command -v gh >/dev/null && gh auth status >/dev/null 2>&1 \
+  || echo "note: gh unavailable — squash-merged branches will read as unlanded"
+
+report "landed — removable" ${LANDED[@]+"${LANDED[@]}"}
+report "held back" ${HELD[@]+"${HELD[@]}"}
+report "skipped" ${SKIPPED[@]+"${SKIPPED[@]}"}
+
+if [ "$PRUNE" -eq 0 ]; then
+  printf '\n%d worktree(s) can be removed. Re-run with --prune to do it.\n' "${#LANDED[@]}"
+  printf 'Branches are never deleted; only the working directories go.\n'
+  exit 0
+fi
+
+# Deepest first, so a nested set unregisters from the inside out.
+while IFS=$'\t' read -r name path branch why; do
+  [ -n "$path" ] || continue
+  repo="$(git -C "$path" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || continue
+  repo="$(cd "${repo%/.git}" && pwd -P)"
+  # Unlink the shared trees before anything recursive runs near them.
+  for link in "$path/node_modules" "$path/.venv"; do
+    [ -L "$link" ] && unlink "$link"
+  done
+  git -C "$repo" worktree remove --force "$path" 2>/dev/null || rm -rf "$path"
+  echo "removed $branch  ($path)"
+done < <(printf '%s\n' ${LANDED[@]+"${LANDED[@]}"} | awk -F'\t' '{print length($2)"\t"$0}' \
+         | sort -rn | cut -f2-)
+
+# The paired view under worktrees/<name> is symlinks plus a directory; both
+# outlive the worktrees they pointed at.
+if [ -d "$HUB/worktrees" ]; then
+  find "$HUB/worktrees" -maxdepth 2 -xtype l -delete 2>/dev/null || true
+  find "$HUB/worktrees" -mindepth 1 -maxdepth 1 -type d -empty -delete 2>/dev/null || true
+fi
+
+while IFS=$'\t' read -r name repo; do
+  git -C "$repo" worktree prune
+done < <(repos)
+
+printf '\n✓ removed %d worktree(s). Branches kept.\n' "${#LANDED[@]}"
