@@ -22,10 +22,12 @@ esac
 
 dc() { docker compose "${PROFILE[@]}" "$@"; }
 
-# TC ticket #112 owns the first custom-component scaffold. Keep the runtime
-# usable before that lands by mounting an empty host-owned directory; as soon as
-# the main TC checkout has the component, select it automatically. An explicit
-# GROWSPACE_TC_SRC always wins and is how a TC worktree is served at :8123.
+# Select the main TC checkout's component automatically. TC is an optional
+# companion, so a hub whose sibling clone is absent — or is mid-rebase, or has
+# not been pulled since the component landed — still has to start: mount an
+# empty host-owned directory rather than let Docker invent one from a path that
+# does not exist. An explicit GROWSPACE_TC_SRC always wins and is how a TC
+# worktree is served at :8123.
 prepare_tc_source() {
   [ "$INSTANCE" = dev ] || return 0
   [ -z "${GROWSPACE_TC_SRC:-}" ] || return 0
