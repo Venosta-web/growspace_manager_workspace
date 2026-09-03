@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# The checkouts the hub's tooling sweeps: every sibling product repository that
+# exists, plus the hub itself. One `name<TAB>absolute path` per line.
+#
+# Siblings hang off the MAIN hub checkout rather than off this script's parent.
+# Run from a hub worktree and `..` is `worktrees/`, where no repository lives.
+set -euo pipefail
+
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+HUB="$(git -C "$WS" rev-parse --path-format=absolute --git-common-dir)"
+HUB="$(cd "$(dirname "$HUB")" && pwd -P)"
+
+for name in growspace_manager growspace_manager_tc growspace_manager_vision \
+            lovelace-growspace-manager-card; do
+  path="$HUB/../$name"
+  if [ -d "$path/.git" ]; then
+    printf '%s\t%s\n' "$name" "$(cd "$path" && pwd -P)"
+  fi
+done
+printf '%s\t%s\n' "$(basename "$HUB")" "$HUB"
