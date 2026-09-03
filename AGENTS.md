@@ -200,6 +200,27 @@ Never run two agents in the same checkout. Create a matched worktree pair:
 ./scripts/feature rm  irrigation-v2
 ```
 
+Worktrees accumulate: a merged feature leaves its directories behind, and a card
+worktree costs ~700 MB in build caches even though its `node_modules` is a
+symlink. **Nothing upstream collects them.** A merge happens on a GitHub runner
+and the worktree is a directory on your laptop, so no workflow can reach it —
+merge state has to be pulled from this side:
+
+```bash
+./scripts/worktree-gc                       # report only — the default
+./scripts/worktree-gc --prune               # remove the landed, clean ones
+./scripts/worktree-gc --prune --untracked   # also those dirty with build fallout only
+```
+
+It sweeps all five checkouts, counting a worktree as landed when its HEAD is
+contained in `origin/main`, `origin/dev` or `origin/prerelease` **or** when `gh`
+reports a merged pull request for its branch — the second signal is what catches
+squash merges, whose commits are ancestors of nothing. Without `gh` it reports
+those as unlanded rather than guessing. Branches are never deleted; only working
+directories go. It refuses the main checkouts, the worktree you are standing in,
+`.claude/worktrees/` agent sessions, and anything with modified tracked files.
+Run it from a `post-merge` hook or a timer if you want it automatic.
+
 For a Codex-managed worktree of this hub, select the checked-in **growspace
 workspace** local environment instead. It creates the matched three-repository
 set during setup; use `./scripts/codex-worktree path` to locate it and
