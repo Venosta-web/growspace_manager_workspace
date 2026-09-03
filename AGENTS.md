@@ -210,16 +210,30 @@ merge state has to be pulled from this side:
 ./scripts/worktree-gc                       # report only — the default
 ./scripts/worktree-gc --prune               # remove the landed, clean ones
 ./scripts/worktree-gc --prune --untracked   # also those dirty with build fallout only
+./scripts/worktree-gc --prune --branches    # delete the landed branches too
 ```
 
 It sweeps all five checkouts, counting a worktree as landed when its HEAD is
 contained in `origin/main`, `origin/dev` or `origin/prerelease` **or** when `gh`
-reports a merged pull request for its branch — the second signal is what catches
-squash merges, whose commits are ancestors of nothing. Without `gh` it reports
-those as unlanded rather than guessing. Branches are never deleted; only working
-directories go. It refuses the main checkouts, the worktree you are standing in,
-`.claude/worktrees/` agent sessions, and anything with modified tracked files.
-Run it from a `post-merge` hook or a timer if you want it automatic.
+reports a merged pull request whose merged head is exactly this tip — the second
+signal is what catches squash merges, whose commits are ancestors of nothing,
+and pinning it to the SHA is what stops a branch *reused* after its PR merged
+from reading as landed on the strength of its name. Without `gh` those read as
+unlanded rather than guessing.
+
+`--branches` adds a second pass over the refs themselves, after any worktree
+removal, so a branch and the worktree holding it are collected in the same run
+rather than a run apart. `main`, `dev` and `prerelease` are excluded by name
+whatever their state, and a branch checked out anywhere that survives the run is
+left alone. Deletion prints the tip it removed, which restores the ref with
+`git -C <repo> branch <name> <sha>`.
+
+Everything else it refuses, with no flag to override: the main checkouts, the
+worktree you are standing in, `.claude/worktrees/` agent sessions, anything with
+modified tracked files, and any landed worktree that *contains* one of those —
+Codex nests a repository's worktree inside the hub's, and `rm -rf` on the outer
+directory does not consult the inner one's status. Run it from a `post-merge`
+hook or a timer if you want it automatic.
 
 For a Codex-managed worktree of this hub, select the checked-in **growspace
 workspace** local environment instead. It creates the matched three-repository

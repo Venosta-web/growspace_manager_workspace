@@ -55,19 +55,24 @@ function fixture(t, { merged = [] } = {}) {
   );
   fs.chmodSync(path.join(hub, "scripts", "worktree-gc"), 0o755);
 
-  // An offline `gh`, so the test never reaches the network and can still
-  // exercise the squash-merge signal.
+  // An offline `gh`, reading the merged-pull-request table the test declares.
   const bin = path.join(root, "bin");
   fs.mkdirSync(bin, { recursive: true });
+  const table = path.join(root, "merged-prs.tsv");
+  fs.writeFileSync(table, "");
   fs.writeFileSync(
     path.join(bin, "gh"),
-    `#!/usr/bin/env bash\n[ "$1" = "pr" ] || exit 1\nprintf '%s\\n' ${
-      merged.length ? merged.map((b) => `'${b}'`).join(" ") : '""'
-    }\n`,
+    `#!/usr/bin/env bash\n[ "$1" = "pr" ] || exit 1\ncat ${table}\n`,
     { mode: 0o755 },
   );
 
-  return { root, hub, backend: clones.growspace_manager, bin };
+  return { root, hub, backend: clones.growspace_manager, bin, table };
+}
+
+// gh reports the commit a pull request merged, and the tool insists on it.
+function declareMerged(f, repository, branch) {
+  const oid = git(repository, "rev-parse", branch);
+  fs.appendFileSync(f.table, `${branch}\t${oid}\n`);
 }
 
 function run(f, args = [], cwd = f.hub) {
@@ -99,14 +104,35 @@ test("removes a landed worktree and keeps its branch", (t) => {
 // Squashed commits are ancestors of nothing, so without the pull-request
 // signal the overwhelmingly common merge style would never be collected.
 test("treats a squash-merged branch as landed", (t) => {
-  const f = fixture(t, { merged: ["feature/squashed"] });
+  const f = fixture(t);
   const wt = path.join(f.backend, ".worktrees", "squashed");
   git(f.backend, "worktree", "add", "-q", "-b", "feature/squashed", wt, "origin/main");
   commit(wt, "squashed.md", "work that upstream flattened");
+  declareMerged(f, f.backend, "feature/squashed");
 
   assert.match(run(f).stdout, /PR merged \(squashed\)/);
   run(f, ["--prune"]);
   assert.equal(fs.existsSync(wt), false);
+});
+
+// A branch name outlives its pull request. Reuse one and the name still matches
+// a MERGED PR while the commits on it are new — matching by name alone would
+// collect work that has never been merged anywhere.
+test("holds back a merged branch that was reused afterwards", (t) => {
+  const f = fixture(t);
+  const wt = path.join(f.backend, ".worktrees", "reused");
+  git(f.backend, "worktree", "add", "-q", "-b", "feature/reused", wt, "origin/main");
+  commit(wt, "first.md", "the round that merged");
+  declareMerged(f, f.backend, "feature/reused");
+  commit(wt, "second.md", "a second round on the same branch");
+
+  const report = run(f, ["--branches"]);
+  assert.match(report.stdout, /feature\/reused\s+not landed upstream/);
+  assert.doesNotMatch(report.stdout, /landed branches/);
+
+  run(f, ["--prune", "--branches", "--untracked"]);
+  assert.equal(fs.existsSync(wt), true);
+  assert.match(git(f.backend, "branch", "--list", "feature/reused"), /feature\/reused/);
 });
 
 // Modified tracked files are somebody's work in progress. Landed or not, no
@@ -179,6 +205,44 @@ test("holds back a landed worktree that contains held-back work", (t) => {
   run(f, ["--prune", "--untracked"]);
   assert.equal(fs.existsSync(inner), true, "the inner worktree must survive");
   assert.equal(fs.existsSync(outer), true, "so must the directory holding it");
+});
+
+// Branch collection is opt-in, leaves the integration branches alone whatever
+// their state, and never touches a branch that is still checked out.
+test("deletes landed branches only when asked, and never the protected ones", (t) => {
+  const f = fixture(t);
+  git(f.backend, "branch", "feature/gone", "origin/main");
+  git(f.backend, "branch", "dev", "origin/main");
+  git(f.backend, "branch", "feature/alive", "origin/main");
+  const alive = path.join(f.backend, ".worktrees", "alive");
+  git(f.backend, "worktree", "add", "-q", alive, "feature/alive");
+  commit(alive, "unlanded.md", "never pushed anywhere");
+
+  const quiet = run(f, ["--prune", "--untracked"]);
+  assert.equal(quiet.status, 0, quiet.stderr);
+  assert.match(git(f.backend, "branch", "--list", "feature/gone"), /feature\/gone/);
+
+  const report = run(f, ["--branches"]);
+  assert.match(report.stdout, /landed branches — deletable \(1\)/);
+
+  run(f, ["--prune", "--branches", "--untracked"]);
+  assert.equal(git(f.backend, "branch", "--list", "feature/gone"), "");
+  assert.match(git(f.backend, "branch", "--list", "dev"), /dev/);
+  assert.match(git(f.backend, "branch", "--list", "feature/alive"), /feature\/alive/);
+});
+
+// The pair is collected together: a branch whose only worktree this run removes
+// is free by the time the branch pass deletes it, so it does not take a second
+// run to disappear.
+test("collects a branch freed by the same run", (t) => {
+  const f = fixture(t);
+  const wt = path.join(f.backend, ".worktrees", "paired");
+  git(f.backend, "worktree", "add", "-q", "-b", "feature/paired", wt, "origin/main");
+
+  const done = run(f, ["--prune", "--branches", "--untracked"]);
+  assert.equal(done.status, 0, done.stderr);
+  assert.equal(fs.existsSync(wt), false);
+  assert.equal(git(f.backend, "branch", "--list", "feature/paired"), "");
 });
 
 // A merged branch says nothing about whether an agent session is still sitting
