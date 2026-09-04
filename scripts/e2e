@@ -4,16 +4,20 @@
 #   ./scripts/e2e provision  generate, build, restart, configure, dashboard, preflight
 #   ./scripts/e2e preflight  verify the existing environment without reconfiguring it
 #   ./scripts/e2e smoke      run the focused capability-profile Playwright specs
+#   ./scripts/e2e vision     prove Vision V1 through the native App, HA, and card
 #   ./scripts/e2e full       run every existing Playwright E2E spec
 set -euo pipefail
 
 WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+GIT_COMMON="$(git -C "$WS" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+RUNTIME_WS="${GIT_COMMON:+$(dirname "$GIT_COMMON")}"
+RUNTIME_WS="${RUNTIME_WS:-$WS}"
 CARD="${GROWSPACE_CARD:-$WS/../lovelace-growspace-manager-card}"
 BACKEND="${GROWSPACE_BACKEND:-$WS/../growspace_manager}"
 BASE_URL="${HA_BASE_URL:-http://127.0.0.1:8123}"
 ENV_FILE="${E2E_ENV_FILE:-$CARD/tests/e2e/.env.test}"
-TOKEN_FILE="${E2E_TOKEN_FILE:-$WS/.ha-token}"
-LOG_FILE="${E2E_HA_LOG:-$WS/ha-dev/home-assistant.log}"
+TOKEN_FILE="${E2E_TOKEN_FILE:-$RUNTIME_WS/.ha-token}"
+LOG_FILE="${E2E_HA_LOG:-$RUNTIME_WS/ha-dev/home-assistant.log}"
 COMMAND="${1:-provision}"
 
 abspath() { (cd "$1" 2>/dev/null && pwd) || printf '%s\n' "$1"; }
@@ -29,10 +33,16 @@ require_inputs() {
     E2E_ACCESS_TOKEN="$HA_ACCESS_TOKEN"
   elif [ -f "$TOKEN_FILE" ]; then
     E2E_ACCESS_TOKEN="$(< "$TOKEN_FILE")"
+  elif [ -f "$ENV_FILE" ]; then
+    E2E_ACCESS_TOKEN="$(sed -n 's/^HA_ACCESS_TOKEN=//p' "$ENV_FILE" | head -n 1)"
   else
     echo "ERROR: set HA_ACCESS_TOKEN or create $TOKEN_FILE with './scripts/ha dev token'" >&2
     exit 1
   fi
+  [ -n "$E2E_ACCESS_TOKEN" ] || {
+    echo "ERROR: HA_ACCESS_TOKEN is empty in $ENV_FILE" >&2
+    exit 1
+  }
   export HA_ACCESS_TOKEN="$E2E_ACCESS_TOKEN" HA_BASE_URL="$BASE_URL"
 }
 
@@ -104,7 +114,7 @@ run_preflight() {
     --env-file "$ENV_FILE" \
     --token-file "$TOKEN_FILE" \
     --base-url "$BASE_URL" \
-    --storage-file "$WS/ha-dev/.storage/core.config_entries" \
+    --storage-file "$RUNTIME_WS/ha-dev/.storage/core.config_entries" \
     --log-file "$LOG_FILE"
 }
 
@@ -175,11 +185,20 @@ case "$COMMAND" in
       specs/vision-camera-profile.spec.ts \
       specs/source-air-conditions.spec.ts
     ;;
+  vision)
+    require_inputs
+    ensure_env_file
+    node "$WS/scripts/vision-v1-acceptance.cjs" \
+      --card-root "$CARD" \
+      --backend-root "$BACKEND" \
+      --env-file "$ENV_FILE" \
+      --base-url "$BASE_URL"
+    ;;
   full)
     run_specs
     ;;
   *)
-    echo "usage: $0 {provision|preflight|smoke|full}" >&2
+    echo "usage: $0 {provision|preflight|smoke|vision|full}" >&2
     exit 2
     ;;
 esac

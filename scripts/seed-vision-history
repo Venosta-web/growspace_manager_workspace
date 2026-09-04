@@ -466,40 +466,6 @@ def symptoms(scene: Scene) -> tuple[tuple[str, float], ...]:
     return tuple(found)
 
 
-def detections_for(found):
-    """Return a `draw_hud` detections callable for the symptoms present.
-
-    Same rule as the generator's `symptomatic_detections` — call out the largest
-    visible leaves first — but over this frame's own symptom list rather than a
-    fixed three.
-    """
-    def detections(boxes, _rng):
-        ranked = sorted(boxes, key=lambda b: (b[2] - b[0]) * (b[3] - b[1]),
-                        reverse=True)
-        # Fewer symptoms than boxes is the normal case, so the pairing stops
-        # at the shorter of the two.
-        return [(label, confidence, box)
-                for (label, confidence), box in zip(found, ranked, strict=False)]
-    return detections
-
-
-def banner_for(found, renderer) -> dict:
-    """Build the bottom bar from the symptoms present."""
-    if not found:
-        return {
-            "text": "NO ISSUES DETECTED  ·  canopy even, colour uniform",
-            "color": renderer.GREEN,
-            "warn": False,
-        }
-    names = "  ·  ".join(label for label, _confidence in found)
-    plural = "" if len(found) == 1 else "S"
-    return {
-        "text": f"{len(found)} WARNING{plural}  ·  {names}",
-        "color": renderer.AMBER,
-        "warn": True,
-    }
-
-
 def render(renderer, scene: Scene, *, camera_label: str, subtitle: str,
            angle: int, moment: datetime, rng: random.Random,
            capture_rng: random.Random, processed: bool) -> bytes:
@@ -542,19 +508,19 @@ def render(renderer, scene: Scene, *, camera_label: str, subtitle: str,
     image = renderer.sensor_grain(image, capture_rng)
 
     if processed:
-        # The `processed` variant is the one the card prefers: the same frame
-        # carrying the overlay a reader expects on an analysed capture. The
-        # overlay names only what this frame actually shows — a fixed
-        # three-symptom banner would call chlorosis and droop on a recovered
-        # plant drawn upright and green, which is exactly the sort of thing a
-        # demo gets caught on.
-        found = symptoms(scene)
+        # The card prefers a processed variant, but V1 does not classify plant
+        # symptoms. Keep the simulated-camera metadata and provenance tag while
+        # leaving interpretation to the evidence ledger and optional explainer.
         spec = {
             "camera_label": camera_label,
             "subtitle": subtitle,
             "clock": moment.strftime("%Y-%m-%d %H:%M:%S"),
-            "detections": detections_for(found),
-            "banner": banner_for(found, renderer),
+            "detections": lambda _boxes, _rng: [],
+            "banner": {
+                "text": "SCENE CAPTURE  ·  comparison evidence recorded",
+                "color": renderer.WHITE,
+                "warn": False,
+            },
         }
         renderer.draw_hud(image, spec, boxes, capture_rng)
 

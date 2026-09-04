@@ -315,7 +315,7 @@ async function bootstrapDashboards({ cardRoot, baseUrl, token, stages }) {
         }
       });
       try {
-        await page.goto(new URL(`/${stage.urlPath}/0`, baseUrl).href, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+        await page.goto(new URL(`/${stage.urlPath}/0`, browserBaseUrl(baseUrl)).href, { waitUntil: 'domcontentloaded', timeout: 30_000 });
         await page.waitForSelector('growspace-manager-card', { state: 'attached', timeout: 30_000 });
         await page.waitForFunction(() => customElements.get('growspace-manager-card') !== undefined);
         await page.waitForTimeout(1_000);
@@ -340,6 +340,12 @@ async function bootstrapDashboards({ cardRoot, baseUrl, token, stages }) {
     await browser.close();
   }
   return { errors, bootstrapped };
+}
+
+function browserBaseUrl(baseUrl) {
+  const url = new URL(baseUrl);
+  if (url.hostname === 'localhost') url.hostname = '127.0.0.1';
+  return url.href;
 }
 
 function validateHaLog(filename) {
@@ -449,6 +455,7 @@ async function main(argv = process.argv.slice(2)) {
 
 module.exports = {
   EQUIPMENT_GATE_ROLE,
+  browserBaseUrl,
   collectEntityIds,
   readConfigEntryStorage,
   serviceCallForState,

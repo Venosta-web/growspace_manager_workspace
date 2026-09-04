@@ -41,4 +41,5 @@ jobs:
           scripts/stamp-card-resource.test.cjs
           scripts/tc-tooling.test.cjs
           scripts/vision-runtime.test.cjs
+          scripts/vision-v1-acceptance.test.cjs
           scripts/worktree-gc.test.cjs

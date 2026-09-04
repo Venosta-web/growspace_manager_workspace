@@ -161,6 +161,7 @@ check_workspace_e2e() {
     scripts/e2e-preflight.test.cjs \
     scripts/gen-e2e-dashboards.test.cjs scripts/stamp-card-resource.test.cjs \
     scripts/tc-tooling.test.cjs scripts/vision-runtime.test.cjs \
+    scripts/vision-v1-acceptance.test.cjs \
     scripts/worktree-gc.test.cjs scripts/install-hooks.test.cjs
 }
 

@@ -52,6 +52,9 @@ ha-test/custom_components/
 vision-dev/*
 !vision-dev/.gitkeep
 
+# Reproducible acceptance output (JSON evidence and browser screenshots).
+artifacts/
+
 # --- agent worktrees (they are real checkouts, not workspace content) ---
 worktrees/
 
