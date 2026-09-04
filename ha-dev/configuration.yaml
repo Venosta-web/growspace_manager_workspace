@@ -17,6 +17,17 @@ homeassistant:
   unit_system: metric
   currency: EUR
   country: DE
+  # The Vision Evidence Store keeps its image corpus under the "local" media
+  # dir. Unset, HA running in Docker defaults that to /media — root-owned in
+  # the image, so HA (uid 1000) cannot create /media/growspace_vision and the
+  # store fails to open with PermissionError, and the corpus would live only
+  # inside the container anyway. Point it inside /config so the images land in
+  # the ha-dev/ bind mount like everything else HA writes.
+  #
+  # `vol.IsDir()` validates this at config load, so ha-dev/media/ must exist —
+  # that is what its tracked .gitkeep is for.
+  media_dirs:
+    local: /config/media
 
 # Trust the Docker bridge so the browser + Playwright can reach HA without
 # tripping the "invalid login attempt" IP ban during local development.

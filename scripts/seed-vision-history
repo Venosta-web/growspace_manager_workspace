@@ -1,0 +1,1165 @@
+#!/usr/bin/env python3
+"""
+Seed the dev instance with a Vision Checkup history for demoing the card.
+
+  ./scripts/seed-vision-history                       # Demo Tent, 45 days
+  ./scripts/seed-vision-history --growspace "E2E Vision"
+  ./scripts/seed-vision-history --days 60 --seed 7
+  ./scripts/seed-vision-history --list                # what can be targeted
+  ./scripts/seed-vision-history --clear               # drop that growspace's evidence
+
+Writes ha-dev/growspace_vision.db and ha-dev/media/growspace_vision/ — the same
+two places the integration writes, so the card's snapshot dialog reads seeded
+history through `growspace_manager/get_vision_history_v2` with no demo mode, no
+fixture branch and no code in the product repos that only exists for this.
+
+Only two things here are fake: the calendar and the photographs.
+
+Everything derived from them is produced by the real machinery. Frames go to the
+running Growspace Vision App, which returns real DINOv2 embeddings and real
+quality signals; those embeddings go through the integration's own
+`VisualComparisonEngine`, so baseline bootstrap, the 30-sample readiness gate,
+rolling admission and eviction, centroid calibration, anomaly scores and verdicts
+are all the shipped implementation rather than numbers chosen to look plausible.
+Fusion states come from `fuse_evidence` against the same truth table the
+scheduler uses. Rows are written with the DDL imported from
+`vision_evidence_schema.py`, so this cannot drift from the store's shape without
+failing loudly.
+
+That fidelity is the point: because the seeded captures carry the live model's
+identity and the surrogate Grow Run and Framing Epoch the store itself would
+mint, a real Vision Checkup run afterwards continues the seeded baseline instead
+of starting a fresh 30-sample bootstrap.
+
+Frames are drawn, not photographed — scripts/gen-e2e-camera-assets is imported
+for the scene, so there is one tent renderer and no binary blobs in git history
+that nobody can regenerate. Every frame keeps that renderer's SIMULATED FIXTURE
+tag, the foliage shifts between captures and the plants put on height over the
+seeded weeks, so scrubbing the history looks like a grow rather than one image
+repeated.
+
+Prerequisites: the Vision App must be up (`./scripts/ha dev up`, or
+`./scripts/vision build` first). HA does not have to be running; restart it
+afterwards if the evidence store was not open when you seeded.
+"""
+
+from __future__ import annotations
+
+import argparse
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+import hashlib
+import importlib
+import importlib.machinery
+import importlib.util
+import io
+import json
+import os
+import pathlib
+import random
+import shutil
+import sqlite3
+import struct
+import subprocess
+import sys
+import types
+import urllib.error
+import urllib.request
+import uuid
+from zoneinfo import ZoneInfo
+
+# --------------------------------------------------------------------------
+# checkouts
+#
+# The runtime belongs to the MAIN hub checkout — ha-dev/ is bind-mounted from
+# beside docker-compose.yml, and `scripts/ha` refuses to drive it from anywhere
+# else. Seeding a worktree's empty ha-dev/ would write a database HA never
+# opens, so resolve the main checkout the way scripts/growspace-repos does and
+# write there whichever checkout this script was invoked from.
+# --------------------------------------------------------------------------
+HERE = pathlib.Path(__file__).resolve().parent.parent
+
+
+def main_hub_checkout() -> pathlib.Path:
+    """Return the main hub checkout, even when run from one of its worktrees."""
+    try:
+        common = subprocess.run(
+            ["git", "-C", str(HERE), "rev-parse", "--path-format=absolute",
+             "--git-common-dir"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return HERE
+    return pathlib.Path(common).parent.resolve()
+
+
+WORKSPACE = main_hub_checkout()
+HA_DEV = WORKSPACE / "ha-dev"
+CONFIG_STORE = HA_DEV / ".storage" / "growspace_manager.config"
+DATABASE = HA_DEV / "growspace_vision.db"
+IMAGE_ROOT = HA_DEV / "media" / "growspace_vision"
+VISION_STATE = pathlib.Path(
+    os.environ.get("GROWSPACE_VISION_STATE_DIR", WORKSPACE / "vision-dev")
+)
+VISION_OPTIONS = VISION_STATE / "options.json"
+
+BACKEND = pathlib.Path(
+    os.environ.get("GROWSPACE_BACKEND", WORKSPACE / ".." / "growspace_manager")
+).resolve()
+
+VISION_URL = os.environ.get("GROWSPACE_VISION_URL", "http://127.0.0.1:8099")
+
+# The demo dashboard (.storage/lovelace.demo_tent) is a panel view holding one
+# card pinned to this growspace, so it is what "the demo setup" means here.
+DEFAULT_GROWSPACE = "Demo Tent"
+DEFAULT_DAYS = 45
+
+# Local wall-clock times of the three scheduled checkups. `early` and `late` sit
+# either side of a 06:00-22:00 light schedule the way the integration's own
+# offsets place them; `mid` is the midpoint check.
+TENT_TZ = ZoneInfo("Europe/Berlin")
+WINDOWS = (("early", 6, 45), ("mid", 13, 30), ("late", 20, 15))
+
+JPEG_CONTENT_TYPE = "image/jpeg"
+
+
+def die(message: str) -> None:
+    """Exit with a message on stderr."""
+    sys.exit(f"error: {message}")
+
+
+# --------------------------------------------------------------------------
+# imported implementations — nothing below is reimplemented here
+# --------------------------------------------------------------------------
+def load_backend():
+    """Import the integration's pure vision modules from the backend checkout.
+
+    `custom_components.growspace_manager.__init__` imports Home Assistant, which
+    is not on this interpreter's path and has no business being — the four
+    modules wanted here are pure. So the package chain is registered as bare
+    namespace modules pointing at the real directories, and only the leaves are
+    executed. They import each other by absolute name and resolve through those
+    `__path__` entries exactly as they would inside HA.
+    """
+    root = BACKEND / "custom_components" / "growspace_manager"
+    if not root.is_dir():
+        die(f"no integration at {BACKEND} (set GROWSPACE_BACKEND)")
+
+    packages = {
+        "custom_components": BACKEND / "custom_components",
+        "custom_components.growspace_manager": root,
+        "custom_components.growspace_manager.data_access": root / "data_access",
+        "custom_components.growspace_manager.domain": root / "domain",
+        "custom_components.growspace_manager.models": root / "models",
+    }
+    for name, path in packages.items():
+        if name in sys.modules:
+            continue
+        package = types.ModuleType(name)
+        package.__path__ = [str(path)]
+        package.__package__ = name
+        sys.modules[name] = package
+
+    try:
+        leaves = [
+            importlib.import_module(f"custom_components.growspace_manager.{name}")
+            for name in (
+                "data_access.vision_evidence_schema",
+                "models.vision_evidence",
+                "domain.visual_comparison",
+                "domain.evidence_fusion",
+            )
+        ]
+    except ImportError as error:
+        die(f"cannot import the integration's vision modules from {BACKEND}: {error}")
+    return tuple(leaves)
+
+
+def load_renderer():
+    """Import scripts/gen-e2e-camera-assets — the one tent-scene renderer."""
+    path = HERE / "scripts" / "gen-e2e-camera-assets"
+    if not path.exists():
+        path = WORKSPACE / "scripts" / "gen-e2e-camera-assets"
+    loader = importlib.machinery.SourceFileLoader("gen_e2e_camera_assets", str(path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(spec)
+    try:
+        loader.exec_module(module)
+    except SystemExit as error:  # Pillow guard inside the generator
+        die(str(error))
+    return module
+
+
+SCHEMA, MODELS, COMPARISON, FUSION = load_backend()
+
+
+# --------------------------------------------------------------------------
+# identity
+# --------------------------------------------------------------------------
+def uuid7_at(moment: datetime, rng: random.Random) -> str:
+    """Mint a UUIDv7 for a past instant, deterministically.
+
+    `uuid.uuid7()` reads the clock, and these rows are dated weeks back; the
+    store's time-ordered identities have to agree with `captured_at` or the
+    ordering they exist to provide is a lie.
+    """
+    milliseconds = int(moment.timestamp() * 1000)
+    raw = bytearray(milliseconds.to_bytes(6, "big") + rng.randbytes(10))
+    raw[6] = 0x70 | (raw[6] & 0x0F)
+    raw[8] = 0x80 | (raw[8] & 0x3F)
+    return str(uuid.UUID(bytes=bytes(raw)))
+
+
+def pack_f32(values) -> bytes:
+    """Encode floats the way vision_checkup_scheduler._pack_f32 does."""
+    return struct.pack(f"<{len(values)}f", *values)
+
+
+def utc_text(moment: datetime) -> str:
+    """Render an instant the way the evidence store writes timestamps."""
+    return moment.astimezone(UTC).isoformat()
+
+
+# --------------------------------------------------------------------------
+# targets
+# --------------------------------------------------------------------------
+@dataclass(frozen=True)
+class Target:
+    """The growspace being seeded and the cameras its captures come from."""
+
+    growspace_id: str
+    name: str
+    cameras: tuple[str, ...]
+    cameras_configured: bool
+
+
+def read_growspaces() -> dict:
+    """Read the integration's growspace store from the host."""
+    if not CONFIG_STORE.exists():
+        die(f"{CONFIG_STORE} not found — has the dev instance been onboarded?")
+    return json.loads(CONFIG_STORE.read_text())["data"]["growspaces"]
+
+
+def slug(name: str) -> str:
+    """Reduce a growspace name to an entity-id-safe fragment."""
+    return "".join(c if c.isalnum() else "_" for c in name.lower()).strip("_")
+
+
+def resolve_target(wanted: str, cameras: list[str]) -> Target:
+    """Resolve a growspace by id or by name, and decide its camera ids."""
+    growspaces = read_growspaces()
+    found = growspaces.get(wanted)
+    growspace_id = wanted
+    if found is None:
+        matches = [
+            (gid, g) for gid, g in growspaces.items()
+            if str(g.get("name", "")).casefold() == wanted.casefold()
+        ]
+        if not matches:
+            die(f"no growspace {wanted!r} — run with --list to see the choices")
+        if len(matches) > 1:
+            die(f"{wanted!r} names {len(matches)} growspaces; pass an id instead")
+        growspace_id, found = matches[0]
+
+    configured = tuple(
+        (found.get("environment_config") or {}).get("camera_entities") or ()
+    )
+    if cameras:
+        return Target(growspace_id, found.get("name", growspace_id),
+                      tuple(cameras), False)
+    if configured:
+        return Target(growspace_id, found.get("name", growspace_id), configured, True)
+    # A growspace with no camera configured still renders a full history — the
+    # projection carries `camera_id` as an opaque string and the card never
+    # resolves it to an entity. Name them after the growspace so the two angles
+    # read as this tent's cameras rather than another growspace's.
+    stem = slug(found.get("name", growspace_id))
+    return Target(
+        growspace_id, found.get("name", growspace_id),
+        (f"camera.{stem}_canopy", f"camera.{stem}_closeup"), False,
+    )
+
+
+def list_targets() -> int:
+    """Print every growspace that can be seeded."""
+    print(f"  store: {CONFIG_STORE}")
+    for growspace_id, growspace in read_growspaces().items():
+        configured = (growspace.get("environment_config") or {}).get(
+            "camera_entities"
+        ) or []
+        cameras = ", ".join(configured) if configured else "(none — synthesized)"
+        print(f"  {growspace.get('name', ''):<26} {growspace_id}  {cameras}")
+    return 0
+
+
+# --------------------------------------------------------------------------
+# the Vision App
+# --------------------------------------------------------------------------
+class VisionApp:
+    """The live Growspace Vision service — the real embeddings come from here."""
+
+    def __init__(self, base_url: str, token: str) -> None:
+        """Hold the endpoint and App token."""
+        self._base_url = base_url.rstrip("/")
+        self._token = token
+        self.model_id = ""
+        self.model_version = ""
+        self.dimension = 0
+        self.service_version = ""
+        self.schema_version = 1
+
+    def _get(self, path: str) -> dict:
+        request = urllib.request.Request(
+            f"{self._base_url}{path}?schema_version=1",
+            headers={"Authorization": f"Bearer {self._token}"},
+        )
+        with urllib.request.urlopen(request, timeout=15) as response:
+            return json.load(response)
+
+    def connect(self) -> None:
+        """Read the service and model identity the seeded rows will record."""
+        info = self._get("/info")
+        self.service_version = info["service_version"]
+        loaded = [m for m in self._get("/models")["models"] if m["state"] == "loaded"]
+        if not loaded:
+            die(f"{self._base_url} has no loaded model")
+        model = loaded[0]
+        self.model_id = model["model_id"]
+        self.model_version = model["model_version"]
+        self.dimension = model["embedding_dimension"]
+
+    def analyze(self, image: bytes, *, camera_id: str, growspace_id: str,
+                captured_at: datetime, light_state: str) -> dict:
+        """Analyze one frame, returning the service's own response."""
+        metadata = {
+            "schema_version": 1,
+            "camera_id": camera_id,
+            "growspace_id": growspace_id,
+            "captured_at": captured_at.astimezone(UTC).isoformat().replace(
+                "+00:00", "Z"
+            ),
+            "light_state": light_state,
+            "model_id": self.model_id,
+            "model_version": self.model_version,
+        }
+        boundary = f"----growspace{uuid.uuid4().hex}"
+        metadata_part = (
+            f'--{boundary}\r\n'
+            f'Content-Disposition: form-data; name="metadata"\r\n'
+            f"Content-Type: application/json\r\n\r\n"
+            f"{json.dumps(metadata)}\r\n"
+            f'--{boundary}\r\n'
+            f'Content-Disposition: form-data; name="image"; filename="capture.jpg"\r\n'
+            f"Content-Type: {JPEG_CONTENT_TYPE}\r\n\r\n"
+        )
+        body = metadata_part.encode() + image + f"\r\n--{boundary}--\r\n".encode()
+        request = urllib.request.Request(
+            f"{self._base_url}/analyze", data=body,
+            headers={
+                "Authorization": f"Bearer {self._token}",
+                "Content-Type": f"multipart/form-data; boundary={boundary}",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.load(response)
+
+
+def read_vision_token() -> str:
+    """Read the App token `ha dev up` minted into gitignored vision-dev/."""
+    if not VISION_OPTIONS.exists():
+        die(f"{VISION_OPTIONS} not found — run ./scripts/ha dev up first")
+    token = json.loads(VISION_OPTIONS.read_text()).get("access_token", "")
+    if not token:
+        die(f"{VISION_OPTIONS} carries no access_token")
+    return token
+
+
+# --------------------------------------------------------------------------
+# the storyline
+# --------------------------------------------------------------------------
+@dataclass(frozen=True)
+class Scene:
+    """What one frame shows — the only fabricated input to the whole pipeline."""
+
+    growth: float          # 0.0 at the start of the seeded run, 1.0 at its end
+    health: float          # draw_fan_leaf's colour health
+    droop: float           # leaf axis below the horizon
+    spots: int             # necrotic spotting call-outs
+    environmental_risk: bool
+    sensors_unavailable: bool
+
+
+def storyline(day: int, days: int, angle: int, angles: int) -> Scene:
+    """Compose one capture's scene.
+
+    A baseline needs 30 admitted samples per (camera, light window) bucket and
+    gets one a day, so nothing can be scored before day 30. The episode
+    therefore sits in the last fortnight, where there is a ready baseline to
+    depart from — put it earlier and it is silently swallowed by the
+    bootstrap and the demo has nothing to show.
+    """
+    # Growth is deliberately gentle — about 20% over the whole seeded window,
+    # and strongly front-loaded so the daily delta shrinks to almost nothing
+    # by the time a baseline is ready to score. A baseline is a rolling 30
+    # samples that only admits `normal` results, so a scene that drifts faster
+    # than the window can follow scores anomalous once and then never gets
+    # re-admitted: the baseline freezes and every later day reads as a
+    # material scene change. Measured against the live model, 150->290px over
+    # 45 days puts two thirds of the run in that state; this stays inside the
+    # calibration spread and leaves the episode as the only real departure.
+    # Growth across a whole run is what Grow Run boundaries reset for.
+    growth = (day / max(days - 1, 1)) ** 0.35
+    # Two scattered days where the environmental sensors were not fresh enough
+    # to evaluate. Fusion then reports partial coverage, which is a state the
+    # card renders and a demo otherwise never shows.
+    sensors_unavailable = day in (11, 26)
+
+    # The episode is a triangle, not a cliff: it ramps in, peaks, and recovers,
+    # and it peaks five days back rather than today. The card asks for the
+    # newest ten checkups, which is barely three days — end the episode at
+    # `now` and the demo opens on nothing but alarms, with no calm history to
+    # contrast them against and no sign of what happened afterwards.
+    peak = days - 5
+    severity = max(0.0, 1.0 - abs(day - peak) / 3.5)
+
+    # Environment is a property of the tent, not of a camera, so both angles see
+    # the same verdict. Risk covers the episode from its first visible day —
+    # starting it later loses the concurrent state entirely, because persistence
+    # is met by the second qualifying capture and persistence takes precedence
+    # over co-occurrence. One earlier standalone risk day, with nothing visible
+    # on either camera, is what shows environmental_risk on its own; without it
+    # the demo only ever exercises three of the five states.
+    environmental_risk = severity > 0.2 or day == days - 12
+    if sensors_unavailable:
+        environmental_risk = False
+
+    # The close angle — the last camera — carries the visual episode alone, so
+    # the demo shows one camera diverging from another that stays healthy.
+    if severity == 0.0 or angle != angles - 1:
+        return Scene(growth, 0.95, 0.0, 0, environmental_risk, sensors_unavailable)
+
+    return Scene(
+        growth=growth,
+        health=0.95 - 0.61 * severity,
+        droop=0.85 * severity,
+        spots=int(round(5 * severity)),
+        environmental_risk=environmental_risk,
+        sensors_unavailable=sensors_unavailable,
+    )
+
+
+STRESS_REASONS = ("Humidity rising fast", "Night Temp High (27.4)",
+                  "VPD out of range (1.71)")
+MOLD_REASONS = ("Humidity High (72)", "Leaf temperature near dew point")
+STALE_REASONS = ("stress_stale", "mold_stale")
+
+
+def symptoms(scene: Scene) -> tuple[tuple[str, float], ...]:
+    """Name what the drawn frame actually shows, worst first."""
+    found = []
+    if scene.health < 0.7:
+        found.append(("chlorosis", round(0.62 + 0.3 * (0.7 - scene.health), 2)))
+    if scene.droop > 0.3:
+        found.append(("leaf droop", round(0.5 + 0.4 * scene.droop, 2)))
+    if scene.spots >= 2:
+        found.append(("necrotic spotting", round(0.5 + 0.06 * scene.spots, 2)))
+    return tuple(found)
+
+
+def detections_for(found):
+    """Return a `draw_hud` detections callable for the symptoms present.
+
+    Same rule as the generator's `symptomatic_detections` — call out the largest
+    visible leaves first — but over this frame's own symptom list rather than a
+    fixed three.
+    """
+    def detections(boxes, _rng):
+        ranked = sorted(boxes, key=lambda b: (b[2] - b[0]) * (b[3] - b[1]),
+                        reverse=True)
+        # Fewer symptoms than boxes is the normal case, so the pairing stops
+        # at the shorter of the two.
+        return [(label, confidence, box)
+                for (label, confidence), box in zip(found, ranked, strict=False)]
+    return detections
+
+
+def banner_for(found, renderer) -> dict:
+    """Build the bottom bar from the symptoms present."""
+    if not found:
+        return {
+            "text": "NO ISSUES DETECTED  ·  canopy even, colour uniform",
+            "color": renderer.GREEN,
+            "warn": False,
+        }
+    names = "  ·  ".join(label for label, _confidence in found)
+    plural = "" if len(found) == 1 else "S"
+    return {
+        "text": f"{len(found)} WARNING{plural}  ·  {names}",
+        "color": renderer.AMBER,
+        "warn": True,
+    }
+
+
+def render(renderer, scene: Scene, *, camera_label: str, subtitle: str,
+           angle: int, moment: datetime, rng: random.Random,
+           capture_rng: random.Random, processed: bool) -> bytes:
+    """Draw one tent frame with the generator's scene primitives.
+
+    `rng` is seeded per camera and never per capture. A camera bolted to a
+    tent wall photographs the same tent every day, and the comparison engine
+    is measuring departure from exactly that: reseed the scene per frame and
+    every capture is a new room, the baseline calibrates against noise, and a
+    third of the run scores anomalous for no reason a grower would recognise.
+    Only the storyline's growth, health and droop may move the room — plus
+    `capture_rng`, which varies leaf pose and sensor grain per capture the way
+    a real tent does between one checkup and the next.
+    """
+    image = renderer.tent_background(rng)
+    draw = renderer.ImageDraw.Draw(image)
+    # The room is fixed; the foliage is not. Leaf pose drawn per capture is
+    # what gives the Baseline Bucket a calibration spread to measure against —
+    # with a pixel-identical scene every distance collapses to the grain and
+    # any real change saturates the anomaly score immediately.
+    height = 205 + 40 * scene.growth
+
+    if angle == 0:  # wide canopy: three plants, the subject centre-front
+        renderer.draw_plant(draw, capture_rng, base_x=138, base_y=372,
+                            height=height * 0.78, health=scene.health - 0.04,
+                            depth=0.55)
+        renderer.draw_plant(draw, capture_rng, base_x=506, base_y=368,
+                            height=height * 0.75, health=scene.health - 0.06,
+                            depth=0.55)
+        boxes = renderer.draw_plant(draw, capture_rng, base_x=320, base_y=402,
+                                    height=height, health=scene.health, depth=1.0,
+                                    droop=scene.droop, spots=scene.spots)
+    else:  # close, lower canopy
+        renderer.draw_plant(draw, capture_rng, base_x=92, base_y=356,
+                            height=height * 0.7, health=scene.health - 0.2,
+                            depth=0.5)
+        boxes = renderer.draw_plant(draw, capture_rng, base_x=338, base_y=430,
+                                    height=height * 1.2, health=scene.health,
+                                    depth=1.0, droop=scene.droop, spots=scene.spots)
+    image = renderer.sensor_grain(image, capture_rng)
+
+    if processed:
+        # The `processed` variant is the one the card prefers: the same frame
+        # carrying the overlay a reader expects on an analysed capture. The
+        # overlay names only what this frame actually shows — a fixed
+        # three-symptom banner would call chlorosis and droop on a recovered
+        # plant drawn upright and green, which is exactly the sort of thing a
+        # demo gets caught on.
+        found = symptoms(scene)
+        spec = {
+            "camera_label": camera_label,
+            "subtitle": subtitle,
+            "clock": moment.strftime("%Y-%m-%d %H:%M:%S"),
+            "detections": detections_for(found),
+            "banner": banner_for(found, renderer),
+        }
+        renderer.draw_hud(image, spec, boxes, capture_rng)
+
+    buffer = io.BytesIO()
+    image.save(buffer, "JPEG", quality=renderer.JPEG_QUALITY, optimize=True)
+    return buffer.getvalue()
+
+
+# --------------------------------------------------------------------------
+# writing
+# --------------------------------------------------------------------------
+def open_database() -> sqlite3.Connection:
+    """Open the evidence database, applying the store's own migrations."""
+    DATABASE.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(DATABASE)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+    connection.execute("PRAGMA journal_mode = WAL")
+    version = connection.execute("PRAGMA user_version").fetchone()[0]
+    if version > SCHEMA.VISION_EVIDENCE_SCHEMA_VERSION:
+        die(f"{DATABASE} is at schema {version}, newer than the integration's "
+            f"{SCHEMA.VISION_EVIDENCE_SCHEMA_VERSION}")
+    while version < SCHEMA.VISION_EVIDENCE_SCHEMA_VERSION:
+        connection.executescript(
+            "BEGIN IMMEDIATE;\n"
+            f"{SCHEMA.VISION_EVIDENCE_MIGRATIONS[version]}\n"
+            f"PRAGMA user_version = {version + 1};\nCOMMIT;"
+        )
+        version += 1
+    return connection
+
+
+def clear(connection: sqlite3.Connection, growspace_id: str) -> int:
+    """Remove one growspace's evidence and its images.
+
+    Captures cascade to files, embeddings, comparisons, fusion outcomes,
+    reports and labels; buckets and members are keyed on the bucket, so they go
+    explicitly. This deletes real captures too — it is a demo instance, and a
+    seeder that could only remove its own rows would leave a half-history that
+    is worse to reason about than either.
+    """
+    captures = connection.execute(
+        "SELECT COUNT(*) FROM vision_capture WHERE growspace_id = ?", (growspace_id,)
+    ).fetchone()[0]
+    # Order is forced by the foreign keys, which are on and mostly do not
+    # cascade: members reference both a bucket and a capture, comparison results
+    # reference a bucket, captures reference a checkup and an epoch, and buckets
+    # reference an epoch. Deleting a bucket before the results that point at it
+    # fails outright rather than orphaning anything.
+    for statement in (
+        "DELETE FROM vision_baseline_member WHERE bucket_id IN"
+        " (SELECT bucket_id FROM vision_baseline_bucket WHERE growspace_id = ?)",
+        "DELETE FROM vision_capture WHERE growspace_id = ?",
+        "DELETE FROM vision_baseline_bucket WHERE growspace_id = ?",
+        "DELETE FROM vision_checkup WHERE growspace_id = ?",
+        "DELETE FROM vision_framing_epoch WHERE growspace_id = ?",
+        "DELETE FROM vision_grow_run_ref WHERE growspace_id = ?",
+    ):
+        connection.execute(statement, (growspace_id,))
+    connection.commit()
+    shutil.rmtree(IMAGE_ROOT / growspace_id, ignore_errors=True)
+    return captures
+
+
+def seed(target: Target, days: int, rng: random.Random, app: VisionApp,
+         renderer, connection: sqlite3.Connection, scene_seed: int) -> dict:
+    """Write one growspace's seeded Vision Checkup history."""
+    policy = SCHEMA.VISION_SCORING_POLICY_VERSION
+    engine = COMPARISON.VisualComparisonEngine()
+    now = datetime.now(TENT_TZ)
+    start = (now - timedelta(days=days - 1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+
+    # The store mints one surrogate Grow Run per growspace and one initial
+    # Framing Epoch per camera; mint them here so a later real checkup joins
+    # these buckets instead of opening its own.
+    grow_run_id = uuid7_at(start, rng)
+    connection.execute(
+        "INSERT OR REPLACE INTO vision_grow_run_ref"
+        " (growspace_id, grow_run_id, started_at, source)"
+        " VALUES (?, ?, ?, 'surrogate')",
+        (target.growspace_id, grow_run_id, utc_text(start)),
+    )
+    epochs = {}
+    for camera_id in target.cameras:
+        epoch_id = uuid7_at(start, rng)
+        epochs[camera_id] = epoch_id
+        connection.execute(
+            "INSERT INTO vision_framing_epoch"
+            " (epoch_id, growspace_id, camera_id, started_at, reason,"
+            " detector_evidence) VALUES (?, ?, ?, ?, 'initial', NULL)",
+            (epoch_id, target.growspace_id, camera_id, utc_text(start)),
+        )
+
+    baselines: dict[tuple, object] = {}
+    persistence: dict[tuple, object] = {}
+    counts = {"checkups": 0, "captures": 0, "scored": 0, "reports": 0}
+    verdicts: dict[str, int] = {}
+    states: dict[str, int] = {}
+
+    for day in range(days):
+        for window_name, hour, minute in WINDOWS:
+            window = MODELS.LightWindow(window_name)
+            started = start + timedelta(days=day, hours=hour, minutes=minute)
+            if started > now:
+                continue
+            checkup_id = uuid7_at(started, rng)
+            completed = started + timedelta(seconds=rng.randint(4, 11))
+            connection.execute(
+                "INSERT INTO vision_checkup"
+                " (checkup_id, growspace_id, growspace_name, trigger_source,"
+                " light_window, started_at, completed_at, status)"
+                " VALUES (?, ?, ?, 'scheduled', ?, ?, ?, 'completed')",
+                (checkup_id, target.growspace_id, target.name, window.value,
+                 utc_text(started), utc_text(completed)),
+            )
+            counts["checkups"] += 1
+
+            for angle, camera_id in enumerate(target.cameras):
+                scene = storyline(day, days, angle, len(target.cameras))
+                captured_at = started + timedelta(seconds=angle * 2 + 1)
+                verdict, state = seed_capture(
+                    connection, engine, renderer, app, rng,
+                    target=target, camera_id=camera_id, checkup_id=checkup_id,
+                    grow_run_id=grow_run_id, epoch_id=epochs[camera_id],
+                    window=window, captured_at=captured_at, scene=scene,
+                    baselines=baselines, persistence=persistence,
+                    policy=policy, counts=counts,
+                    scene_seed=f"{scene_seed}:{camera_id}",
+                )
+                if verdict:
+                    verdicts[verdict] = verdicts.get(verdict, 0) + 1
+                states[state] = states.get(state, 0) + 1
+        connection.commit()
+
+    connection.commit()
+    return {"counts": counts, "verdicts": verdicts, "states": states}
+
+
+def seed_capture(connection, engine, renderer, app, rng, *, target, camera_id,
+                 checkup_id, grow_run_id, epoch_id, window, captured_at, scene,
+                 baselines, persistence, policy, counts, scene_seed):
+    """Render, analyze, score and fuse one capture, then persist every row."""
+    capture_id = uuid7_at(captured_at, rng)
+    angle = target.cameras.index(camera_id)
+    label = f"CAM  {camera_id.split('.')[-1].replace('_', ' ').upper()}"
+    subtitle = (f"growspace {slug(target.name)}  ·  "
+                f"{'wide canopy' if angle == 0 else 'close, lower canopy'}")
+
+    # The scene rng is keyed on the camera alone, so this tent looks like
+    # itself on every one of the seeded days. The capture rng is keyed on the
+    # capture and NOT on the variant: `raw` and `processed` have to be one
+    # photograph differing only by the overlay, not two different moments.
+    frames = {
+        variant: render(renderer, scene, camera_label=label, subtitle=subtitle,
+                        angle=angle, moment=captured_at,
+                        rng=random.Random(scene_seed),
+                        capture_rng=random.Random(capture_id),
+                        processed=variant == "processed")
+        for variant in ("raw", "processed")
+    }
+
+    light_state = MODELS.LightState.ON
+    try:
+        analysis = app.analyze(
+            frames["raw"], camera_id=camera_id, growspace_id=target.growspace_id,
+            captured_at=captured_at, light_state=light_state.value,
+        )
+    except (urllib.error.URLError, TimeoutError) as error:
+        die(f"Growspace Vision at {VISION_URL} failed on a frame: {error}\n"
+            f"       start it with ./scripts/ha dev up")
+
+    signals = analysis["quality"]["signals"]
+    reasons = analysis["quality"].get("reasons", [])
+    analyzed = analysis["status"] == "analyzed"
+    state = MODELS.AnalysisState.ANALYZED if analyzed else MODELS.AnalysisState.REJECTED
+
+    connection.execute(
+        "INSERT INTO vision_capture"
+        " (capture_id, checkup_id, growspace_id, growspace_name, camera_id,"
+        " grow_run_id, framing_epoch_id, captured_at, light_window, light_state,"
+        " trigger_source, content_sha256, analysis_state, request_id,"
+        " vision_schema_version, service_version, quality_mean_luminance,"
+        " quality_clipped_pixel_fraction, quality_mean_absolute_gradient,"
+        " quality_reasons, created_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, ?, ?, ?, ?,"
+        " ?, ?, ?)",
+        (capture_id, checkup_id, target.growspace_id, target.name, camera_id,
+         grow_run_id, epoch_id, utc_text(captured_at), window.value,
+         light_state.value,
+         hashlib.sha256(frames["raw"]).hexdigest(), state.value,
+         analysis["request_id"], analysis["schema_version"], app.service_version,
+         signals["mean_luminance"], signals["clipped_pixel_fraction"],
+         signals["mean_absolute_gradient"], json.dumps(reasons),
+         utc_text(captured_at)),
+    )
+    counts["captures"] += 1
+
+    for variant, image in frames.items():
+        relative = f"{target.growspace_id}/{camera_id}/{capture_id}.{variant}.jpg"
+        destination = IMAGE_ROOT / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(image)
+        connection.execute(
+            "INSERT INTO vision_capture_file"
+            " (capture_id, variant, relative_path, byte_size, content_type)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (capture_id, variant, relative, len(image), JPEG_CONTENT_TYPE),
+        )
+
+    if not analyzed:
+        return None, "rejected"
+
+    values = tuple(float(v) for v in analysis["embedding"]["values"])
+    connection.execute(
+        "INSERT INTO vision_embedding"
+        " (capture_id, model_id, model_version, dimension, values_f32, derived_at,"
+        " source) VALUES (?, ?, ?, ?, ?, ?, 'live')",
+        (capture_id, app.model_id, app.model_version,
+         analysis["embedding"]["dimension"], pack_f32(values),
+         utc_text(captured_at)),
+    )
+
+    key = COMPARISON.BaselineKey(
+        growspace_id=target.growspace_id, camera_id=camera_id, light_window=window,
+        grow_run_id=grow_run_id, model_id=app.model_id,
+        model_version=app.model_version, framing_epoch_id=epoch_id,
+        scoring_policy_version=policy,
+    )
+    decision = engine.evaluate(
+        key,
+        COMPARISON.VisualEmbeddingCapture(
+            capture_id=capture_id, captured_at=captured_at, values=values,
+            trigger_source=MODELS.CaptureTrigger.SCHEDULED, quality_accepted=True,
+        ),
+        baselines.get(key),
+    )
+    if decision.baseline is not None:
+        baselines[key] = decision.baseline
+        write_bucket(connection, decision.baseline, target.growspace_id,
+                     app, policy, captured_at)
+    comparison = decision.comparison
+    if comparison is None:
+        return None, "unscored"
+
+    bucket_id = decision.baseline.bucket_id if decision.baseline is not None else None
+    connection.execute(
+        "INSERT INTO vision_comparison_result"
+        " (result_id, capture_id, bucket_id, evaluated_at, outcome, baseline_state,"
+        " samples_collected, samples_required, raw_distance, anomaly_score, verdict,"
+        " comparison_confidence, admitted_to_baseline, unavailable_reasons,"
+        " trigger_source, model_id, model_version, scoring_policy_version)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', 'scheduled', ?, ?, ?)",
+        (uuid7_at(captured_at, rng), capture_id, bucket_id, utc_text(captured_at),
+         comparison.outcome.value, comparison.baseline_state.value,
+         comparison.samples_collected, comparison.samples_required,
+         comparison.raw_distance, comparison.anomaly_score,
+         comparison.verdict.value if comparison.verdict else None,
+         comparison.comparison_confidence, int(decision.admitted),
+         app.model_id, app.model_version, policy),
+    )
+
+    if decision.admitted and decision.baseline is not None:
+        phase = (MODELS.AdmissionPhase.NORMAL
+                 if comparison.outcome is MODELS.ComparisonOutcome.SCORED
+                 else MODELS.AdmissionPhase.BOOTSTRAP)
+        connection.execute(
+            "INSERT INTO vision_baseline_member"
+            " (bucket_id, capture_id, admitted_at, admission_phase)"
+            " VALUES (?, ?, ?, ?)",
+            (decision.baseline.bucket_id, capture_id, utc_text(captured_at),
+             phase.value),
+        )
+    if decision.evicted_capture_id and decision.baseline is not None:
+        connection.execute(
+            "UPDATE vision_baseline_member SET evicted_at = ?,"
+            " evicted_by_capture_id = ? WHERE bucket_id = ? AND capture_id = ?"
+            " AND evicted_at IS NULL",
+            (utc_text(captured_at), capture_id, decision.baseline.bucket_id,
+             decision.evicted_capture_id),
+        )
+
+    if comparison.outcome is MODELS.ComparisonOutcome.SCORED:
+        counts["scored"] += 1
+
+    outcome = write_fusion(connection, rng, capture_id=capture_id,
+                           captured_at=captured_at, scene=scene,
+                           comparison=comparison, policy=policy,
+                           persistence=persistence, key=key,
+                           camera_id=camera_id, grow_run_id=grow_run_id,
+                           epoch_id=epoch_id)
+    # The explainer is optional and costs a cloud call, so the integration
+    # only has prose where fusion found something to explain.
+    if outcome is not None and (
+        outcome.state is not FUSION.EvidenceFusionState.NO_DETECTED_CHANGE
+    ):
+        write_report(connection, rng, capture_id=capture_id,
+                     captured_at=captured_at, scene=scene, outcome=outcome,
+                     policy=policy)
+        counts["reports"] += 1
+
+    verdict = comparison.verdict.value if comparison.verdict else None
+    state = outcome.state.value if outcome is not None else "fusion_unavailable"
+    return verdict, state
+
+
+def write_bucket(connection, baseline, growspace_id, app, policy, moment) -> None:
+    """Upsert a Baseline Bucket exactly as the store's own upsert does."""
+    connection.execute(
+        "INSERT INTO vision_baseline_bucket"
+        " (bucket_id, growspace_id, camera_id, light_window, grow_run_id, model_id,"
+        " model_version, framing_epoch_id, state, member_count, members_required,"
+        " centroid, calibration_distances, last_admitted_at, recomputed_at,"
+        " scoring_policy_version, created_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        " ON CONFLICT(bucket_id) DO UPDATE SET state = excluded.state,"
+        " member_count = excluded.member_count,"
+        " members_required = excluded.members_required,"
+        " centroid = excluded.centroid,"
+        " calibration_distances = excluded.calibration_distances,"
+        " last_admitted_at = excluded.last_admitted_at,"
+        " recomputed_at = excluded.recomputed_at,"
+        " scoring_policy_version = excluded.scoring_policy_version",
+        (baseline.bucket_id, growspace_id, baseline.key.camera_id,
+         baseline.key.light_window.value, baseline.key.grow_run_id, app.model_id,
+         app.model_version, baseline.key.framing_epoch_id, baseline.state.value,
+         len(baseline.members), COMPARISON.BASELINE_SIZE,
+         pack_f32(baseline.centroid) if baseline.centroid else None,
+         pack_f32(baseline.calibration_distances)
+         if baseline.calibration_distances else None,
+         utc_text(baseline.last_admitted_at) if baseline.last_admitted_at else None,
+         utc_text(moment), policy, utc_text(baseline.created_at)),
+    )
+
+
+def write_fusion(connection, rng, *, capture_id, captured_at, scene, comparison,
+                 policy, persistence, key, camera_id, grow_run_id, epoch_id):
+    """Fuse this capture's evidence with the integration's own truth table."""
+    if scene.sensors_unavailable:
+        environmental = FUSION.EnvironmentalEvidence(
+            verdict=FUSION.EnvironmentalVerdict.UNAVAILABLE,
+            unavailable_reasons=STALE_REASONS,
+        )
+    elif scene.environmental_risk:
+        environmental = FUSION.EnvironmentalEvidence(
+            verdict=FUSION.EnvironmentalVerdict.RISK
+        )
+    else:
+        environmental = FUSION.EnvironmentalEvidence(
+            verdict=FUSION.EnvironmentalVerdict.WITHIN_EVALUATED_RANGE
+        )
+
+    if comparison.verdict is None:
+        visual = FUSION.VisualEvidence(unavailable_reasons=("baseline_monitoring",))
+    else:
+        visual = FUSION.VisualEvidence(
+            verdict=comparison.verdict,
+            comparison_confidence=comparison.comparison_confidence,
+        )
+
+    persistence_key = FUSION.VisualPersistenceKey(
+        camera_id=camera_id, grow_run_id=grow_run_id, model_id=key.model_id,
+        model_version=key.model_version, framing_epoch_id=epoch_id,
+    )
+    persistence_decision = FUSION.evaluate_visual_persistence(
+        persistence.get(camera_id),
+        FUSION.VisualPersistenceEvent(
+            key=persistence_key, capture_id=capture_id, captured_at=captured_at,
+            trigger_source=MODELS.CaptureTrigger.SCHEDULED,
+            verdict=comparison.verdict,
+            comparison_confidence=comparison.comparison_confidence,
+            baseline_state=comparison.baseline_state,
+        ),
+    )
+    persistence[camera_id] = persistence_decision.state
+    outcome = FUSION.fuse_evidence(
+        environmental, visual, persistence_met=persistence_decision.persistence_met
+    )
+
+    available = isinstance(outcome, FUSION.AvailableFusionOutcome)
+    stress = STRESS_REASONS if scene.environmental_risk else ()
+    mold = MOLD_REASONS if scene.environmental_risk else ()
+    connection.execute(
+        "INSERT INTO vision_fusion_outcome"
+        " (outcome_id, capture_id, evaluated_at, scoring_policy_version,"
+        " environmental_verdict, environmental_evaluated_at, stress_reasons,"
+        " mold_reasons, fusion_state, fusion_confidence, fusion_coverage,"
+        " unavailable_reasons) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (uuid7_at(captured_at, rng), capture_id, utc_text(captured_at), policy,
+         environmental.verdict.value,
+         None if scene.sensors_unavailable
+         else utc_text(captured_at - timedelta(minutes=2)),
+         json.dumps(stress), json.dumps(mold),
+         outcome.state.value if available else None,
+         outcome.confidence.value if available else None,
+         outcome.coverage.value if available else None,
+         json.dumps([] if available else list(outcome.unavailable_reasons))),
+    )
+    return outcome if available else None
+
+
+OBSERVATION_HEALTHY = (
+    "The canopy fills the frame evenly across all sectors. Leaf blades are held "
+    "flat and their colour is uniform from the lower nodes upward, with no "
+    "discolouration, marking or curl visible at this resolution."
+)
+# One clause per symptom, so a report describes the frame it was written about
+# rather than the worst frame in the run. The Visual Observation Pass saw only a
+# photograph and the timing, so none of these may name a measurement, a piece of
+# equipment or an evaluation — that vocabulary is what the pass is built to be
+# unable to see (ADR 0042).
+OBSERVATION_CLAUSES = {
+    "chlorosis": (
+        "colour on the lower blades lightens from the midrib outward, while the "
+        "upper canopy stays even"
+    ),
+    "leaf droop": (
+        "blades on the lower two nodes are angled downward well below horizontal"
+    ),
+    "necrotic spotting": (
+        "several of those blades carry small dark patches with defined edges"
+    ),
+}
+
+
+def observation_for(found) -> str:
+    """Compose the Visual Observation Pass text for the symptoms present."""
+    if not found:
+        return OBSERVATION_HEALTHY
+    clauses = [OBSERVATION_CLAUSES[label] for label, _confidence in found]
+    body = clauses[0] if len(clauses) == 1 else (
+        ", ".join(clauses[:-1]) + " and " + clauses[-1]
+    )
+    return f"In this frame {body}. The rest of the plant reads as unchanged."
+
+
+def write_report(connection, rng, *, capture_id, captured_at, scene, outcome,
+                 policy) -> None:
+    """Attach an explainer report, the way an AI-task-configured growspace has one.
+
+    The observation is what the Visual Observation Pass saw and names nothing
+    environmental; the explanation is the second pass, which never saw the
+    photograph. Keeping the two apart here matters: a demo report that mixed
+    them would misrepresent what the shipped explainer is allowed to say.
+    """
+    found = symptoms(scene)
+    if scene.environmental_risk:
+        environmental_risk = (
+            "Stress and mold evaluations are both active. Humidity is rising fast "
+            "and sat at 72% through the night with temperature at 27.4 °C, holding "
+            "VPD at 1.71 kPa, outside the band for this stage."
+        )
+    else:
+        environmental_risk = (
+            "Both evaluations are fresh and inactive; no environmental risk was "
+            "raised for this capture."
+        )
+
+    if outcome.state is FUSION.EvidenceFusionState.ENVIRONMENTAL_RISK:
+        hypothesis = (
+            "The environmental channel alone carries this outcome — the scene has "
+            "not departed from recent history. A night humidity peak that does not "
+            "clear is the exposure worth watching, not anything visible yet."
+        )
+        recommendations = [
+            "Check that the dehumidifier is keeping up through the dark period.",
+            "Raise night-time air exchange until humidity clears 65%.",
+        ]
+    elif found:
+        hypothesis = (
+            "The observed droop and lower-leaf marking co-occur with a sustained "
+            "humidity and VPD excursion. Co-occurrence is all that is claimed here; "
+            "no cause has been established and no diagnosis is implied."
+        )
+        recommendations = [
+            "Inspect the lower canopy by hand and confirm what the frame shows.",
+            "Bring VPD back inside the band for this stage before changing feed.",
+            "Keep the schedule unchanged for 48 hours so the trend stays readable.",
+        ]
+    else:
+        hypothesis = (
+            "The scene departed from its recent history without a matching "
+            "environmental signal. A framing or lighting change is at least as "
+            "likely as anything happening to the plants."
+        )
+        recommendations = [
+            "Confirm the camera has not been nudged since the last checkup.",
+            "Re-run the checkup at the next light window before acting.",
+        ]
+
+    connection.execute(
+        "INSERT INTO vision_explainer_report"
+        " (report_id, capture_id, created_at, ai_task_entity_id, observation_source,"
+        " scoring_policy_version, observation, environmental_risk, hypothesis,"
+        " recommendations, fusion_state, fusion_confidence, fusion_coverage,"
+        " fusion_unavailable_reasons)"
+        " VALUES (?, ?, ?, ?, 'image_pass', ?, ?, ?, ?, ?, ?, ?, ?, '[]')",
+        (uuid7_at(captured_at, rng), capture_id,
+         utc_text(captured_at + timedelta(seconds=6)),
+         "ai_task.growspace_vision_explainer", policy,
+         observation_for(found),
+         environmental_risk, hypothesis, json.dumps(recommendations),
+         outcome.state.value, outcome.confidence.value, outcome.coverage.value),
+    )
+
+
+# --------------------------------------------------------------------------
+# entry point
+# --------------------------------------------------------------------------
+def parse_args(argv):
+    """Parse the command line."""
+    parser = argparse.ArgumentParser(
+        description="Seed the dev instance with a Vision Checkup history.",
+    )
+    parser.add_argument("--growspace", default=DEFAULT_GROWSPACE,
+                        help="growspace id or name (default: %(default)s)")
+    parser.add_argument("--days", type=int, default=DEFAULT_DAYS,
+                        help="days of history (default: %(default)s)")
+    parser.add_argument("--camera", action="append", default=[],
+                        help="camera id to attribute captures to (repeatable)")
+    parser.add_argument("--seed", type=int, default=20260101,
+                        help="rng seed for the drawn frames (default: %(default)s)")
+    parser.add_argument("--clear", action="store_true",
+                        help="delete the growspace's evidence and exit")
+    parser.add_argument("--list", action="store_true",
+                        help="list the growspaces that can be seeded")
+    return parser.parse_args(argv)
+
+
+def main(argv) -> int:
+    """Seed, clear or list."""
+    args = parse_args(argv)
+    print(f"  workspace: {WORKSPACE}")
+    print(f"  backend:   {BACKEND}")
+
+    if args.list:
+        return list_targets()
+
+    # A bucket needs 30 daily samples before it can score, and the store prunes
+    # images past its 90-day retention on the next start.
+    if args.days < COMPARISON.BASELINE_SIZE + 4:
+        die(f"--days must be at least {COMPARISON.BASELINE_SIZE + 4}: a baseline "
+            f"needs {COMPARISON.BASELINE_SIZE} daily samples per light window "
+            "before anything can be scored")
+    if args.days > 90:
+        die("--days must be at most 90; the store prunes images older than its "
+            "90-day retention on the next start")
+
+    target = resolve_target(args.growspace, args.camera)
+    connection = open_database()
+    print(f"  database:  {DATABASE}")
+    print(f"  images:    {IMAGE_ROOT}")
+    print(f"  growspace: {target.name}  ({target.growspace_id})")
+    source = "configured" if target.cameras_configured else "synthesized"
+    print(f"  cameras:   {', '.join(target.cameras)}  [{source}]")
+
+    removed = clear(connection, target.growspace_id)
+    if args.clear:
+        connection.close()
+        print(f"  cleared {removed} captures")
+        return 0
+    if removed:
+        print(f"  cleared {removed} existing captures first")
+
+    app = VisionApp(VISION_URL, read_vision_token())
+    try:
+        app.connect()
+    except (urllib.error.URLError, TimeoutError) as error:
+        die(f"Growspace Vision is not reachable at {VISION_URL}: {error}\n"
+            "       start it with ./scripts/ha dev up")
+    print(f"  vision:    {VISION_URL}  {app.model_id} {app.model_version} "
+          f"(dim {app.dimension}), service {app.service_version}")
+
+    renderer = load_renderer()
+    print(f"  seeding {args.days} days x {len(WINDOWS)} windows x "
+          f"{len(target.cameras)} cameras ...")
+    result = seed(target, args.days, random.Random(args.seed), app, renderer,
+                  connection, args.seed)
+    connection.close()
+
+    counts = result["counts"]
+    print(f"  wrote {counts['checkups']} checkups, {counts['captures']} captures, "
+          f"{counts['scored']} scored, {counts['reports']} explainer reports")
+    print(f"  verdicts:  {format_tally(result['verdicts'])}")
+    print(f"  fusion:    {format_tally(result['states'])}")
+    if not result["verdicts"]:
+        print("  NOTE: nothing scored — every bucket is still in bootstrap. "
+              "Seed more days.")
+    print()
+    print("  The card reads this through growspace_manager/get_vision_history_v2.")
+    print("  If HA was running when the evidence store failed to open, restart it:")
+    print("    ./scripts/ha dev restart")
+    return 0
+
+
+def format_tally(tally: dict) -> str:
+    """Render a count-by-key tally, commonest first."""
+    if not tally:
+        return "(none)"
+    return "  ".join(
+        f"{key} {count}"
+        for key, count in sorted(tally.items(), key=lambda kv: -kv[1])
+    )
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
