@@ -19,17 +19,17 @@ Design
   mylar streaks and procedural fan leaves. No binary blob in git history that
   nobody can regenerate.
 * The two cameras are deliberately contrasting so specs can tell them apart by
-  eye and by bytes: vision_1 is a healthy wide canopy shot, vision_2 is a close
-  shot carrying simulated symptoms — chlorosis, necrotic spotting, droop.
-* Symptoms are also *called out* on the frame the way a vision model overlay
-  would: amber detection boxes with confidences plus a warning banner. A human
-  looking at the snapshot dialog can see at a glance which condition the fixture
-  is meant to represent.
+  eye and by bytes: vision_1 is a wide canopy shot and vision_2 is a close lower
+  canopy view with different colour, posture and markings.
+* The HUD names only camera/framing metadata. Growspace Vision V1 monitors scene
+  change and does not classify symptoms, so the fixture never paints diagnosis
+  labels, confidence scores or a health verdict onto a source frame.
 * Every random draw comes from a per-frame seeded `random.Random`, and the HUD
   clock is a fixed string, so re-running this script reproduces the same file.
   (Byte-identical output assumes the same Pillow and the same HUD font; the
   suite only requires the two frames to be valid JPEGs that differ.)
 """
+import argparse
 import math
 import pathlib
 import random
@@ -302,7 +302,7 @@ def render_healthy(rng):
     return sensor_grain(img, rng), []
 
 
-def render_symptomatic(rng):
+def render_contrast(rng):
     img = tent_background(rng)
     draw = ImageDraw.Draw(img)
     draw_plant(draw, rng, base_x=92, base_y=356, height=168, health=0.72, depth=0.5)
@@ -317,16 +317,6 @@ def healthy_detections(_boxes, _rng):
     return []
 
 
-def symptomatic_detections(boxes, rng):
-    """Three call-outs on the largest visible leaves, lowest first."""
-    ranked = sorted(boxes, key=lambda b: (b[2] - b[0]) * (b[3] - b[1]), reverse=True)
-    labels = [("chlorosis", 0.86), ("necrotic spotting", 0.71), ("leaf droop", 0.63)]
-    return [
-        (label, confidence, box)
-        for (label, confidence), box in zip(labels, ranked[: len(labels)])
-    ]
-
-
 FRAMES = [
     {
         "filename": "e2e_vision_1.jpg",
@@ -336,8 +326,8 @@ FRAMES = [
         "render": render_healthy,
         "detections": healthy_detections,
         "banner": {
-            "text": "NO ISSUES DETECTED  ·  canopy even, colour uniform",
-            "color": GREEN,
+            "text": "REFERENCE VIEW  ·  wide canopy",
+            "color": WHITE,
             "warn": False,
         },
     },
@@ -346,33 +336,59 @@ FRAMES = [
         "seed": 20260102,
         "camera_label": "CAM  E2E VISION 2",
         "subtitle": "growspace e2e_vision  ·  veg  ·  close, lower canopy",
-        "render": render_symptomatic,
-        "detections": symptomatic_detections,
+        "render": render_contrast,
+        "detections": healthy_detections,
         "banner": {
-            "text": "3 WARNINGS  ·  chlorosis  ·  necrotic spotting  ·  droop",
-            "color": AMBER,
-            "warn": True,
+            "text": "CONTRAST VIEW  ·  close lower canopy",
+            "color": WHITE,
+            "warn": False,
         },
     },
 ]
 
 
-def main() -> int:
+def parse_args(argv):
+    parser = argparse.ArgumentParser(
+        description="Generate deterministic Vision camera fixtures."
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=pathlib.Path,
+        help="destination directory (default: ha-dev/www/e2e-camera-assets)",
+    )
+    parser.add_argument(
+        "--scenario",
+        choices=("reference", "unusable"),
+        default="reference",
+        help="reference scenes or uniformly dark unusable captures",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv) -> int:
+    args = parse_args(argv)
     workspace = pathlib.Path(__file__).resolve().parent.parent
-    dest_dir = workspace / "ha-dev" / "www" / "e2e-camera-assets"
+    dest_dir = args.output_dir or workspace / "ha-dev" / "www" / "e2e-camera-assets"
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     for spec in FRAMES:
-        rng = random.Random(spec["seed"])
-        img, boxes = spec["render"](rng)
-        draw_hud(img, spec, boxes, rng)
+        if args.scenario == "unusable":
+            img = Image.new("RGB", SIZE, (2, 2, 2))
+        else:
+            rng = random.Random(spec["seed"])
+            img, boxes = spec["render"](rng)
+            draw_hud(img, spec, boxes, rng)
         dest = dest_dir / spec["filename"]
         img.save(dest, "JPEG", quality=JPEG_QUALITY, optimize=True)
-        print(f"  wrote {dest.relative_to(workspace)}  ({dest.stat().st_size:,} bytes)")
+        try:
+            display = dest.relative_to(workspace)
+        except ValueError:
+            display = dest
+        print(f"  wrote {display}  ({dest.stat().st_size:,} bytes)")
 
     print(f"  {len(FRAMES)} frames at {SIZE[0]}x{SIZE[1]} — served as camera.e2e_vision_1/2")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))
