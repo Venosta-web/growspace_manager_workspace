@@ -14,10 +14,22 @@ and the final live health verdict.
 loaded via `homeassistant.packages` in `ha-dev/configuration.yaml`.
 
 The executable contract in `e2e/entity_coverage.py` owns the entity inventory,
-the thirteen current capability-profile instances, their setup payloads, and the
-roles reserved for the later simulator tickets. The generated package, the card
-setup manifest, and this coverage table are checked against it by
-`./scripts/check-e2e-coverage`.
+every capability-profile instance, their setup payloads, and the roles reserved
+for the later simulator tickets. The generated package, the card setup manifest,
+and this coverage table are checked against it by `./scripts/check-e2e-coverage`
+— which `./scripts/check` runs as a refusal, before any stage, on its `backend`,
+`card` and `all` targets. Regenerate all three adapters with one command:
+
+```bash
+./scripts/gen-e2e-sensors --card-root <path-to-card-checkout>
+```
+
+The card manifest is the reason `--card-root` exists and the reason `backend` is
+guarded: it is committed to a **different repository**, so a declaration edited
+here goes stale over there, and the refusal that follows blocks that repo's
+entire validation until someone regenerates
+([card#884](https://github.com/Venosta-web/lovelace-growspace-manager-card/issues/884)).
+The failure names this command with the card checkout already filled in.
 
 <!-- BEGIN GENERATED E2E ENTITY COVERAGE -->
 <!-- Regenerate with ./scripts/gen-e2e-sensors; do not edit this table. -->
