@@ -372,9 +372,16 @@ consistently across both repos:
 
 `scripts/card-node-modules` is the one implementation, and it links only while
 the two `package-lock.json` hashes match **and** an offline `npm ci --dry-run`
-reports a zero add/change/remove plan. On drift it removes the link and requires
-a private `npm ci`. Writable Vite/test caches are checkout-local under `.cache/`,
-never inside the shared tree.
+**in the lending checkout** reports a zero add/change/remove plan. The plan is
+measured before the link exists, and against whichever checkout owns the tree it
+describes: asked through the link, npm answers for the lender while every message
+names the worktree, so a drifted main checkout used to be reported as ~193 added
+/ 673 changed packages in the borrower instead of the one package it was actually
+missing. A refusal therefore names the checkout to run `npm ci` in — the lender
+when the shared tree drifted, which fixes it once for every future worktree, and
+the worktree itself when it holds a drifted private install. On drift no link is
+left behind. Writable Vite/test caches are checkout-local under `.cache/`, never
+inside the shared tree.
 
 Never run dependency-mutating npm commands through a shared link. `npm ci` and
 `npm install` merely convert the worktree to a private install, but `npm rebuild`,

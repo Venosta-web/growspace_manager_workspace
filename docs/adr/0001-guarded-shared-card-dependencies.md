@@ -61,12 +61,20 @@ The guard is two-layered:
 
 1. The complete `package-lock.json` SHA-256 must be identical. This catches a
    *different dependency plan*.
-2. An offline `npm ci --dry-run --ignore-scripts` in the worktree must report
-   zero added, changed, and removed packages. This catches an install that no
-   longer *realizes* an otherwise matching plan — a stale main checkout.
+2. An offline `npm ci --dry-run --ignore-scripts` must report zero added,
+   changed, and removed packages. This catches an install that no longer
+   *realizes* an otherwise matching plan — a stale main checkout. It runs **in
+   the lending checkout, before the link is created**
+   ([hub#124](https://github.com/Venosta-web/growspace_manager_workspace/issues/124)):
+   the lockfiles are byte-identical by then and the link would resolve to that
+   same tree, but asked from the worktree npm answers for the lender while every
+   message names the borrower, and reports the whole tree rather than the
+   packages that drifted. A worktree with a private install is still measured,
+   and blamed, on its own.
 
-Either check failing removes the link and fails with the recipe to run a private
-`npm ci`. An existing real `node_modules` directory is left alone and only
+Either check failing removes the link and fails with the recipe to run `npm ci`
+in the checkout that drifted — the lender when the shared tree is the stale one,
+the worktree when it owns a private install. An existing real `node_modules` directory is left alone and only
 validated; it is never replaced by a link. Drift therefore fails closed.
 
 A worktree created by hand shares nothing and runs its own `npm ci`.

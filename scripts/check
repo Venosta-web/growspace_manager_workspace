@@ -102,7 +102,8 @@ check_card() {
 check_workspace_e2e() {
   cd "$WS"
   run "workspace E2E contract tests" python3 -m unittest e2e.test_entity_coverage
-  run "workspace E2E tooling tests" node --test scripts/e2e-ensure-integration.test.cjs \
+  run "workspace E2E tooling tests" node --test scripts/card-node-modules.test.cjs \
+    scripts/e2e-ensure-integration.test.cjs \
     scripts/e2e-preflight.test.cjs \
     scripts/gen-e2e-dashboards.test.cjs scripts/stamp-card-resource.test.cjs \
     scripts/tc-tooling.test.cjs scripts/vision-runtime.test.cjs \
