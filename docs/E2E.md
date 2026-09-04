@@ -450,11 +450,15 @@ Both frames are drawn by `./scripts/gen-e2e-camera-assets`, not photographed:
 640x480 grow-tent scenes built from seeded noise, mylar streaks and procedural
 fan leaves under a camera HUD.
 
-* **vision_1** — a healthy wide canopy, green banner, no call-outs.
-* **vision_2** — a close shot carrying simulated symptoms (chlorosis, necrotic
-  spotting, droop), marked up the way a vision-model overlay would: amber
-  detection boxes with confidences plus a warning banner. It is what a spec or a
-  human needs to see a recognisable problem state in the snapshot dialog.
+* **vision_1** — a wide canopy reference view.
+* **vision_2** — a contrasting close lower-canopy view with visibly different
+  colour, posture and markings.
+
+The HUD is deliberately neutral: it identifies the camera and framing but never
+paints a diagnosis, confidence score or health verdict onto the source. V1's
+output is scene-change evidence, not symptom classification. The acceptance
+runner can generate a separate uniformly-dark variant to exercise the Frame
+Quality Gate without changing that contract.
 
 Both carry a `SIMULATED FIXTURE` tag, so a frame that reaches that dialog can
 never be mistaken for a real capture. Every random draw is seeded and the HUD
@@ -504,6 +508,37 @@ dashboard to the same layout and creates only the missing dashboards. It uses
 the WebSocket API because HA has no REST endpoint for
 `lovelace/dashboards/create`.
 
+## Vision V1 aggregate acceptance
+
+After provisioning, one command proves the simulated Vision V1 aggregate
+through the production native App image, public integration boundaries,
+durable evidence store and real card bundle:
+
+```bash
+./scripts/e2e vision
+```
+
+The run replaces only the dedicated **E2E Vision** growspace's evidence
+history. It seeds the 30-sample Baseline Bucket through the real App and
+integration comparison/fusion implementations, verifies normal and material
+scene-change outcomes plus optional explainer reports, and runs one local-only
+manual checkup. It then drives Home Assistant's real minute scheduler once with
+the reference frames and three times with generated uniformly-dark frames. The
+last three runs must be rejected by the Frame Quality Gate and activate one
+Capture Continuity Break per camera.
+
+Finally it restores the reference frames and original schedule, restarts Home
+Assistant, verifies the evidence and continuity alerts survived, and opens the
+card's Vision evidence view in Playwright. Raw JSON evidence and a screenshot
+are written to the ignored `artifacts/vision-v1-acceptance/<timestamp>/`
+directory. The JSON also records direct native-amd64 analyze latency and the
+App container's host-cgroup peak memory before the restart resets that counter.
+
+The acceptance is intentionally bounded to generated scenes and the local
+amd64 development host. It does not claim physical-camera image quality or ARM
+hardware performance. The first recorded result and exact scope are in
+[`acceptance/vision-v1-simulated.md`](acceptance/vision-v1-simulated.md).
+
 ## Full rebuild from scratch
 
 ```bash
@@ -518,7 +553,9 @@ commit it.
 
 The authoritative status is the live verdict from `./scripts/e2e preflight`.
 Run `./scripts/e2e smoke` for focused capability coverage or
-`./scripts/e2e full` for every existing Playwright spec.
+`./scripts/e2e full` for every existing Playwright spec. Run
+`./scripts/e2e vision` for the destructive, dedicated-profile Vision V1
+aggregate acceptance described above.
 
 Full-suite run, 2026-08-22 (37 tests, 41.3 min): **17 passed, 18 failed,
 2 flaky.** The dialog cause below is fixed; the remaining failures are the

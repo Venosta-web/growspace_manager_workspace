@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const {
+  browserBaseUrl,
   collectEntityIds,
   serviceCallForState,
   validateBackendPayloads,
@@ -10,6 +11,12 @@ const {
   validateLovelace,
   validateRegistryDevices,
 } = require('./e2e-preflight.cjs');
+
+test('uses the IPv4 loopback origin for service-worker-blocked browser checks', () => {
+  assert.equal(browserBaseUrl('http://localhost:8123'), 'http://127.0.0.1:8123/');
+  assert.equal(browserBaseUrl('http://127.0.0.1:8123'), 'http://127.0.0.1:8123/');
+  assert.equal(browserBaseUrl('https://ha.example.test'), 'https://ha.example.test/');
+});
 
 const ENTITY = {
   entity_id: 'input_number.e2e_profile_temperature',
