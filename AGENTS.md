@@ -53,6 +53,7 @@ the host path instead.
 ./scripts/ha test up       # http://localhost:8124 — virgin config, HACS test
 ./scripts/vision build     # build the locked native amd64 Vision App image
 ./scripts/vision smoke     # analyze both deterministic camera fixtures
+./scripts/seed-vision-history   # fake Vision Checkup history for the demo
 ```
 
 `ha dev up|restart` starts the production Vision App image before Home
@@ -93,6 +94,54 @@ gitignored `vision-dev/options.json`; later starts preserve it, `./scripts/visio
 token` prints it for local configuration, and `ha dev reset` removes it with the Home
 Assistant state. `./scripts/e2e smoke` proves both tracked Local File camera frames
 complete real Vision Analyses before the browser specs run.
+
+### Vision evidence, and the demo history
+
+The Vision Evidence Store keeps its database at `ha-dev/growspace_vision.db` and
+its image corpus under the **`local` media dir**, which
+`ha-dev/configuration.yaml` pins to `/config/media` — i.e. `ha-dev/media/`. That
+line is load-bearing twice over. Unset, Home Assistant running in Docker defaults
+the media dir to `/media`, which is root-owned in the image while HA runs as
+1000: the store cannot create `/media/growspace_vision` and every start logs
+`Failed to open the Vision Evidence Store` with a `PermissionError`, leaving the
+card with no V1 history at all and no obvious reason why. It would also be the
+one thing HA writes that lives only inside the container. `media_dirs` is
+validated with `vol.IsDir()` at config load, so `ha-dev/media/` has to exist —
+that is what its tracked `.gitkeep` is for; the contents are ignored.
+
+`./scripts/seed-vision-history` fills that store with a plausible history so the
+snapshot dialog has something to show:
+
+```bash
+./scripts/seed-vision-history                     # Demo Tent, 45 days
+./scripts/seed-vision-history --growspace "E2E Vision"
+./scripts/seed-vision-history --list              # what can be targeted
+./scripts/seed-vision-history --clear             # drop that growspace's evidence
+```
+
+Only the calendar and the photographs are fake. Frames are drawn by importing
+`scripts/gen-e2e-camera-assets` — one tent renderer, no binary blobs in git — and
+then sent to the **running Vision App**, so the embeddings and quality signals
+are the real model's. Those go through the integration's own
+`VisualComparisonEngine` and `fuse_evidence`, and the rows are written with the
+DDL imported from `vision_evidence_schema.py`. Verdicts, baseline readiness,
+calibration and fusion states are therefore produced rather than chosen, and the
+seeded captures carry the live model identity plus the surrogate Grow Run and
+Framing Epoch the store itself would mint — so a real checkup afterwards
+continues the seeded baseline instead of bootstrapping a fresh 30 samples.
+
+Two consequences worth knowing before changing it. A Baseline Bucket is one
+camera and light window, admits one capture a day and needs 30 before it scores
+anything, so fewer than ~34 days seeds a history in which nothing is ever scored
+— the script refuses. And a bucket only re-admits `normal` results, so a scene
+that drifts faster than its rolling window scores anomalous once and then never
+recovers; the seeded plants grow about 20% across the run for exactly that
+reason, not for looks.
+
+The Vision App must be up. Home Assistant need not be, but restart it afterwards
+if its store failed to open when you seeded. Both the database and the images
+are gitignored, and the script writes to the **main** hub checkout's `ha-dev/`
+even when run from a worktree, because that is the only one the runtime mounts.
 
 The card is **code-split**: a thin `growspace-manager-card.js` entry plus ~16
 lazy `growspace-[name]-[hash].js` chunks. The whole `dist/` directory is
