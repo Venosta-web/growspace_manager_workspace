@@ -3,7 +3,8 @@
 #
 # A real node_modules directory is private and is only validated. An absent
 # directory is linked to the main checkout only when both lockfiles are
-# byte-identical and npm confirms that the shared install needs no changes.
+# byte-identical and npm confirms that the lending checkout's own install needs
+# no changes.
 set -euo pipefail
 
 SOURCE_CHECKOUT="${1:?usage: card-node-modules <source-checkout> <worktree>}"
@@ -22,8 +23,16 @@ lock_hash() {
   sha256sum "$1" | cut -d' ' -f1
 }
 
+# Measure one checkout against its own lockfile, and blame that checkout.
+#
+# The checkout named here must own a real node_modules. Asked through a shared
+# link npm answers for the lender's tree while every message names the borrower,
+# and it reports the whole tree as added/changed rather than the few packages
+# that actually drifted — so the developer runs a 465 MB private npm ci in the
+# worktree and leaves the lender drifted for the next one.
 verify_install() {
-  local checkout="$1" plan counts
+  local checkout="$1" plan counts added changed removed hint
+  shift
 
   if ! plan="$(
     cd "$checkout"
@@ -49,8 +58,16 @@ verify_install() {
     return 1
   fi
 
-  if [ "$counts" != $'0\t0\t0' ]; then
-    echo "ERROR: node_modules in $checkout does not match its lockfile (added/changed/removed: $counts); run npm ci there" >&2
+  IFS=$'\t' read -r added changed removed <<<"$counts"
+  if [ "$added" != 0 ] || [ "$changed" != 0 ] || [ "$removed" != 0 ]; then
+    {
+      echo "ERROR: node_modules in $checkout does not realize its own lockfile"
+      echo "       (added $added, changed $changed, removed $removed)"
+      echo "       run: (cd $checkout && npm ci)"
+      for hint in "$@"; do
+        echo "       $hint"
+      done
+    } >&2
     return 1
   fi
 }
@@ -86,11 +103,18 @@ if [ "$source_hash" != "$worktree_hash" ]; then
 fi
 
 [ -d "$SOURCE_MODULES" ] || die "shared card dependencies missing at $SOURCE_MODULES; run npm ci in $SOURCE_CHECKOUT"
-ln -sfn "$SOURCE_MODULES" "$WORKTREE_MODULES"
 
-if ! verify_install "$WORKTREE"; then
-  unlink "$WORKTREE_MODULES"
+# Validate the lender before the link exists. The lockfiles are byte-identical
+# by now and the link would resolve to this same tree, so this is the same
+# question the borrower would have asked — only measured where the answer is
+# accurate and reported against the checkout that has to be fixed. Nothing is
+# linked on failure, so no npm command ever runs through a shared link.
+if ! verify_install "$SOURCE_CHECKOUT" \
+  "the shared tree backs every card worktree; one npm ci there fixes all of them"; then
+  [ -L "$WORKTREE_MODULES" ] && unlink "$WORKTREE_MODULES"
   exit 1
 fi
+
+ln -sfn "$SOURCE_MODULES" "$WORKTREE_MODULES"
 
 printf '→ sharing card dependencies (lock %s)\n' "${worktree_hash:0:12}"
