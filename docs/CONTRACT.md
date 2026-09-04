@@ -2,9 +2,12 @@
 
 > This document governs `growspace_manager` ⇄ Lovelace card payloads. The separate,
 > stateless `growspace_manager` ⇄ Growspace Vision HTTP boundary is specified by the
-> versioned [Growspace Vision contract][vision-contract].
+> versioned [Growspace Vision contract][vision-contract], and the optional
+> `growspace_manager_tc` ⇄ card WebSocket boundary by the [TC contract][tc-contract]
+> — including how the card detects whether TC is installed at all.
 
 [vision-contract]: https://github.com/Venosta-web/growspace_manager_vision/tree/main/contracts/growspace-vision/v1
+[tc-contract]: https://github.com/Venosta-web/growspace_manager_tc/blob/main/docs/websocket-contract.md
 
 The integration and the card are separate repos with separate release cycles,
 but they are one product. Everything they agree on crosses this boundary:
