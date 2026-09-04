@@ -8,6 +8,8 @@
 #   ./scripts/check tc      full     + coverage
 #   ./scripts/check card    fast     eslint + tsc + prettier + tokens + vitest
 #   ./scripts/check card    full     + coverage + contract fixture + build + HACS
+#   ./scripts/check vision  fast     V1 contract + backend fixtures + card schemas
+#   ./scripts/check vision  full     + Vision suite + two-architecture App smoke
 #   ./scripts/check all     fast|full
 #
 # Exit code is non-zero if ANY stage fails (nothing is swallowed).
@@ -17,6 +19,7 @@ WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND="${GROWSPACE_BACKEND:-$WS/../growspace_manager}"
 TC="${GROWSPACE_TC:-$WS/../growspace_manager_tc}"
 CARD="${GROWSPACE_CARD:-$WS/../lovelace-growspace-manager-card}"
+VISION="${GROWSPACE_VISION:-$WS/../growspace_manager_vision}"
 # Normalize all of them, so every path this script prints or compares is the one a
 # reader would recognize. The defaults are `$WS/../<repo>`, which never equals
 # the same directory's real path as a string — and the checkout comparison below
@@ -25,8 +28,10 @@ abspath() { (cd "$1" 2>/dev/null && pwd) || printf '%s\n' "$1"; }
 BACKEND="$(abspath "$BACKEND")"
 TC="$(abspath "$TC")"
 CARD="$(abspath "$CARD")"
+VISION="$(abspath "$VISION")"
 PY="$BACKEND/.venv/bin/python"
 TC_PY="$TC/.venv/bin/python"
+VISION_PY="${GROWSPACE_VISION_PY:-$VISION/.venv/bin/python}"
 
 TARGET="${1:-all}"
 LEVEL="${2:-fast}"
@@ -96,6 +101,55 @@ check_card() {
     run "HACS release layout"   npm run --silent validate:hacs-release
   else
     run "unit tests" npm run --silent test
+  fi
+}
+
+check_vision() {
+  local contract_dir="$BACKEND/tests/fixtures/contract"
+
+  cd "$VISION"
+  if [ "$LEVEL" = full ]; then
+    [ -x "$VISION_PY" ] || {
+      refuse "no Vision test environment at $VISION_PY" \
+             "set GROWSPACE_VISION_PY to the Python executable that realizes $VISION/pyproject.toml"
+      RC=1
+      return
+    }
+    run "Vision ruff check" "$VISION_PY" -m ruff check \
+      src tests scripts growspace_vision
+    run "Vision ruff format" "$VISION_PY" -m ruff format --check \
+      src tests scripts growspace_vision
+    run "Vision mypy" "$VISION_PY" -m mypy src growspace_vision scripts
+    run "Vision service and contract tests" env PYTHONPATH=src \
+      "$VISION_PY" -m unittest discover -s tests -v
+  else
+    run "Vision V1 service contract" python3 -m unittest discover \
+      -s tests -p test_growspace_vision_contract.py -v
+  fi
+
+  cd "$BACKEND"
+  run "backend Vision fixture handoff" "$PY" \
+    tests/utils/vision_contract_fixtures.py \
+    --vision-root "$VISION" --backend-root "$BACKEND"
+  run "backend Vision parser boundary" "$PY" -m pytest tests/test_vision_models.py -q
+
+  cd "$CARD"
+  run "card Vision schema boundary" env \
+    GSM_MAIN_GROWSPACE_FIXTURE="$contract_dir/growspace_payload.json" \
+    GSM_RELEASE_GROWSPACE_FIXTURE="$contract_dir/growspace_payload.json" \
+    GSM_PRERELEASE_VISION_STATUS_FIXTURE="$contract_dir/vision_status_response.json" \
+    GSM_PRERELEASE_VISION_HISTORY_FIXTURE="$contract_dir/vision_history_response.json" \
+    GSM_PRERELEASE_VISION_TRIGGER_FIXTURE="$contract_dir/trigger_vision_checkup_response.json" \
+    npm run --silent test:contract-fixture
+  run "card Vision version compatibility" \
+    "$CARD/node_modules/.bin/vitest" run \
+    src/slices/camera/camera.schema.test.ts --environment node
+
+  cd "$WS"
+  run "simulated Vision runtime" node --test scripts/vision-runtime.test.cjs
+  if [ "$LEVEL" = full ]; then
+    run "network-isolated amd64 and arm64 App images" \
+      "$VISION/scripts/build-app-images.sh" all
   fi
 }
 
@@ -239,12 +293,12 @@ guard_python_venv() {
 }
 
 case "$TARGET" in
-  backend|tc|card|all) ;;
-  *) echo "usage: $0 {backend|tc|card|all} {fast|full}" >&2; exit 2 ;;
+  backend|tc|card|vision|all) ;;
+  *) echo "usage: $0 {backend|tc|card|vision|all} {fast|full}" >&2; exit 2 ;;
 esac
 case "$LEVEL" in
   fast|full) ;;
-  *) echo "usage: $0 {backend|tc|card|all} {fast|full}" >&2; exit 2 ;;
+  *) echo "usage: $0 {backend|tc|card|vision|all} {fast|full}" >&2; exit 2 ;;
 esac
 
 # Say which trees are being validated. All product roots are overridable by
@@ -302,6 +356,12 @@ case "$TARGET" in
     show_tree card: "$CARD" GROWSPACE_CARD
     warn_foreign_checkout card "$CARD" GROWSPACE_CARD
     ;;
+  vision)
+    show_tree vision: "$VISION" GROWSPACE_VISION
+    warn_foreign_checkout vision "$VISION" GROWSPACE_VISION
+    show_tree backend: "$BACKEND" GROWSPACE_BACKEND
+    show_tree card: "$CARD" GROWSPACE_CARD
+    ;;
   all)
     show_tree backend: "$BACKEND" GROWSPACE_BACKEND
     warn_foreign_checkout backend "$BACKEND" GROWSPACE_BACKEND
@@ -309,6 +369,8 @@ case "$TARGET" in
     warn_foreign_checkout tc "$TC" GROWSPACE_TC
     show_tree card: "$CARD" GROWSPACE_CARD
     warn_foreign_checkout card "$CARD" GROWSPACE_CARD
+    show_tree vision: "$VISION" GROWSPACE_VISION
+    warn_foreign_checkout vision "$VISION" GROWSPACE_VISION
     ;;
 esac
 
@@ -323,11 +385,11 @@ GUARDED=0
 # refused the whole card validation for whoever touched the card next — see
 # lovelace-growspace-manager-card#884.
 case "$TARGET" in
-  backend|card|all) "$WS/scripts/check-e2e-coverage" --card-root "$CARD" || GUARDED=1 ;;
+  backend|card|vision|all) "$WS/scripts/check-e2e-coverage" --card-root "$CARD" || GUARDED=1 ;;
 esac
-[ "$TARGET" != backend ] && [ "$TARGET" != all ] || { guard_python_venv backend "$BACKEND" || GUARDED=1; }
+[ "$TARGET" != backend ] && [ "$TARGET" != vision ] && [ "$TARGET" != all ] || { guard_python_venv backend "$BACKEND" || GUARDED=1; }
 [ "$TARGET" != tc ] && [ "$TARGET" != all ] || { guard_python_venv tc "$TC" || GUARDED=1; }
-[ "$TARGET" != card ] && [ "$TARGET" != all ] || { guard_card_deps || GUARDED=1; }
+[ "$TARGET" != card ] && [ "$TARGET" != vision ] && [ "$TARGET" != all ] || { guard_card_deps || GUARDED=1; }
 if [ "$GUARDED" -ne 0 ]; then
   printf '\n\033[1;31m✗ %s / %s — refusing to run\033[0m\n' "$TARGET" "$LEVEL"
   exit 1
@@ -337,8 +399,10 @@ case "$TARGET" in
   backend) check_workspace_e2e; check_backend ;;
   tc)      check_tc ;;
   card)    check_workspace_e2e; check_card ;;
+  vision)  check_vision ;;
   all)
     check_workspace_e2e
+    check_vision
     check_backend
     check_tc
     check_card

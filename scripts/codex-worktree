@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Create and address the matched backend/TC/card set used by a Codex-managed
+# Create and address the matched backend/TC/card/Vision set used by a Codex-managed
 # worktree of this workspace hub.
 set -euo pipefail
 
@@ -10,6 +10,7 @@ DEV_ROOT="$(dirname "$LOCAL_HUB")"
 BACKEND_REPO="$DEV_ROOT/growspace_manager"
 TC_REPO="$DEV_ROOT/growspace_manager_tc"
 CARD_REPO="$DEV_ROOT/lovelace-growspace-manager-card"
+VISION_REPO="$DEV_ROOT/growspace_manager_vision"
 
 WORKTREE_KEY="$(printf '%s' "$HUB_WORKTREE" | sha256sum | cut -c1-12)"
 NAME="codex-$WORKTREE_KEY"
@@ -20,6 +21,7 @@ BACKEND_WORKTREE="$BACKEND_CONTAINER/.worktrees/backend"
 TC_CONTAINER="$PAIR_ROOT/growspace_manager_tc"
 TC_WORKTREE="$TC_CONTAINER/.worktrees/tc"
 CARD_WORKTREE="$PAIR_ROOT/card"
+VISION_WORKTREE="$PAIR_ROOT/vision"
 
 require_repo() {
   local repo="$1"
@@ -90,11 +92,12 @@ prepare_tc_venv() {
 }
 
 setup_pair() {
-  local backend_base tc_base card_base
+  local backend_base tc_base card_base vision_base
 
   require_repo "$BACKEND_REPO"
   require_repo "$TC_REPO"
   require_repo "$CARD_REPO"
+  require_repo "$VISION_REPO"
   # Not because this pair runs it — it builds its own — but because that venv
   # is where the uv binary and the hub's documented setup live.
   [ -x "$BACKEND_REPO/.venv/bin/python" ] || {
@@ -105,15 +108,21 @@ setup_pair() {
     echo "ERROR: shared card dependencies missing at $CARD_REPO/node_modules" >&2
     exit 1
   }
+  [ -x "$VISION_REPO/.venv/bin/python" ] || {
+    echo "ERROR: main Vision test environment missing at $VISION_REPO/.venv" >&2
+    exit 1
+  }
 
   backend_base="$(resolve_base "$BACKEND_REPO" "${CODEX_BACKEND_BASE:-prerelease}")"
   tc_base="$(resolve_base "$TC_REPO" "${CODEX_TC_BASE:-main}")"
   card_base="$(resolve_base "$CARD_REPO" "${CODEX_CARD_BASE:-dev}")"
+  vision_base="$(resolve_base "$VISION_REPO" "${CODEX_VISION_BASE:-main}")"
 
   mkdir -p "$BACKEND_CONTAINER" "$TC_CONTAINER" "$PAIR_ROOT/.cache"
   add_worktree "$BACKEND_REPO" "$BACKEND_WORKTREE" "$backend_base"
   add_worktree "$TC_REPO" "$TC_WORKTREE" "$tc_base"
   add_worktree "$CARD_REPO" "$CARD_WORKTREE" "$card_base"
+  add_worktree "$VISION_REPO" "$VISION_WORKTREE" "$vision_base"
   ln -sfn "$BACKEND_WORKTREE" "$PAIR_ROOT/backend"
   ln -sfn "$TC_WORKTREE" "$PAIR_ROOT/tc"
   prepare_backend_venv
@@ -124,6 +133,7 @@ setup_pair() {
   printf '  backend: %s\n' "$BACKEND_WORKTREE"
   printf '  tc:      %s\n' "$TC_WORKTREE"
   printf '  card:    %s\n' "$CARD_WORKTREE"
+  printf '  vision:  %s\n' "$VISION_WORKTREE"
   printf '  pair:    %s\n' "$PAIR_ROOT"
 }
 
@@ -133,6 +143,8 @@ run_check() {
   export GROWSPACE_BACKEND="$BACKEND_WORKTREE"
   export GROWSPACE_TC="$TC_WORKTREE"
   export GROWSPACE_CARD="$CARD_WORKTREE"
+  export GROWSPACE_VISION="$VISION_WORKTREE"
+  export GROWSPACE_VISION_PY="$VISION_REPO/.venv/bin/python"
   export PRE_COMMIT_HOME="$PAIR_ROOT/.cache/pre-commit"
   export PYTHONDONTWRITEBYTECODE=1
   exec "$HUB_WORKTREE/scripts/check" "$target" "$level"
@@ -222,9 +234,10 @@ case "${1:-setup}" in
     git -C "$BACKEND_WORKTREE" status --short --branch
     git -C "$TC_WORKTREE" status --short --branch
     git -C "$CARD_WORKTREE" status --short --branch
+    git -C "$VISION_WORKTREE" status --short --branch
     ;;
   *)
-    echo "usage: $0 {setup|path|status|precommit|tc-precommit|card-precommit|card-e2e|check [backend|tc|card|all] [fast|full]}" >&2
+    echo "usage: $0 {setup|path|status|precommit|tc-precommit|card-precommit|card-e2e|check [backend|tc|card|vision|all] [fast|full]}" >&2
     exit 2
     ;;
 esac

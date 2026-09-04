@@ -60,8 +60,8 @@ Start the release-test instance with `./scripts/ha test up`.
 ./scripts/check all fast     # ruff+mypy+pytest, eslint+tsc+vitest
 ./scripts/check all full     # + coverage + production build
 ./scripts/check tc fast      # TC's own pytest suite
-# Growspace Vision V1 contract
-python3 -m unittest discover -s ../growspace_manager_vision/tests -v
+./scripts/check vision fast  # Vision V1 contract across service, backend, card, runtime
+./scripts/check vision full  # + full Vision suite and network-isolated App images
 ```
 
 ## Parallel agent work
@@ -84,11 +84,12 @@ Never run two agents in the same checkout.
 ### Codex managed worktrees
 
 Select the checked-in **growspace workspace** local environment when starting a
-Codex worktree task. Its setup creates isolated backend, TC, and card worktrees
+Codex worktree task. Its setup creates isolated backend, TC, card, and Vision worktrees
 on the same `codex/codex-<id>` branch, using `prerelease` for the backend, `main`
-for TC, and `dev` for the card. The set and its mutable caches stay under
-`worktrees/codex-<id>/`; each Python worktree gets a private venv while the card
-reuses `node_modules` through a guarded link when its lockfile agrees.
+for TC and Vision, and `dev` for the card. The set and its mutable caches stay under
+`worktrees/codex-<id>/`; backend and TC get private venvs, Vision uses its main
+checkout's test environment, and the card reuses `node_modules` through a guarded
+link when its lockfile agrees.
 
 The environment actions run the normal checks against the matched set. From a
 terminal, the equivalent commands are:
@@ -98,6 +99,7 @@ terminal, the equivalent commands are:
 ./scripts/codex-worktree precommit
 ./scripts/codex-worktree check backend fast
 ./scripts/codex-worktree check tc fast
+./scripts/codex-worktree check vision fast
 ./scripts/codex-worktree tc-precommit
 ./scripts/codex-worktree card-precommit
 ./scripts/codex-worktree card-e2e
