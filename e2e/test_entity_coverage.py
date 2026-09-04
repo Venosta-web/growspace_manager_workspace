@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from dataclasses import replace
 import json
+from pathlib import Path
 import unittest
+from unittest import mock
 
+from e2e import entity_coverage
 from e2e.entity_coverage import (
     EXACTLY_ONE,
     PROFILES,
@@ -15,6 +18,7 @@ from e2e.entity_coverage import (
     build_card_manifest,
     expand_entities,
     extract_generated_entity_ids,
+    remedy,
     render_ha_package,
     validate_contract,
     validate_generated_entities,
@@ -957,6 +961,25 @@ class EntityCoverageContractTest(unittest.TestCase):
                 for error in errors
             )
         )
+
+    def test_stale_adapter_failure_names_the_generator_and_the_card_root(
+        self,
+    ) -> None:
+        card_root = Path("/somewhere/lovelace-growspace-manager-card")
+
+        with mock.patch.object(entity_coverage, "validate_contract", return_value=[]):
+            message = remedy(card_root)
+
+        self.assertIn(f"./scripts/gen-e2e-sensors --card-root {card_root}", message)
+
+    def test_contract_failure_does_not_advise_regenerating(self) -> None:
+        with mock.patch.object(
+            entity_coverage, "validate_contract", return_value=["undeclared role"]
+        ):
+            message = remedy(Path("/somewhere/lovelace-growspace-manager-card"))
+
+        self.assertNotIn("gen-e2e-sensors", message)
+        self.assertIn("regenerating cannot help", message)
 
 
 if __name__ == "__main__":

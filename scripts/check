@@ -289,6 +289,10 @@ case "$TARGET" in
   backend)
     show_tree backend: "$BACKEND" GROWSPACE_BACKEND
     warn_foreign_checkout backend "$BACKEND" GROWSPACE_BACKEND
+    # Not a stage of this target, but the E2E guard below judges this checkout's
+    # committed fixture against the hub's declarations, so name it before it can
+    # refuse over a tree the header never mentioned.
+    show_tree card: "$CARD" GROWSPACE_CARD
     ;;
   tc)
     show_tree tc: "$TC" GROWSPACE_TC
@@ -311,9 +315,16 @@ esac
 # Before any stage runs — including the backend half of `all`, which would
 # otherwise spend a whole pytest suite on its way to a card refusal.
 GUARDED=0
-[ "$TARGET" != card ] && [ "$TARGET" != all ] || {
-  "$WS/scripts/check-e2e-coverage" --card-root "$CARD" || GUARDED=1
-}
+# The E2E coverage guard runs wherever `check_workspace_e2e` does, backend
+# included, because the drift it catches is authored on the hub side and only
+# observable on the card side: `e2e/entity_coverage.py` is the source and the
+# card's committed fixture is generated from it. Guarding `card` alone meant a
+# hub declaration change passed `./scripts/check backend` cleanly and then
+# refused the whole card validation for whoever touched the card next — see
+# lovelace-growspace-manager-card#884.
+case "$TARGET" in
+  backend|card|all) "$WS/scripts/check-e2e-coverage" --card-root "$CARD" || GUARDED=1 ;;
+esac
 [ "$TARGET" != backend ] && [ "$TARGET" != all ] || { guard_python_venv backend "$BACKEND" || GUARDED=1; }
 [ "$TARGET" != tc ] && [ "$TARGET" != all ] || { guard_python_venv tc "$TC" || GUARDED=1; }
 [ "$TARGET" != card ] && [ "$TARGET" != all ] || { guard_card_deps || GUARDED=1; }
