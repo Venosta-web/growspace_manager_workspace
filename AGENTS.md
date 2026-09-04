@@ -235,6 +235,28 @@ against a dependency tree matching nobody's lockfile. The fix it prints is
 whether one checkout may back another is hub setup's decision, not a validation
 command's.
 
+The `backend`, `card` and `all` targets additionally refuse if the E2E entity
+coverage contract has drifted. `e2e/entity_coverage.py` is the source of truth;
+`ha-dev/packages/e2e_simulated_sensors.yaml`, `docs/E2E.md` and the card's
+committed `tests/e2e/fixtures/e2e-entity-coverage.generated.json` are all
+generated from it, and `scripts/check-e2e-coverage` compares each one against
+the declarations. One command rewrites all three, and the refusal prints it with
+the card checkout already filled in:
+
+```bash
+./scripts/gen-e2e-sensors --card-root <path-to-card-checkout>
+```
+
+**`backend` is in that list on purpose.** The declarations are edited here, in
+the hub, but the artifact that goes stale lives in the card repository — so
+guarding only `card` meant a hub declaration change passed `./scripts/check
+backend` cleanly and then refused the *whole* card validation, eslint through
+vitest, for whoever touched the card next
+([card#884](https://github.com/Venosta-web/lovelace-growspace-manager-card/issues/884)).
+Editing `e2e/entity_coverage.py` and regenerating is one action; the check now
+treats it that way. The card checkout it will judge is named in the header even
+on a `backend` run, since it is not otherwise a tree that target reports on.
+
 ## Parallel agents — and why you cannot commit from the main checkout
 
 Never run two agents in the same checkout. Create a matched worktree pair:

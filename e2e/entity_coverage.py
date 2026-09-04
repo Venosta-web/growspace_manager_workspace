@@ -3084,6 +3084,31 @@ def generate_outputs(workspace: Path, card_root: Path) -> None:
         path.write_text(content)
 
 
+def remedy(card_root: Path) -> str:
+    """Name the one command that resolves a `check` failure.
+
+    A contract failure is a declaration the generator cannot express, so
+    regenerating would only rewrite the adapters around it. Every other failure
+    is drift in a generated adapter, and the generator is the only thing allowed
+    to write one — including the card manifest, which lives in a different
+    repository from both the declarations and this check, so a reader staring at
+    sixty entity errors has no reason to guess that one hub command fixes them.
+    """
+
+    if validate_contract():
+        return (
+            "\nThe declarations in e2e/entity_coverage.py are themselves "
+            "inconsistent;\nregenerating cannot help. Fix the contract above "
+            "first."
+        )
+    return (
+        "\nThe declarations are consistent — every error above is a generated "
+        "adapter\nthat no longer matches them. Regenerate all of them from the "
+        "hub:\n"
+        f"\n  ./scripts/gen-e2e-sensors --card-root {card_root}\n"
+    )
+
+
 def _summary() -> str:
     records = expand_entities()
     covered = [record for record in records if record.status is Status.COVERED]
@@ -3116,6 +3141,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if errors:
         for error in errors:
             print(f"ERROR: {error}")
+        print(remedy(card_root))
         return 1
     print(f"E2E entity coverage contract is consistent ({_summary()})")
     return 0
