@@ -45,13 +45,12 @@ test('the dev runtime starts the host-configured Vision App before Home Assistan
   assert.equal(vision.image, 'growspace-vision:test-amd64');
   assert.equal(vision.pull_policy, 'never');
   assert.equal(vision.read_only, true);
-  assert.deepEqual(vision.volumes, [
+  assert.deepEqual(vision.volumes.map(({ bind: _bind, ...volume }) => volume), [
     {
       type: 'bind',
       source: path.join(WORKSPACE, 'vision-dev'),
       target: '/data',
       read_only: true,
-      bind: {},
     },
   ]);
   assert.deepEqual(vision.ports, [
@@ -302,4 +301,14 @@ esac
   assert.match(smoke.stdout, /camera\.e2e_vision_1: analyzed/);
   assert.match(smoke.stdout, /camera\.e2e_vision_2: analyzed/);
   assert.match(fs.readFileSync(npmLog, 'utf8'), /vision-camera-profile\.spec\.ts/);
+});
+
+test('workspace CI executes the simulated Vision runtime contract', () => {
+  const workflow = fs.readFileSync(
+    path.join(WORKSPACE, '.github', 'workflows', 'quality.yml'),
+    'utf8'
+  );
+
+  assert.match(workflow, /node --test/);
+  assert.match(workflow, /scripts\/vision-runtime\.test\.cjs/);
 });

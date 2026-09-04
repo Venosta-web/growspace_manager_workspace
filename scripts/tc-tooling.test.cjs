@@ -144,7 +144,7 @@ test("check all validates TC rather than skipping it", (t) => {
   // Before the TC scaffold landed, `all` skipped the slot whenever the checkout
   // had no requirements.txt. Now that every TC checkout carries one, an absent
   // file means a stale or broken tree — and silence about it would let `all`
-  // report green while validating two repositories out of three.
+  // report green while validating two repositories out of four.
   const { root, hub } = fixture(t);
   const backend = path.join(root, "growspace_manager");
   const tc = path.join(root, "growspace_manager_tc");
@@ -241,14 +241,22 @@ test("Codex setup gives TC a private-venv-compatible worktree depth", (t) => {
   const { root, hub } = fixture(t);
   const backend = path.join(root, "growspace_manager");
   const tc = path.join(root, "growspace_manager_tc");
+  const vision = path.join(root, "growspace_manager_vision");
   const card = path.join(root, "lovelace-growspace-manager-card");
   const helperLog = path.join(root, "helper.log");
   initRepository(hub, { "README.md": "fixture\n" });
   initRepository(backend, { "requirements.txt": "homeassistant==2026.8.0\n" });
   initRepository(tc, { "requirements.txt": "homeassistant==2026.8.0\n" });
+  initRepository(vision, {
+    "pyproject.toml": "[project]\nname='vision'\nversion='1'\n",
+  });
   initRepository(card, { "package-lock.json": "{}\n" });
   executable(
     path.join(backend, ".venv", "bin", "python"),
+    "#!/usr/bin/env bash\n",
+  );
+  executable(
+    path.join(vision, ".venv", "bin", "python"),
     "#!/usr/bin/env bash\n",
   );
   fs.mkdirSync(path.join(card, "node_modules"), { recursive: true });
@@ -296,6 +304,49 @@ test("Codex setup gives TC a private-venv-compatible worktree depth", (t) => {
   assert.match(
     fs.readFileSync(helperLog, "utf8"),
     /venv:.*growspace_manager_tc.*\|tc/,
+  );
+});
+
+test("Codex setup includes the Vision checkout used by workspace checks", (t) => {
+  const { root, hub } = fixture(t);
+  const backend = path.join(root, "growspace_manager");
+  const tc = path.join(root, "growspace_manager_tc");
+  const vision = path.join(root, "growspace_manager_vision");
+  const card = path.join(root, "lovelace-growspace-manager-card");
+  const checkLog = path.join(root, "check.log");
+  initRepository(hub, { "README.md": "fixture\n" });
+  initRepository(backend, { "requirements.txt": "homeassistant==2026.8.0\n" });
+  initRepository(tc, { "requirements.txt": "homeassistant==2026.8.0\n" });
+  initRepository(vision, { "pyproject.toml": "[project]\nname='vision'\nversion='1'\n" });
+  initRepository(card, { "package-lock.json": "{}\n" });
+  executable(path.join(backend, ".venv", "bin", "python"), "#!/usr/bin/env bash\n");
+  executable(path.join(vision, ".venv", "bin", "python"), "#!/usr/bin/env bash\n");
+  fs.mkdirSync(path.join(card, "node_modules"), { recursive: true });
+  copyScript("codex-worktree", hub);
+  executable(path.join(hub, "scripts", "backend-venv"), "#!/usr/bin/env bash\n");
+  executable(path.join(hub, "scripts", "card-node-modules"), "#!/usr/bin/env bash\n");
+  executable(
+    path.join(hub, "scripts", "check"),
+    '#!/usr/bin/env bash\nprintf "%s|%s\\n" "$GROWSPACE_VISION" "$GROWSPACE_VISION_PY" > "$CHECK_LOG"\n',
+  );
+
+  const result = spawnSync(
+    path.join(hub, "scripts", "codex-worktree"),
+    ["check", "vision", "fast"],
+    { encoding: "utf8", env: { ...process.env, CHECK_LOG: checkLog } },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  const pairRoot = spawnSync(
+    path.join(hub, "scripts", "codex-worktree"),
+    ["path"],
+    { encoding: "utf8" },
+  ).stdout.trim();
+  const visionWorktree = path.join(pairRoot, "vision");
+  assert.equal(git(visionWorktree, "branch", "--show-current").startsWith("codex/"), true);
+  assert.equal(
+    fs.readFileSync(checkLog, "utf8").trim(),
+    `${visionWorktree}|${path.join(vision, ".venv", "bin", "python")}`,
   );
 });
 

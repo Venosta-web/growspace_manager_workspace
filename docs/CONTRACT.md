@@ -103,6 +103,21 @@ results invisible to the released card.
 
 [vision-migration-adr]: https://github.com/Venosta-web/growspace_manager/blob/prerelease/docs/adr/0043-vision-checkups-migrate-through-versioned-capture-contracts.md
 
+### Vision V1 quality gate
+
+Run `./scripts/check vision fast` from this workspace to execute the complete V1
+handoff: the Vision-owned OpenAPI fixtures, byte-for-byte backend vendoring, the
+backend's strict parser, the card's Zod schemas against the current backend fixtures,
+and the simulated development runtime. `./scripts/check vision full` additionally
+runs the whole Vision repository suite and builds and smokes both App architectures
+with Docker networking disabled.
+
+CI keeps ownership local. Growspace Vision runs its service suite and both locked App
+images; Growspace Manager checks its vendored fixtures against Vision `main`; and the
+card checks current `prerelease` fixtures for completeness plus the latest published
+backend release for backward safety. A missing current fixture is an error and never
+falls back to an older bootstrap commit.
+
 ## Breaking-change checklist
 
 Before merging anything that touches the boundary, confirm:
