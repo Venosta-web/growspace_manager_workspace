@@ -203,6 +203,7 @@ missing `docker` is a printed no-op. `ha test` (:8124) is untouched.
 ./scripts/check backend fast|full
 ./scripts/check tc      fast|full
 ./scripts/check card    fast|full
+./scripts/check vision  fast|full
 ./scripts/check all     fast|full
 ```
 
@@ -210,8 +211,8 @@ These are the exact commands to run — do not improvise venv paths or test flag
 
 `check` prints the checkouts it resolved before it runs anything, because it is
 not necessarily validating the tree you are sitting in. It takes
-`GROWSPACE_BACKEND` / `GROWSPACE_TC` / `GROWSPACE_CARD` when set —
-`codex-worktree check` sets all three — and otherwise falls back to the **main**
+`GROWSPACE_BACKEND` / `GROWSPACE_TC` / `GROWSPACE_CARD` / `GROWSPACE_VISION`
+when set — `codex-worktree check` sets all four — and otherwise falls back to the **main**
 checkouts. Run `./scripts/check card` from a `scripts/feature` worktree and,
 without that variable, it reports green about the main checkout; it now says so
 in the header and prints the invocation that would check yours instead.
@@ -326,7 +327,7 @@ the hook stays quietly inert until that branch lands in the main checkout. A
 as a collision, never clobbered.
 
 For a Codex-managed worktree of this hub, select the checked-in **growspace
-workspace** local environment instead. It creates the matched three-repository
+workspace** local environment instead. It creates the matched four-repository
 set during setup; use `./scripts/codex-worktree path` to locate it and
 `./scripts/codex-worktree check ...` to validate it. Do not create a second
 pair with `scripts/feature` in the same task. Card browser tests use an exact
