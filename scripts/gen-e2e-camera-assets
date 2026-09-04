@@ -42,6 +42,9 @@ except ModuleNotFoundError:  # pragma: no cover - environment guard
 
 SIZE = (640, 480)
 JPEG_QUALITY = 82
+# Fixed so re-running reproduces the same file. A caller rendering a series
+# of frames — scripts/seed-vision-history — overrides it per frame with
+# spec["clock"], which is the only thing on the HUD that moves.
 HUD_CLOCK = "2026-01-01 06:45:00"
 
 FONT_CANDIDATES = [
@@ -264,8 +267,9 @@ def draw_hud(img, spec, boxes, rng):
     draw.rectangle([0, 0, w, 26], fill=(0, 0, 0, 150))
     draw.ellipse([12, 9, 20, 17], fill=RED)
     draw.text((28, 6), spec["camera_label"], font=small, fill=WHITE)
-    clock_w = draw.textlength(HUD_CLOCK, font=small)
-    draw.text((w - clock_w - 12, 6), HUD_CLOCK, font=small, fill=WHITE)
+    clock = spec.get("clock", HUD_CLOCK)
+    clock_w = draw.textlength(clock, font=small)
+    draw.text((w - clock_w - 12, 6), clock, font=small, fill=WHITE)
 
     # bottom bar: the simulated verdict
     bar_h = 30
