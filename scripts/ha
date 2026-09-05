@@ -111,6 +111,9 @@ case "$CMD" in
   up)
     # Fail early and loudly if something else already owns the port —
     # this is exactly how the HA Core devcontainer used to silently win.
+    # `{{.Names}}` below is docker's own Go template, not a shell expansion;
+    # single quotes are what keep the shell out of it.
+    # shellcheck disable=SC2016
     if ss -ltn "sport = :$PORT" 2>/dev/null | grep -q ":$PORT"; then
       owner="$(docker ps --format '{{.Names}}\t{{.Ports}}' | grep ":$PORT->" | cut -f1 || true)"
       echo "ERROR: port $PORT is already in use${owner:+ by container '$owner'}." >&2

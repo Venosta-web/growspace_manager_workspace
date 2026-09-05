@@ -48,10 +48,17 @@ run() {
   hdr "$1"; shift
   "$@" || { RC=1; printf '\033[1;31m✗ FAILED: %s\033[0m\n' "$*"; }
 }
+# Enter a resolved checkout, or fail the target. `abspath` keeps a missing tree's
+# raw value, and this script runs without `set -e`, so a bare `cd` that failed
+# would leave every stage below validating whatever directory we were standing
+# in — the wrong-tree failure #140 exists to make legible, in its worst form.
+enter() {
+  cd "$1" || { echo "ERROR: cannot enter $1" >&2; RC=1; return 1; }
+}
 
 check_backend() {
   [ -x "$PY" ] || { echo "ERROR: venv missing at $PY — see the repo's CLAUDE.md" >&2; RC=1; return; }
-  cd "$BACKEND"
+  enter "$BACKEND" || return
   # Scopes below mirror .pre-commit-config.yaml exactly, so a green run here
   # means the hooks will not reject your commit:
   #   ruff-format  files: ^(custom_components|tests)/.+\.(py|pyi)$
@@ -71,7 +78,7 @@ check_backend() {
 
 check_tc() {
   [ -x "$TC_PY" ] || { echo "ERROR: venv missing at $TC_PY — see the TC repo's AGENTS.md" >&2; RC=1; return; }
-  cd "$TC"
+  enter "$TC" || return
   # Mirror the TC repository's Tests workflow: its own pytest suite, with
   # coverage in the full lane. Repository-file linting remains pre-commit's job.
   if [ "$LEVEL" = full ]; then
@@ -83,7 +90,7 @@ check_tc() {
 }
 
 check_card() {
-  cd "$CARD"
+  enter "$CARD" || return
   # Stages below mirror .github/workflows/lint.yml's job, in its order, so a
   # green run here means CI's lint job will not reject your PR. The card has no
   # husky/lint-staged, so nothing formats on commit — `format:check` is a real
@@ -107,7 +114,7 @@ check_card() {
 check_vision() {
   local contract_dir="$BACKEND/tests/fixtures/contract"
 
-  cd "$VISION"
+  enter "$VISION" || return
   if [ "$LEVEL" = full ]; then
     [ -x "$VISION_PY" ] || {
       refuse "no Vision test environment at $VISION_PY" \
@@ -127,13 +134,13 @@ check_vision() {
       -s tests -p test_growspace_vision_contract.py -v
   fi
 
-  cd "$BACKEND"
+  enter "$BACKEND" || return
   run "backend Vision fixture handoff" "$PY" \
     tests/utils/vision_contract_fixtures.py \
     --vision-root "$VISION" --backend-root "$BACKEND"
   run "backend Vision parser boundary" "$PY" -m pytest tests/test_vision_models.py -q
 
-  cd "$CARD"
+  enter "$CARD" || return
   run "card Vision schema boundary" env \
     GSM_MAIN_GROWSPACE_FIXTURE="$contract_dir/growspace_payload.json" \
     GSM_RELEASE_GROWSPACE_FIXTURE="$contract_dir/growspace_payload.json" \
@@ -145,7 +152,7 @@ check_vision() {
     "$CARD/node_modules/.bin/vitest" run \
     src/slices/camera/camera.schema.test.ts --environment node
 
-  cd "$WS"
+  enter "$WS" || return
   run "simulated Vision runtime" node --test scripts/vision-runtime.test.cjs
   if [ "$LEVEL" = full ]; then
     run "network-isolated amd64 and arm64 App images" \
@@ -154,17 +161,12 @@ check_vision() {
 }
 
 check_workspace_e2e() {
-  cd "$WS"
+  enter "$WS" || return
   run "workspace E2E contract tests" python3 -m unittest e2e.test_entity_coverage
-  run "workspace E2E tooling tests" node --test scripts/card-hacs-update.test.cjs \
-    scripts/card-node-modules.test.cjs \
-    scripts/check.test.cjs \
-    scripts/e2e-ensure-integration.test.cjs \
-    scripts/e2e-preflight.test.cjs \
-    scripts/gen-e2e-dashboards.test.cjs scripts/stamp-card-resource.test.cjs \
-    scripts/tc-tooling.test.cjs scripts/vision-runtime.test.cjs \
-    scripts/vision-v1-acceptance.test.cjs \
-    scripts/worktree-gc.test.cjs scripts/install-hooks.test.cjs
+  # A glob, matching .github/workflows/quality.yml. A hand-written list here and
+  # a hand-written list there drift independently, and both had already lost
+  # card-node-modules.test.cjs from CI.
+  run "workspace E2E tooling tests" node --test "scripts/**/*.test.cjs"
 }
 
 # The dependency tree a card check is about to validate is not necessarily the

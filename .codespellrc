@@ -1,0 +1,6 @@
+[codespell]
+# `hass`/`tage`/`trough` match the integration repository's list so a word that
+# is fine there is fine here; `ans` is the shell variable scripts/ha reads a
+# confirmation into.
+ignore-words-list = hass,tage,trough,ans
+quiet-level = 2

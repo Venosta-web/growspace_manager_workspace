@@ -1,0 +1,74 @@
+---
+name: Lint
+
+"on":
+  # `main` is this repository's only long-lived branch. Feature work is
+  # validated by pull_request; restricting push validation to main keeps a
+  # same-repository PR commit from running the whole workflow twice.
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Cancel only an older run for this workflow and this PR. Push and manual
+  # runs keep their branch/ref group and are never cancelled here.
+  group: >-
+    validation-${{ github.workflow }}-${{ github.event_name }}-${{
+    github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    name: Shell, Python, YAML and spelling
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        name: Setup Python
+        with:
+          python-version: "3.14"
+      # Pinned rather than taken from the runner image, so a refreshed image
+      # cannot turn a green branch red on findings nobody introduced. The Ruff,
+      # yamllint and codespell pins match the integration repository's, so a
+      # construct that passes there passes here.
+      - name: Install lint tools
+        run: >-
+          python -m pip install --upgrade
+          "ruff==0.15.12"
+          "yamllint==1.37.1"
+          "codespell==2.4.1"
+          "shellcheck-py==0.11.0.1"
+
+      # The hub's shell tooling is extensionless, so discover it by shebang the
+      # way the kernel does. A script added later is covered without editing
+      # this workflow.
+      - name: ShellCheck
+        run: |
+          mapfile -t scripts < <(
+            git ls-files scripts \
+              | while read -r f; do
+                  head -1 "$f" | grep -qE '^#!.*(bash|/sh)$' && printf '%s\n' "$f"
+                done
+          )
+          printf 'checking %d shell scripts\n' "${#scripts[@]}"
+          printf '  %s\n' "${scripts[@]}"
+          shellcheck "${scripts[@]}"
+
+      # Configuration lives in ruff.toml, .yamllint and .codespellrc rather than
+      # in flags here, so a local run and this job cannot disagree about what
+      # the rules are.
+      - name: ruff check
+        run: ruff check e2e ha-dev/custom_components/ac_infinity scripts
+      - name: ruff format --check
+        run: ruff format --check e2e ha-dev/custom_components/ac_infinity scripts
+
+      - name: yamllint
+        run: git ls-files -z '*.yml' '*.yaml' | xargs -0 yamllint --strict
+
+      - name: codespell
+        run: git ls-files -z | xargs -0 codespell

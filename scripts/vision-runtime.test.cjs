@@ -309,6 +309,16 @@ test('workspace CI executes the simulated Vision runtime contract', () => {
     'utf8'
   );
 
-  assert.match(workflow, /node --test/);
-  assert.match(workflow, /scripts\/vision-runtime\.test\.cjs/);
+  // CI runs the tooling suite as a glob rather than a hand-written list, so
+  // assert that the pattern it hands `node --test` really selects this file.
+  // Matching the name as a literal would have kept passing while the file went
+  // unrun — which is exactly how card-node-modules.test.cjs stayed outside CI.
+  const pattern = workflow.match(/node --test "([^"]+)"/)?.[1];
+  assert.ok(pattern, 'quality.yml should run node --test over a quoted glob');
+
+  const selected = fs.globSync(pattern, { cwd: WORKSPACE });
+  assert.ok(
+    selected.includes(path.join('scripts', 'vision-runtime.test.cjs')),
+    `${pattern} selected ${selected.length} files, none of them this one`
+  );
 });

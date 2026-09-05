@@ -361,6 +361,69 @@ Editing `e2e/entity_coverage.py` and regenerating is one action; the check now
 treats it that way. The card checkout it will judge is named in the header even
 on a `backend` run, since it is not otherwise a tree that target reports on.
 
+### What CI gates on a pull request
+
+`./scripts/check` validates the **product repositories**. The hub's own content —
+the shell tooling, the Python behind the E2E contract, the YAML, the workflows —
+is gated by three workflows on every pull request:
+
+| workflow | job | what it runs |
+|---|---|---|
+| `Lint` | Shell, Python, YAML and spelling | ShellCheck, Ruff, yamllint, codespell |
+| `Workspace quality` | Workspace contracts and tooling | the E2E coverage contract, and every `scripts/**/*.test.cjs` |
+| `PR Title` | Conventional commit title | the PR title, against the card repository's type list |
+
+Every tool is **pinned in the workflow** rather than taken from the runner image,
+and every rule lives in a checked-in config — `ruff.toml`, `.yamllint`,
+`.codespellrc` — never in a flag, so a local run and CI cannot disagree about
+what the rules are. To run the lint job exactly as CI does:
+
+```bash
+pip install "ruff==0.15.12" "yamllint==1.37.1" "codespell==2.4.1" "shellcheck-py==0.11.0.1"
+mapfile -t scripts < <(
+  git ls-files scripts \
+    | while read -r f; do
+        head -1 "$f" | grep -qE '^#!.*(bash|/sh)$' && printf '%s\n' "$f"
+      done
+)
+shellcheck "${scripts[@]}"
+ruff check e2e ha-dev/custom_components/ac_infinity scripts
+ruff format --check e2e ha-dev/custom_components/ac_infinity scripts
+git ls-files -z '*.yml' '*.yaml' | xargs -0 yamllint --strict
+git ls-files -z | xargs -0 codespell
+```
+
+Two of those deserve a note, because both encode a decision rather than a default.
+
+**ShellCheck discovers its inputs by shebang**, the way the kernel does, because
+the hub's shell tooling is extensionless. A script added to `scripts/` is covered
+without anyone remembering to edit a list.
+
+**The tooling suite is a glob, not a list.** The hand-written list it replaced had
+silently dropped `card-node-modules.test.cjs` — nine passing tests that no CI run
+had ever executed — because adding a test file and adding it to CI were two
+actions and only the first one is obvious. `scripts/vision-runtime.test.cjs`
+asserts that the workflow's pattern really selects it, expanding the glob rather
+than matching its own name as a literal: a name check would have kept passing
+while the file went unrun, which is the failure it exists to prevent.
+
+What is **not** linted is as deliberate. `.yamllint` ignores the agent skill
+manifests the installer owns, `ha-dev/packages/e2e_simulated_sensors.yaml`
+(generated from `e2e/entity_coverage.py`, so a fix here is undone by the next
+generation), and the stub files Home Assistant rewrites for itself. Ruff omits
+`E501`, because this repository's Python carries the same long explanatory prose
+its shell and Markdown do, and it exempts `e2e/entity_coverage.py` from `UP031`:
+that module renders Jinja2 templates, whose own `{{ }}` make percent-formatting
+the readable choice.
+
+Ruff also targets **`py313`, not the 3.14 that CI and the integration repository
+run** — the one place in this repository where a version pin is deliberately
+behind. These scripts are host tooling you are told to run directly, and at
+py314 the formatter drops the parentheses from `except (OSError, ...)` per
+PEP 758: valid only on 3.14, a hard `SyntaxError` on every interpreter before
+it, and worth nothing. Ruff catches the construct itself, so the floor is
+enforced rather than hoped for.
+
 ## Parallel agents — and why you cannot commit from the main checkout
 
 Never run two agents in the same checkout. Create a matched worktree pair:

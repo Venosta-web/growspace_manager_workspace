@@ -1,0 +1,34 @@
+# Hub Python: the E2E entity-coverage contract, the AC Infinity E2E simulator,
+# and the generator scripts. The product repositories carry their own, stricter
+# Ruff configuration; this one is deliberately smaller, because the hub's Python
+# is tooling rather than a shipped integration.
+
+# Deliberately behind the 3.14 that CI and the integration repository run. These
+# scripts are host tooling — AGENTS.md tells you to run `./scripts/seed-vision-history`
+# directly — so the formatter must not emit syntax a slightly older interpreter
+# rejects. At py314 it drops the parentheses from `except (OSError, ...)` per
+# PEP 758, which is a hard SyntaxError anywhere before 3.14 and buys nothing.
+target-version = "py313"
+required-version = ">=0.15.12"
+
+# The hub's Python tooling ships as extensionless executables on PATH, which
+# Ruff does not discover by shebang during directory traversal.
+extend-include = [
+    "scripts/check-e2e-coverage",
+    "scripts/gen-e2e-camera-assets",
+    "scripts/gen-e2e-sensors",
+    "scripts/seed-vision-history",
+]
+
+[lint]
+# Ruff's defaults (pyflakes + the pycodestyle errors that are real bugs), plus
+# import order, the bugbear checks that catch silent breakage, and pyupgrade.
+# `E501` is left out on purpose: this repository's Python carries the same long
+# explanatory prose its shell and Markdown do, and reflowing it buys nothing.
+select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
+
+[lint.per-file-ignores]
+# This module renders Home Assistant Jinja2 templates. Their own `{{ }}` and the
+# `%%` that survives into the template make percent-formatting the readable
+# choice here; an f-string would have to double every brace.
+"e2e/entity_coverage.py" = ["UP031"]

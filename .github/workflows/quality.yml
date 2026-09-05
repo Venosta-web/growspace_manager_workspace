@@ -12,8 +12,10 @@ permissions:
   contents: read
 
 concurrency:
+  # Cancel only an older run for this workflow and this PR. Push and manual
+  # runs keep their branch/ref group and are never cancelled here.
   group: >-
-    workspace-quality-${{ github.event_name }}-${{
+    validation-${{ github.workflow }}-${{ github.event_name }}-${{
     github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
@@ -31,18 +33,9 @@ jobs:
           node-version: "24"
       - name: E2E entity coverage contract
         run: python -m unittest e2e.test_entity_coverage -v
+      # A glob, not a list. The hand-written list this replaced had silently
+      # dropped `card-node-modules.test.cjs` — nine passing tests that no CI run
+      # had ever executed — because adding a test file and adding it here are two
+      # actions and only the first is obvious.
       - name: Workspace tooling and simulated Vision runtime
-        run: >-
-          node --test
-          scripts/card-hacs-update.test.cjs
-          scripts/card-release-update-check.test.cjs
-          scripts/check.test.cjs
-          scripts/e2e-ensure-integration.test.cjs
-          scripts/e2e-preflight.test.cjs
-          scripts/gen-e2e-dashboards.test.cjs
-          scripts/install-hooks.test.cjs
-          scripts/stamp-card-resource.test.cjs
-          scripts/tc-tooling.test.cjs
-          scripts/vision-runtime.test.cjs
-          scripts/vision-v1-acceptance.test.cjs
-          scripts/worktree-gc.test.cjs
+        run: node --test "scripts/**/*.test.cjs"
