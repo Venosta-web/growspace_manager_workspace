@@ -31,6 +31,15 @@ homeassistant:
   unit_system: metric
   currency: EUR
   country: DE
+  # The same pin ha-dev carries, and for the same reason: unset, Home Assistant
+  # in Docker defaults the "local" media dir to /media, which is root-owned in
+  # the image while HA runs as 1000. The Vision Evidence Store then cannot
+  # create its image root, every start logs `Failed to open the Vision Evidence
+  # Store` with a PermissionError, and a release test reads as broken over
+  # something no release test is asking about. `vol.IsDir()` validates this at
+  # config load, so ha-test/media/ has to exist — hence its tracked .gitkeep.
+  media_dirs:
+    local: /config/media
 
 # There is deliberately no `http:` block here any more. It declared this same
 # bridge range as a trusted proxy, and Home Assistant refuses a trusted-network
