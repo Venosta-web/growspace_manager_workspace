@@ -115,11 +115,30 @@ and the simulated development runtime. `./scripts/check vision full` additionall
 runs the whole Vision repository suite and builds and smokes both App architectures
 with Docker networking disabled.
 
-CI keeps ownership local. Growspace Vision runs its service suite and both locked App
-images; Growspace Manager checks its vendored fixtures against Vision `main`; and the
-card checks current `prerelease` fixtures for completeness plus the latest published
-backend release for backward safety. A missing current fixture is an error and never
-falls back to an older bootstrap commit.
+CI keeps ownership local, and for the vendored fixtures that means the check runs in
+the repository that owns them rather than the one that copies them. `growspace_manager`
+is public and `growspace_manager_vision` is private, so a backend job cannot read the
+canonical fixtures without a credential; Vision's own CI can read both sides for free.
+Growspace Vision therefore runs its service suite, both locked App images, and
+`scripts/check-backend-vendoring.sh`, which clones the public backend at `prerelease`
+and runs the backend's own comparison helper against the canonical V1 fixtures — on
+every Vision pull request and push to `main`, and weekly, since a backend-side edit to
+the vendored tree trips no commit in Vision. The card checks current `prerelease`
+fixtures for completeness plus the latest published backend release for backward
+safety. A missing current fixture is an error and never falls back to an older
+bootstrap commit.
+
+**No job in `growspace_manager` looks at Vision at all.** Its
+`tests/test_vision_contract_fixture_sync.py` exercises the comparison helper against
+synthetic trees; it does not compare anything to the Vision repository. The backend
+learns that its vendored copy has gone stale from Vision's gate, or from
+`./scripts/check vision` here — never from its own CI.
+
+A V1 fixture change is authored in Vision first, as the contract always is, but the
+backend's mirror commit lands first: Vision's vendoring job is red from the moment the
+fixtures move until `prerelease` carries the same bytes, and the backend can vendor
+from an unmerged Vision branch because it is copying bytes, not depending on a merged
+commit.
 
 ## Breaking-change checklist
 
