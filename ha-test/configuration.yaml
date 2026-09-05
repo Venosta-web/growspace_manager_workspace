@@ -27,6 +27,10 @@ logger:
   default: warning
   logs:
     custom_components.growspace_manager: debug
+    # scripts/card-hacs-update drives HACS from the outside, and HACS reports
+    # most of its refusals as frontend events rather than log lines. Debug here
+    # is the only place a failed download or registration explains itself.
+    custom_components.hacs: debug
 
 # NOTE: no `lovelace.resources` block here on purpose — the HACS install flow
 # must register the resource itself. If the card only works when you hand-add

@@ -1,0 +1,919 @@
+#!/usr/bin/env node
+/*
+ * Reproduce a HACS install-then-update of the card, then walk what the entry
+ * bundle actually imports.
+ *
+ *   ./scripts/card-hacs-update <from-tag> <to-tag>
+ *
+ * The failure this exists for is invisible to every other tool here. The dev
+ * runtime bind-mounts the whole build output, so chunks always resolve there
+ * and HACS is never in the loop; a fresh HACS download fetches every release
+ * asset and passes. Only the update path was ever seen to break it — a live
+ * install ended up with the entry from v1.3.0-next.48 sitting on the complete
+ * v1.3.0-next.10 chunk set, every module the entry imports returning 404, and
+ * the dashboard rendering nothing.
+ *
+ * So this drives the real thing: real HACS, in the clean :8124 instance,
+ * downloading real release assets from GitHub. Nothing is copied into place.
+ * Then it fetches the registered entry URL over HTTP and follows its import
+ * graph, reporting the status of every module — the shape of the bug as a
+ * browser meets it — and exits non-zero if any of them is not served.
+ *
+ * What it finds today, on HACS 2.0.5, is not that: both downloads fetch the
+ * complete asset set of the tag they were asked for, and the entry's graph
+ * resolves. What the update does leave behind is the whole previous chunk set,
+ * forever — 66 files where 34 belong — because HACS treats a plugin release as
+ * single-file content and never cleans the directory. The run prints that count
+ * next to the walk, so the day a download does come back partial, the two
+ * numbers say so together.
+ *
+ * The dev instance is refused, not merely defaulted away from: :8123 serves the
+ * card from a read-only bind mount of dist/, so a HACS download there would
+ * fight the mount and take the dev loop with it.
+ */
+"use strict";
+
+const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { execFileSync } = require("node:child_process");
+
+const { connectHaWebSocket } = require("./gen-e2e-dashboards.cjs");
+
+const HERE = path.resolve(__dirname, "..");
+const CARD_REPOSITORY = "Venosta-web/lovelace-growspace-manager-card";
+const CARD_DIRECTORY = CARD_REPOSITORY.split("/")[1];
+const HACS_FILES_PREFIX = `/hacsfiles/${CARD_DIRECTORY}`;
+const DEFAULT_HACS_VERSION = "2.0.5";
+const DEFAULT_BASE_URL = "http://localhost:8124";
+const DEV_PORT = "8123";
+const DEV_CONFIG_DIRNAME = "ha-dev";
+const TEST_CONFIG_DIRNAME = "ha-test";
+const MODULE_LIMIT = 250;
+/* github.com/Venosta-web/lovelace-growspace-manager-card — HACS keys its store
+ * by the GitHub repository id, which is what a real registration would store. */
+const CARD_REPOSITORY_ID = "1052170854";
+
+/* ------------------------------------------------------------------ *
+ * Pure helpers — everything scripts/card-hacs-update.test.cjs asserts.
+ * ------------------------------------------------------------------ */
+
+function mainHubCheckout(checkout = HERE) {
+  try {
+    const common = execFileSync(
+      "git",
+      [
+        "-C",
+        checkout,
+        "rev-parse",
+        "--path-format=absolute",
+        "--git-common-dir",
+      ],
+      { encoding: "utf8" },
+    ).trim();
+    return path.resolve(common, "..");
+  } catch {
+    return checkout;
+  }
+}
+
+/*
+ * The dev instance is off limits, and saying so is half of what this guard is
+ * for. The other half is that ha-test/ and ha-dev/ are both plain directories
+ * under the hub: an over-helpful --config-dir is all it takes to point a HACS
+ * download at the tree :8123 serves.
+ */
+function assertTestInstance({ baseUrl, configDir }) {
+  const url = new URL(baseUrl);
+  const port = url.port || (url.protocol === "https:" ? "443" : "80");
+  const refuse = (what) => {
+    throw new Error(
+      `refusing to run against the dev instance (${what}).\n` +
+        `  This downloads release assets into <config>/www/community/${CARD_DIRECTORY},\n` +
+        `  which on :${DEV_PORT} is a read-only bind mount of the card's dist/. Use the\n` +
+        `  clean test instance: ${DEFAULT_BASE_URL} and <hub>/${TEST_CONFIG_DIRNAME}.`,
+    );
+  };
+  if (port === DEV_PORT) refuse(`${baseUrl} is the dev port`);
+  if (path.basename(configDir) === DEV_CONFIG_DIRNAME) {
+    refuse(`${configDir} is the dev config directory`);
+  }
+}
+
+/*
+ * Finding what a module imports means reading real rollup output, which is not
+ * as simple as looking for the word `import`. These bundles carry their
+ * dependencies' unminified source, comments and all, and zod alone contributes
+ * `// import { $ZodType } from "./schemas.js";` — a line that is not an import,
+ * names a file that was never built, and cost this tool a false 404 the first
+ * time it ran.
+ *
+ * So comments come out first, and what is left is matched only where an import
+ * can legally be: a statement at the start of a line or after ; or }, or an
+ * import() call. A string that merely contains the words is not enough. The
+ * two remaining blind spots — a `/*` inside a string literal, and an import()
+ * quoted inside one — cannot arise in a bundle of this shape, and anything
+ * they did produce would have to be a relative path before it was followed.
+ */
+function stripComments(source) {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/^[ \t]*\/\/.*$/gm, "");
+}
+
+// The lookaheads keep `import`/`export` from matching a longer identifier
+// while still allowing minified output's `import{a}from"./x.js"`.
+const SPECIFIER_PATTERNS = [
+  /(?:^|[\n;}])\s*import(?=[\s{*"'])\s*(?:[^"'()]*?\bfrom\s*)?["']([^"']+)["']/g,
+  /(?:^|[\n;}])\s*export(?=[\s{*])\s*[^"']*?\bfrom\s*["']([^"']+)["']/g,
+  /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g,
+];
+
+function parseModuleSpecifiers(source) {
+  const code = stripComments(source);
+  const found = new Set();
+  for (const pattern of SPECIFIER_PATTERNS) {
+    for (const [, specifier] of code.matchAll(pattern)) found.add(specifier);
+  }
+  return [...found];
+}
+
+/*
+ * Resolve the way a browser does: against the importer's URL, dropping its
+ * query. That detail is the whole point — HACS stamps ?hacstag= on the entry
+ * only, so the chunks are requested at their bare paths and a stale chunk set
+ * is exactly what 404s.
+ */
+function resolveSpecifier(specifier, importerUrl) {
+  if (!/^\.{0,2}\//.test(specifier)) return null;
+  return new URL(specifier, importerUrl).toString();
+}
+
+async function walkImportGraph({ entryUrl, fetchModule, limit = MODULE_LIMIT }) {
+  const seen = new Map();
+  const queue = [{ url: entryUrl, importer: null }];
+  while (queue.length > 0 && seen.size < limit) {
+    const { url, importer } = queue.shift();
+    if (seen.has(url)) continue;
+    const response = await fetchModule(url);
+    seen.set(url, {
+      url,
+      importer,
+      status: response.status,
+      bytes: (response.body || "").length,
+    });
+    if (response.status !== 200) continue;
+    for (const specifier of parseModuleSpecifiers(response.body)) {
+      const resolved = resolveSpecifier(specifier, url);
+      if (resolved === null) {
+        if (!seen.has(specifier)) {
+          seen.set(specifier, {
+            url: specifier,
+            importer: url,
+            status: null,
+            bytes: 0,
+          });
+        }
+        continue;
+      }
+      if (!seen.has(resolved)) queue.push({ url: resolved, importer: url });
+    }
+  }
+  return [...seen.values()];
+}
+
+function brokenModules(records) {
+  return records.filter(
+    (record) => record.status !== null && record.status !== 200,
+  );
+}
+
+function formatWalk(records, { baseUrl = "" } = {}) {
+  const shorten = (url) =>
+    url.startsWith(baseUrl) ? url.slice(baseUrl.length) : url;
+  const lines = records.map((record) => {
+    const status = record.status === null ? "----" : String(record.status);
+    const suffix =
+      record.status === null
+        ? "  (not a relative specifier — not followed)"
+        : record.importer
+          ? `  ← ${path.basename(shorten(record.importer).split("?")[0])}`
+          : "";
+    return `  ${status}  ${shorten(record.url)}${suffix}`;
+  });
+  const broken = brokenModules(records);
+  lines.push(
+    broken.length === 0
+      ? `  ✓ ${records.length} modules, every one served`
+      : `  ✗ ${broken.length} of ${records.length} modules are not 200`,
+  );
+  return lines.join("\n");
+}
+
+/* A Crockford base32 ULID, because HA logs a repair issue for any other id. */
+function ulid(now = Date.now(), randomBytes = crypto.randomBytes) {
+  const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+  let time = "";
+  let remaining = now;
+  for (let index = 0; index < 10; index += 1) {
+    time = alphabet[remaining % 32] + time;
+    remaining = Math.floor(remaining / 32);
+  }
+  return (
+    time +
+    [...randomBytes(16)].map((byte) => alphabet[byte % 32]).join("")
+  );
+}
+
+/*
+ * HACS has exactly one way in for a human — a GitHub device-code flow that
+ * ends in a browser — and no YAML or import path at all. An agent cannot walk
+ * that, so the entry is written the way the flow would have written it: token
+ * in data, experimental in options. Everything about the card's download still
+ * goes through HACS itself.
+ */
+function hacsConfigEntry({ token, entryId = ulid(), now = new Date() }) {
+  const timestamp = now.toISOString();
+  return {
+    created_at: timestamp,
+    data: { token },
+    disabled_by: null,
+    discovery_keys: {},
+    domain: "hacs",
+    entry_id: entryId,
+    minor_version: 1,
+    modified_at: timestamp,
+    options: { experimental: true },
+    pref_disable_new_entities: false,
+    pref_disable_polling: false,
+    source: "user",
+    subentries: [],
+    title: "HACS",
+    unique_id: null,
+    version: 1,
+  };
+}
+
+function withHacsEntry(storage, entry) {
+  const entries = storage?.data?.entries;
+  assert(
+    Array.isArray(entries),
+    "core.config_entries has no data.entries array",
+  );
+  if (entries.some((existing) => existing.domain === "hacs")) return null;
+  return { ...storage, data: { ...storage.data, entries: [...entries, entry] } };
+}
+
+/*
+ * HACS refuses to register this repository the way a human would — paste the
+ * URL, pick "Lovelace" — and the refusal is silent, dispatched as a frontend
+ * event and never logged. It happens because every one of the last 30 releases
+ * is a prerelease: with show_beta off HACS filters them all away, falls back to
+ * checking `main`, finds no growspace-manager-card.js in a tree whose dist/ is
+ * gitignored, and gives up. Whoever hit the bug this reproduces added the card
+ * while that was not yet true, and their HACS has carried it ever since.
+ *
+ * So when the add does not take, the repository is written into HACS's own
+ * store the way theirs looks. Two details are load-bearing. show_beta, because
+ * without it HACS filters away every release this repository has and there is
+ * nothing to download. And installed, because HACS unregisters every custom
+ * repository that is not downloaded during the startup category refresh — a
+ * seeded row that claims nothing is installed is gone before the first
+ * command reaches it. The claim is then made true the honest way: the tool
+ * uninstalls through HACS before it downloads anything, so the from-tag really
+ * is a first install onto an empty directory.
+ *
+ * Only the store row is written. Every byte of the card still arrives through
+ * HACS, from the real release assets.
+ */
+function hacsRepositoryRow({
+  fullName = CARD_REPOSITORY,
+  installedVersion,
+  showBeta = true,
+  now = new Date(),
+}) {
+  return {
+    full_name: fullName,
+    category: "plugin",
+    new: false,
+    show_beta: showBeta,
+    installed: true,
+    version_installed: installedVersion,
+    // hacs/repositories/list drops any repository that was never fetched, so a
+    // row without this is registered and invisible.
+    last_fetched: now.getTime() / 1000,
+  };
+}
+
+function withHacsRepository(store, id, row) {
+  const base = store ?? {
+    version: "6", // HACS's VERSION_STORAGE, and it compares as a string
+    minor_version: 1,
+    key: "hacs.repositories",
+    data: {},
+  };
+  const data = base.data ?? {};
+  return { ...base, data: { ...data, [id]: { ...(data[id] ?? {}), ...row } } };
+}
+
+/*
+ * Options take a value, switches do not. Knowing which is which is what keeps
+ * `--reset v1.3.0-next.10 v1.3.0-next.48` from reading the from-tag as the
+ * value of --reset and then complaining that no tags were given.
+ */
+const OPTIONS = new Set([
+  "--base-url",
+  "--config-dir",
+  "--hacs-version",
+  "--github-token",
+]);
+const SWITCHES = new Set(["--reset", "--help"]);
+
+function parseArguments(argv) {
+  const options = {};
+  const switches = new Set();
+  const positional = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (OPTIONS.has(argument)) {
+      const value = argv[index + 1];
+      if (value === undefined) throw new Error(`${argument} needs a value`);
+      options[argument] = value;
+      index += 1;
+    } else if (SWITCHES.has(argument)) {
+      switches.add(argument);
+    } else if (argument.startsWith("--")) {
+      throw new Error(`unknown option ${argument}`);
+    } else {
+      positional.push(argument);
+    }
+  }
+  return { options, switches, positional };
+}
+
+/* ------------------------------------------------------------------ *
+ * The live run.
+ * ------------------------------------------------------------------ */
+
+function log(message = "") {
+  console.log(message);
+}
+
+function heading(message) {
+  console.log(`\n\x1b[1;36m━━ ${message}\x1b[0m`);
+}
+
+async function fetchText(url, { headers = {}, timeoutMs = 30_000 } = {}) {
+  const response = await fetch(url, {
+    headers,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  return { status: response.status, body: await response.text() };
+}
+
+async function postJson(url, payload, { headers = {} } = {}) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(60_000),
+  });
+  const body = await response.text();
+  return {
+    status: response.status,
+    body,
+    json: (() => {
+      try {
+        return JSON.parse(body);
+      } catch {
+        return null;
+      }
+    })(),
+  };
+}
+
+async function until(what, probe, { timeoutMs, intervalMs = 2000 }) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError = "";
+  while (Date.now() < deadline) {
+    try {
+      const result = await probe();
+      if (result) return result;
+    } catch (error) {
+      lastError = error.message || String(error);
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  throw new Error(
+    `timed out after ${Math.round(timeoutMs / 1000)}s waiting for ${what}${lastError ? ` (last error: ${lastError})` : ""}`,
+  );
+}
+
+/*
+ * Compose resolves ./ha-test and the source mounts relative to the compose
+ * file, and every hub checkout produces the same project and container names —
+ * so the runtime belongs to the main checkout even when this command is run
+ * from a worktree. Running compose there is what running it from the main
+ * checkout would do; ha-test has no source mounts to get wrong.
+ */
+function compose(runtimeWorkspace, args) {
+  execFileSync("docker", ["compose", "--profile", "test", ...args], {
+    cwd: runtimeWorkspace,
+    stdio: "inherit",
+  });
+}
+
+function githubToken(explicit) {
+  if (explicit) return explicit;
+  if (process.env.HACS_GITHUB_TOKEN) return process.env.HACS_GITHUB_TOKEN;
+  if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN;
+  try {
+    return execFileSync("gh", ["auth", "token"], { encoding: "utf8" }).trim();
+  } catch {
+    return "";
+  }
+}
+
+function installedHacsVersion(componentDir) {
+  const manifest = path.join(componentDir, "manifest.json");
+  if (!fs.existsSync(manifest)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(manifest, "utf8")).version;
+  } catch {
+    return null;
+  }
+}
+
+async function ensureHacsComponent({ configDir, version }) {
+  const componentDir = path.join(configDir, "custom_components", "hacs");
+  if (installedHacsVersion(componentDir) === version) {
+    log(`  HACS ${version} already installed in ${componentDir}`);
+    return false;
+  }
+  const url = `https://github.com/hacs/integration/releases/download/${version}/hacs.zip`;
+  log(`  downloading ${url}`);
+  const response = await fetch(url, { signal: AbortSignal.timeout(120_000) });
+  if (!response.ok) {
+    throw new Error(`could not download HACS ${version}: HTTP ${response.status}`);
+  }
+  const archive = path.join(
+    fs.mkdtempSync(path.join(os.tmpdir(), "hacs-")),
+    "hacs.zip",
+  );
+  fs.writeFileSync(archive, Buffer.from(await response.arrayBuffer()));
+  fs.rmSync(componentDir, { recursive: true, force: true });
+  fs.mkdirSync(componentDir, { recursive: true });
+  execFileSync("python3", ["-m", "zipfile", "-e", archive, componentDir]);
+  fs.rmSync(path.dirname(archive), { recursive: true, force: true });
+  log(`  installed HACS ${version} into ${componentDir}`);
+  return true;
+}
+
+async function tokenWorks(baseUrl, token) {
+  if (!token) return false;
+  const { status } = await fetchText(`${baseUrl}/api/`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  return status === 200;
+}
+
+/*
+ * A virgin :8124 has no user, so there is no token to be given one. HA's
+ * onboarding REST API is the supported way in, and it hands back an auth code
+ * we trade for a session — from which the WebSocket API mints the long-lived
+ * token every later run reuses.
+ */
+async function onboard({ baseUrl, tokenFile }) {
+  const existing = fs.existsSync(tokenFile)
+    ? fs.readFileSync(tokenFile, "utf8").trim()
+    : "";
+  if (await tokenWorks(baseUrl, existing)) {
+    log(`  reusing the access token in ${tokenFile}`);
+    return existing;
+  }
+
+  const steps = JSON.parse(
+    (await fetchText(`${baseUrl}/api/onboarding`)).body || "[]",
+  );
+  const userStep = steps.find((step) => step.step === "user");
+  if (userStep && userStep.done) {
+    throw new Error(
+      `the test instance already has an owner but ${tokenFile} holds no working token.\n` +
+        `  Create a long-lived token at ${baseUrl}/profile/security and write it there,\n` +
+        `  or start over with --reset.`,
+    );
+  }
+
+  const clientId = `${baseUrl}/`;
+  const password = crypto.randomBytes(12).toString("base64url");
+  const created = await postJson(`${baseUrl}/api/onboarding/users`, {
+    client_id: clientId,
+    name: "Growspace Release Test",
+    username: "growspace",
+    password,
+    language: "en",
+  });
+  if (created.status !== 200 || !created.json?.auth_code) {
+    throw new Error(`onboarding failed: HTTP ${created.status} ${created.body}`);
+  }
+
+  const tokenResponse = await fetch(`${baseUrl}/auth/token`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code: created.json.auth_code,
+      client_id: clientId,
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  const session = await tokenResponse.json();
+  if (!session.access_token) {
+    throw new Error(`could not exchange the onboarding auth code: ${JSON.stringify(session)}`);
+  }
+  const authorization = { authorization: `Bearer ${session.access_token}` };
+
+  // Finish the remaining steps so the instance behaves like a real one. They
+  // are advisory: an instance that has already passed a step answers 403.
+  for (const [step, payload] of [
+    ["core_config", {}],
+    ["analytics", {}],
+    ["integration", { client_id: clientId, redirect_uri: `${baseUrl}/?auth_callback=1` }],
+  ]) {
+    await postJson(`${baseUrl}/api/onboarding/${step}`, payload, {
+      headers: authorization,
+    }).catch(() => null);
+  }
+
+  const connection = await connectTestInstance(baseUrl, session.access_token);
+  let longLived;
+  try {
+    longLived = await command(connection, {
+      type: "auth/long_lived_access_token",
+      client_name: `card-hacs-update ${new Date().toISOString()}`,
+      lifespan: 365,
+    });
+  } finally {
+    connection.close();
+  }
+  fs.writeFileSync(tokenFile, longLived, { mode: 0o600 });
+  log(`  onboarded, token saved to ${tokenFile}`);
+  log(`  sign in at ${baseUrl} as growspace / ${password} to watch HACS work`);
+  return longLived;
+}
+
+/*
+ * connectHaWebSocket() speaks the `ws` package's event API. Node's own
+ * WebSocket is close enough to adapt in five lines, which keeps this command
+ * independent of the card checkout's node_modules — it has no other reason to
+ * need one.
+ */
+class NodeWebSocket {
+  constructor(url) {
+    this.socket = new globalThis.WebSocket(url);
+  }
+  on(event, handler) {
+    this.socket.addEventListener(
+      event,
+      event === "message" ? (message) => handler(message.data) : handler,
+    );
+  }
+  send(payload) {
+    this.socket.send(payload);
+  }
+  close() {
+    this.socket.close();
+  }
+}
+
+function connectTestInstance(baseUrl, token) {
+  return connectHaWebSocket({ WebSocket: NodeWebSocket, baseUrl, token });
+}
+
+async function command(connection, message) {
+  const response = await connection.send(message);
+  if (!response.success) {
+    throw new Error(
+      `${message.type} failed: ${JSON.stringify(response.error || response)}`,
+    );
+  }
+  return response.result;
+}
+
+async function waitForHacs(connection) {
+  return until(
+    "HACS to finish starting",
+    async () => {
+      const info = await connection.send({ type: "hacs/info" });
+      if (!info.success) return false;
+      return info.result.startup === false ? info.result : false;
+    },
+    { timeoutMs: 300_000, intervalMs: 3000 },
+  );
+}
+
+function findCardRepository(repositories) {
+  return repositories.find(
+    (repository) =>
+      String(repository.full_name).toLowerCase() ===
+      CARD_REPOSITORY.toLowerCase(),
+  );
+}
+
+async function listPlugins(connection) {
+  return command(connection, {
+    type: "hacs/repositories/list",
+    categories: ["plugin"],
+  });
+}
+
+/*
+ * hacs/repositories/add answers success before it has done anything and
+ * reports its refusals as a frontend event, so the only way to know whether a
+ * repository was accepted is to look for it afterwards. Null means it was not.
+ */
+async function ensureCardRepository(connection) {
+  const known = findCardRepository(await listPlugins(connection));
+  if (known) return known;
+  log(`  adding ${CARD_REPOSITORY} as a custom repository`);
+  await command(connection, {
+    type: "hacs/repositories/add",
+    repository: CARD_REPOSITORY,
+    category: "plugin",
+  });
+  try {
+    return await until(
+      `${CARD_REPOSITORY} to appear in the HACS store`,
+      async () => findCardRepository(await listPlugins(connection)),
+      { timeoutMs: 30_000 },
+    );
+  } catch {
+    return null;
+  }
+}
+
+async function download(connection, repositoryId, version) {
+  await command(connection, {
+    type: "hacs/repository/download",
+    repository: String(repositoryId),
+    version,
+  });
+  const repository = findCardRepository(await listPlugins(connection));
+  return repository ? repository.installed_version : null;
+}
+
+async function entryUrl(connection, baseUrl) {
+  const resources = await command(connection, { type: "lovelace/resources" });
+  const registered = (resources || []).find((resource) =>
+    String(resource.url).startsWith(HACS_FILES_PREFIX),
+  );
+  assert(
+    registered,
+    `HACS registered no dashboard resource under ${HACS_FILES_PREFIX}`,
+  );
+  return new URL(registered.url, baseUrl).toString();
+}
+
+function filesOnDisk(configDir) {
+  const directory = path.join(configDir, "www", "community", CARD_DIRECTORY);
+  if (!fs.existsSync(directory)) return [];
+  return fs.readdirSync(directory).sort();
+}
+
+async function inspect({ connection, baseUrl, configDir, label }) {
+  const url = await entryUrl(connection, baseUrl);
+  const records = await walkImportGraph({
+    entryUrl: url,
+    fetchModule: (moduleUrl) => fetchText(moduleUrl),
+  });
+  const files = filesOnDisk(configDir);
+  heading(label);
+  log(`  entry ${url.slice(baseUrl.length)}`);
+  log(`  ${files.length} files in www/community/${CARD_DIRECTORY}`);
+  log(formatWalk(records, { baseUrl }));
+  return { label, entry: url, files, modules: records };
+}
+
+async function main(argv = process.argv.slice(2)) {
+  const { options, switches, positional } = parseArguments(argv);
+  const [fromTag, toTag] = positional;
+  if (!fromTag || !toTag || switches.has("--help")) {
+    console.log(
+      [
+        "usage: ./scripts/card-hacs-update <from-tag> <to-tag> [options]",
+        "",
+        "  --base-url URL       test instance to drive (default " + DEFAULT_BASE_URL + ")",
+        "  --config-dir DIR     its config directory (default <hub>/" + TEST_CONFIG_DIRNAME + ")",
+        "  --hacs-version V     HACS release to install there (default " + DEFAULT_HACS_VERSION + ")",
+        "  --github-token T     token HACS talks to GitHub with (default: gh auth token)",
+        "  --reset              wipe the instance's state and onboard from scratch",
+      ].join("\n"),
+    );
+    return switches.has("--help") ? 0 : 2;
+  }
+
+  const runtimeWorkspace = mainHubCheckout();
+  const baseUrl = (options["--base-url"] || DEFAULT_BASE_URL).replace(/\/$/, "");
+  const configDir = path.resolve(
+    options["--config-dir"] ||
+      path.join(runtimeWorkspace, TEST_CONFIG_DIRNAME),
+  );
+  assertTestInstance({ baseUrl, configDir });
+
+  const hacsVersion = options["--hacs-version"] || DEFAULT_HACS_VERSION;
+  const token = githubToken(options["--github-token"]);
+  if (!token) {
+    throw new Error(
+      "no GitHub token. HACS authenticates every repository read with one.\n" +
+        "  Pass --github-token, set HACS_GITHUB_TOKEN, or run `gh auth login`.",
+    );
+  }
+  const tokenFile = path.join(runtimeWorkspace, ".ha-test-token");
+
+  heading(`HACS ${fromTag} → ${toTag} on ${baseUrl}`);
+  log(`  runtime: ${runtimeWorkspace}`);
+  log(`  config:  ${configDir}`);
+
+  if (switches.has("--reset")) {
+    compose(runtimeWorkspace, ["stop", "ha-test"]);
+    for (const entry of fs.existsSync(configDir) ? fs.readdirSync(configDir) : []) {
+      if (
+        entry === ".storage" ||
+        entry === "www" ||
+        entry.startsWith("home-assistant")
+      ) {
+        fs.rmSync(path.join(configDir, entry), { recursive: true, force: true });
+      }
+    }
+    fs.rmSync(tokenFile, { force: true });
+    log("  reset the test instance to a fresh onboarding state");
+  }
+
+  const waitForApi = () =>
+    until(
+      `Home Assistant at ${baseUrl}`,
+      async () => (await fetchText(`${baseUrl}/api/`)).status > 0,
+      { timeoutMs: 300_000 },
+    );
+
+  let restartNeeded = await ensureHacsComponent({ configDir, version: hacsVersion });
+  compose(runtimeWorkspace, ["up", "-d", "ha-test"]);
+  await waitForApi();
+  const accessToken = await onboard({ baseUrl, tokenFile });
+
+  // HA writes .storage with a delayed save, so a just-onboarded instance has
+  // no core.config_entries for a second or two after the API says it is done.
+  const storageFile = path.join(configDir, ".storage", "core.config_entries");
+  await until(`${storageFile} to be written`, () => fs.existsSync(storageFile), {
+    timeoutMs: 120_000,
+  });
+  const patched = withHacsEntry(
+    JSON.parse(fs.readFileSync(storageFile, "utf8")),
+    hacsConfigEntry({ token }),
+  );
+  if (patched) {
+    compose(runtimeWorkspace, ["stop", "ha-test"]);
+    fs.writeFileSync(storageFile, `${JSON.stringify(patched, null, 2)}\n`);
+    log("  added the HACS config entry");
+    restartNeeded = true;
+  }
+  const restart = async () => {
+    compose(runtimeWorkspace, ["up", "-d", "--force-recreate", "ha-test"]);
+    await waitForApi();
+  };
+  const connect = () =>
+    until(
+      "the Home Assistant WebSocket API",
+      () => connectTestInstance(baseUrl, accessToken),
+      { timeoutMs: 120_000 },
+    );
+  if (restartNeeded) await restart();
+
+  let connection = await connect();
+  const report = {
+    repository: CARD_REPOSITORY,
+    from: fromTag,
+    to: toTag,
+    base_url: baseUrl,
+    started_at: new Date().toISOString(),
+    steps: [],
+  };
+  try {
+    let info = await waitForHacs(connection);
+    log(`  HACS ${info.version} ready (stage ${info.stage})`);
+
+    let repository = await ensureCardRepository(connection);
+    if (!repository) {
+      log(`  HACS would not register ${CARD_REPOSITORY}; writing its store row`);
+      connection.close();
+      compose(runtimeWorkspace, ["stop", "ha-test"]);
+      const storeFile = path.join(configDir, ".storage", "hacs.repositories");
+      const seeded = withHacsRepository(
+        fs.existsSync(storeFile)
+          ? JSON.parse(fs.readFileSync(storeFile, "utf8"))
+          : null,
+        CARD_REPOSITORY_ID,
+        hacsRepositoryRow({ installedVersion: fromTag }),
+      );
+      fs.writeFileSync(storeFile, `${JSON.stringify(seeded, null, 2)}\n`);
+      await restart();
+      connection = await connect();
+      info = await waitForHacs(connection);
+      repository = findCardRepository(await listPlugins(connection));
+      assert(repository, `HACS still does not know ${CARD_REPOSITORY}`);
+    }
+    if (repository.installed) {
+      log(`  removing the ${repository.installed_version} download already there`);
+      await command(connection, {
+        type: "hacs/repository/remove",
+        repository: String(repository.id),
+      });
+      repository = await ensureCardRepository(connection);
+    }
+    fs.rmSync(path.join(configDir, "www", "community", CARD_DIRECTORY), {
+      recursive: true,
+      force: true,
+    });
+
+    // Every tag this reproduces against is a prerelease; a user who saw the
+    // bug was tracking them, and show_beta is what puts them in reach.
+    await command(connection, {
+      type: "hacs/repository/beta",
+      repository: String(repository.id),
+      show_beta: true,
+    });
+
+    heading(`downloading ${fromTag} through HACS`);
+    log(`  installed version: ${await download(connection, repository.id, fromTag)}`);
+    report.steps.push(
+      await inspect({
+        connection,
+        baseUrl,
+        configDir,
+        label: `after installing ${fromTag}`,
+      }),
+    );
+
+    heading(`updating to ${toTag} through HACS`);
+    log(`  installed version: ${await download(connection, repository.id, toTag)}`);
+    report.steps.push(
+      await inspect({
+        connection,
+        baseUrl,
+        configDir,
+        label: `after updating to ${toTag}`,
+      }),
+    );
+  } finally {
+    connection.close();
+  }
+
+  const broken = report.steps.flatMap((step) => brokenModules(step.modules));
+  report.broken_modules = broken.length;
+  report.finished_at = new Date().toISOString();
+  const artifact = path.join(
+    runtimeWorkspace,
+    "artifacts/card-hacs-update",
+    `${fromTag}-to-${toTag}.json`,
+  );
+  fs.mkdirSync(path.dirname(artifact), { recursive: true });
+  fs.writeFileSync(artifact, `${JSON.stringify(report, null, 2)}\n`);
+
+  heading(broken.length === 0 ? "no broken modules" : "broken modules");
+  for (const record of broken) {
+    log(`  ${record.status}  ${record.url.slice(baseUrl.length)}`);
+  }
+  log(`  report: ${artifact}`);
+  return broken.length === 0 ? 0 : 1;
+}
+
+module.exports = {
+  CARD_REPOSITORY,
+  assertTestInstance,
+  brokenModules,
+  findCardRepository,
+  formatWalk,
+  hacsConfigEntry,
+  hacsRepositoryRow,
+  mainHubCheckout,
+  parseArguments,
+  parseModuleSpecifiers,
+  resolveSpecifier,
+  ulid,
+  walkImportGraph,
+  withHacsEntry,
+  withHacsRepository,
+};
+
+if (require.main === module) {
+  main()
+    .then((code) => {
+      process.exitCode = code;
+    })
+    .catch((error) => {
+      console.error(`\nERROR: ${error.message || error}`);
+      process.exitCode = 1;
+    });
+}

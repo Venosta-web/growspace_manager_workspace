@@ -54,6 +54,13 @@ and leaves an unchanged bundle alone. See `scripts/stamp-card-resource.cjs`.
 
 Start the release-test instance with `./scripts/ha test up`.
 
+A user's copy of the card comes from HACS, and HACS never cleans the directory
+it downloads into — an update writes the new release's files alongside the old
+ones. `./scripts/card-hacs-update <from-tag> <to-tag>` reproduces that on the
+test instance: it downloads the first tag through HACS, updates to the second,
+then walks the entry bundle's import graph and reports the HTTP status of every
+module it references. It refuses to run against the dev instance.
+
 ## Checks
 
 ```bash

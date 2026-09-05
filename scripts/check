@@ -156,7 +156,8 @@ check_vision() {
 check_workspace_e2e() {
   cd "$WS"
   run "workspace E2E contract tests" python3 -m unittest e2e.test_entity_coverage
-  run "workspace E2E tooling tests" node --test scripts/card-node-modules.test.cjs \
+  run "workspace E2E tooling tests" node --test scripts/card-hacs-update.test.cjs \
+    scripts/card-node-modules.test.cjs \
     scripts/check.test.cjs \
     scripts/e2e-ensure-integration.test.cjs \
     scripts/e2e-preflight.test.cjs \
