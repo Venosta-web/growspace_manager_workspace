@@ -217,6 +217,20 @@ checkouts. Run `./scripts/check card` from a `scripts/feature` worktree and,
 without that variable, it reports green about the main checkout; it now says so
 in the header and prints the invocation that would check yours instead.
 
+The header also says when a resolved checkout is **behind**, and by how much:
+`prerelease is 2 commits behind origin/prerelease`. A tree a few commits back
+fails in ways that belong to nobody's code — a fixture helper that does not exist
+yet, a test file added upstream — and reads exactly like a regression in someone's
+work; that is what it looked like for a whole `./scripts/check all` audit before
+this existed. A branch with no upstream is measured against the nearest of
+`origin/main`, `origin/prerelease` and `origin/dev`, so a checkout parked on a
+merged feature branch reads as `6 commits behind origin/main  (no upstream —
+nothing of its own)` rather than as work in progress. This **warns and never
+refuses**: validating a deliberately older tree is legitimate. It reads only the
+remote-tracking refs already on disk and never fetches, so the counts are as old
+as your last fetch — `check` stays offline and fast, and the case that bites is a
+checkout left behind by a pull somebody already did here.
+
 All targets refuse before any stage runs if the checkout they resolved would be
 validated against the wrong dependencies.
 
@@ -456,6 +470,8 @@ main-hub `./scripts/ha dev restart` to serve a TC worktree against :8123.
   as of `a39faf67 chore(release): untrack built bundle`.
 - **Don't work from a stale checkout.** `git fetch` and compare against
   `origin/main` before concluding anything is broken — the product repos move fast.
+  `./scripts/check` says so in its header when a checkout it resolved is behind,
+  but only as far as your last fetch knows.
 - **Don't start a second thing on :8123.** `./scripts/ha dev up` refuses rather
   than silently losing the race.
 - **Don't drive the runtime from a hub worktree.** `docker-compose.yml` resolves
