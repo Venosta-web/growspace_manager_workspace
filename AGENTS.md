@@ -197,6 +197,51 @@ missing `docker` is a printed no-op. `ha test` (:8124) is untouched.
 > refresh shows stale code during a watch session, `./scripts/ha dev restart` —
 > that is the only thing that re-reads the resource list.
 
+### And the third stale layer is HACS itself
+
+A user does not get the card from a bind mount. HACS downloads it, and **HACS
+never cleans the directory it downloads into** — a plugin release is single-file
+content to it, so an update writes the new release's files alongside every file
+the previous one left. A live install ended up serving the entry from
+`v1.3.0-next.48` on the complete `v1.3.0-next.10` chunk set, every lazy chunk
+the entry imports 404ing, and the dashboard rendering nothing. Neither runtime
+here can see that: :8123 mounts `dist/` whole, and a fresh HACS download on
+:8124 fetches every release asset and passes. Only install-then-update
+reproduces it.
+
+```bash
+./scripts/card-hacs-update v1.3.0-next.10 v1.3.0-next.48
+./scripts/card-hacs-update v1.3.0-next.10 v1.3.0-next.48 --reset   # from onboarding
+```
+
+It downloads the from-tag through HACS into the **clean :8124 instance**,
+updates to the to-tag through HACS, and then walks the entry bundle's import
+graph over HTTP — reporting every module URL with its status, printing the file
+count in `www/community/` beside it, and exiting non-zero if any module is not
+served. A JSON record of both walks lands in
+`artifacts/card-hacs-update/<from>-to-<to>.json`. It **refuses the dev
+instance** by port and by config directory: a HACS download into `ha-dev/` would
+be writing through a read-only mount of `dist/`.
+
+Three things it needs, and does for itself: HACS (downloaded into
+`ha-test/custom_components/`), an onboarded instance (`.ha-test-token`, and it
+prints the login it created), and a GitHub token — HACS authenticates every
+repository read, so `gh auth login`, `HACS_GITHUB_TOKEN`, or `--github-token`.
+Two rows are written into HA's and HACS's own stores, both because there is no
+non-interactive way in: HACS's config entry only ever comes from a GitHub
+device-code flow that ends in a browser, and the card **cannot currently be
+added to HACS at all** — every one of its last 30 releases is a prerelease, so
+with `show_beta` off HACS filters them all away, checks `main`, finds no
+`growspace-manager-card.js` in a tree whose `dist/` is gitignored, and refuses
+without logging anything. Everything about the download itself still goes
+through HACS, from the real release assets.
+
+Run against HACS 2.0.5, `v1.3.0-next.10 → v1.3.0-next.48` **does not** reproduce
+the 404s: both downloads fetch the complete asset set of the tag they were asked
+for and the entry's graph resolves. What it does show is 66 files where 34
+belong. `--hacs-version` points it at the HACS a report came from, which is the
+next thing to vary when a report says otherwise.
+
 ## Validation
 
 ```bash

@@ -49,6 +49,9 @@ ha-test/custom_components/
 
 # --- local credentials ---
 .ha-token
+# The release-test instance's own token, minted by scripts/card-hacs-update
+# when it onboards :8124. Same reason, different instance.
+.ha-test-token
 vision-dev/*
 !vision-dev/.gitkeep
 
