@@ -273,7 +273,7 @@ function releasePageFetcher({ repository, token }) {
     });
     if (!response.ok) {
       throw new Error(
-        `GET ${url} answered HTTP ${response.status}. The card repository is private, so this needs a token that can read its releases.`,
+        `GET ${url} answered HTTP ${response.status}. An unauthenticated read is rate-limited to 60 an hour, so pass --token, set HACS_GITHUB_TOKEN or GITHUB_TOKEN, or run \`gh auth login\`.`,
       );
     }
     return response.json();
