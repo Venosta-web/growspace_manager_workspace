@@ -95,6 +95,36 @@ token` prints it for local configuration, and `ha dev reset` removes it with the
 Assistant state. `./scripts/e2e smoke` proves both tracked Local File camera frames
 complete real Vision Analyses before the browser specs run.
 
+#### The published Vision tag, and the local one
+
+`growspace_vision/config.yaml`'s `version` is the App version, and everything
+downstream of it is that number: the Home Assistant App store reads it off the
+default branch and pulls exactly `ghcr.io/venosta-web/growspace-manager-vision:<version>`,
+Vision's `Release` workflow publishes that tag from a `main` push and refuses to
+overwrite one that already exists, and `./scripts/build-app-images.sh` derives its
+own local tag from the same line. So the compose default
+`growspace-vision:<version>-amd64` and the published multi-arch tag name the same
+release; the local one is per-architecture and built here, the published one is
+generic and resolved by Supervisor.
+
+A contributor who is not iterating on Vision does not have to build it:
+
+```bash
+GROWSPACE_VISION_IMAGE=ghcr.io/venosta-web/growspace-manager-vision:1.0.0 \
+  ./scripts/ha dev restart
+```
+
+**The `docker-compose.yml` default stays the local build.** The dev loop's whole
+point is iterating on Vision source, and a runtime that silently pulled a release
+would be running something other than what you just built. Pointing
+`GROWSPACE_VISION_IMAGE` at the published tag once is also the cheapest way to
+exercise what a user actually gets, which no other part of this hub does.
+
+The **model** version — `src/growspace_vision/model_manifest.json`, textually
+identical to the App version today — is a different number and must not move
+with it. It identifies the embeddings every Baseline Bucket and Framing Epoch in
+`ha-dev/growspace_vision.db` is keyed to.
+
 ### Vision evidence, and the demo history
 
 The Vision Evidence Store keeps its database at `ha-dev/growspace_vision.db` and
