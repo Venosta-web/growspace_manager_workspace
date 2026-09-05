@@ -98,6 +98,8 @@ services:
     container_name: growspace-ha-test
     profiles: ["test"]          # only starts with: --profile test
     ports:
-      - "8124:8123"
+      # Loopback only. This instance trusts its own network for login, and a
+      # release test is not something to serve to the LAN while it runs.
+      - "127.0.0.1:8124:8123"
     volumes:
       - ./ha-test:/config
