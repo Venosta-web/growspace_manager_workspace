@@ -109,6 +109,13 @@ one thing HA writes that lives only inside the container. `media_dirs` is
 validated with `vol.IsDir()` at config load, so `ha-dev/media/` has to exist —
 that is what its tracked `.gitkeep` is for; the contents are ignored.
 
+**Both instances carry the pin**, because the failure is not about Vision. It is
+about `/media` being root-owned, so any instance without the pin logs that error
+on every start whether or not anything asks it for evidence — and `ha-test` is
+the one place a stray error costs the most, since a clean-room release
+verification is supposed to make an unexplained log line mean something.
+`ha-test/media/` therefore has its own tracked `.gitkeep` too.
+
 `./scripts/seed-vision-history` fills that store with a plausible history so the
 snapshot dialog has something to show:
 
