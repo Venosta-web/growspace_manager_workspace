@@ -12,17 +12,31 @@ default_config:
 
 homeassistant:
   name: Growspace Release Test
+  # A release verification is driven from this host, and the password of the
+  # user that onboarding minted is a random string nobody kept. Trusted
+  # networks let the run reach the dashboard without one — which matters
+  # because the browser is the only place the card can be checked at all.
+  # The addresses are the loopback pair and Docker's bridge range, which is
+  # how the container sees a connection from the host; Compose binds 8124 to
+  # loopback, so nothing on the LAN is on the other side of this.
+  auth_providers:
+    - type: trusted_networks
+      trusted_networks:
+        - 127.0.0.1
+        - ::1
+        - 172.16.0.0/12
+      allow_bypass_login: true
+    - type: homeassistant
   time_zone: Europe/Berlin
   unit_system: metric
   currency: EUR
   country: DE
 
-http:
-  use_x_forwarded_for: true
-  trusted_proxies:
-    - 172.16.0.0/12
-    - 127.0.0.1
-    - ::1
+# There is deliberately no `http:` block here any more. It declared this same
+# bridge range as a trusted proxy, and Home Assistant refuses a trusted-network
+# login from an address that is also a trusted proxy — it cannot tell the
+# client's own address from one a proxy claims. Nothing sits in front of this
+# instance: the connection arrives straight through Docker's published port.
 
 logger:
   default: warning
