@@ -242,6 +242,50 @@ for and the entry's graph resolves. What it does show is 66 files where 34
 belong. `--hacs-version` points it at the HACS a report came from, which is the
 next thing to vary when a report says otherwise.
 
+#### Every published release replays that update
+
+Reproducing a pair on demand only helps someone who already suspects the bug.
+`./scripts/card-release-update-check` is the same reproducer, pointed at the
+release that was just published:
+
+```bash
+./scripts/card-release-update-check --tag v1.3.0-next.58
+./scripts/card-release-update-check --tag v1.3.0-next.58 --resolve-only
+./scripts/card-release-update-check --tag v1.3.0-next.58 --from v1.3.0-next.10 --reset
+```
+
+It resolves the predecessor from the card's GitHub releases, hands the pair to
+`card-hacs-update`, and turns the report into a verdict — one `::error`
+annotation per missing chunk naming the chunk and both tags, and a job summary
+table beside it, so a red release is legible on the run page without opening a
+log. `--resolve-only` prints the pair and stops, which is the cheap way to ask
+what a publish would check. Anything it does not recognise goes to
+`card-hacs-update` untouched.
+
+The predecessor is per channel, because that is what the user's HACS offers:
+a **stable** release is checked against the previous stable, since `show_beta`
+is off there and every prerelease in between is invisible to that install; a
+**prerelease** is checked against the previous release of any kind, since
+`show_beta` is what puts prereleases in reach and it does not hide the stable
+ones.
+
+It runs **after** the publish, in the card repository's `Release` workflow —
+`hacs-update-check.yaml`, a job that `needs` whichever publishing job ran and
+therefore cannot gate or delay it. That placement is deliberate three times
+over. [ADR-0025] makes e2e a main-only release gate and leaves the dev
+prerelease job with no `needs` so the frequent path stays fast, and this must
+not change that. A main-only gate would have caught nothing anyway: every
+broken release in the incident was a dev prerelease. And a pre-publish check
+could only install, which passes — the update is the path that breaks, and it
+does not exist until both releases do.
+
+The job checks this hub out for `docker-compose.yml`, `ha-test/` and the two
+scripts, and sets `GROWSPACE_HA_USER` to the runner's own uid: the container
+and the tooling driving it write the same bind-mounted config directory, and on
+a runner that is not 1000.
+
+[ADR-0025]: https://github.com/Venosta-web/lovelace-growspace-manager-card/blob/main/docs/adr/0025-ci-merge-gate-and-e2e-on-main-only.md
+
 ## Validation
 
 ```bash

@@ -15,7 +15,12 @@ name: growspace
 x-ha-common: &ha-common
   image: homeassistant/home-assistant:stable
   # Run as you (1000:1000) so files HA creates stay editable from the host.
-  user: "1000:1000"
+  #
+  # GROWSPACE_HA_USER exists for CI, where "you" is not uid 1000: a GitHub
+  # runner is 1001, and the container and the tooling driving it have to write
+  # the same bind-mounted config directory as the same user or each takes turns
+  # locking the other out of directories the other created.
+  user: "${GROWSPACE_HA_USER:-1000:1000}"
   environment:
     TZ: Europe/Berlin
   restart: unless-stopped
