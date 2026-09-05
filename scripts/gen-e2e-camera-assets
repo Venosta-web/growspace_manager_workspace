@@ -29,6 +29,7 @@ Design
   (Byte-identical output assumes the same Pillow and the same HUD font; the
   suite only requires the two frames to be valid JPEGs that differ.)
 """
+
 import argparse
 import math
 import pathlib
@@ -78,7 +79,9 @@ def tent_background(rng):
         t = y / (h - 1)
         draw.line(
             [(0, y), (w, y)],
-            fill=tuple(round(a + (b - a) * t) for a, b in zip(top, bottom)),
+            fill=tuple(
+                round(a + (b - a) * t) for a, b in zip(top, bottom, strict=True)
+            ),
         )
 
     # mylar: vertical highlight streaks, brighter near the light
@@ -88,8 +91,9 @@ def tent_background(rng):
         x = rng.uniform(0, w)
         width = rng.uniform(3, 22)
         alpha = rng.randint(6, 26)
-        sd.rectangle([x, 0, x + width, h * rng.uniform(0.45, 0.9)],
-                     fill=(196, 168, 236, alpha))
+        sd.rectangle(
+            [x, 0, x + width, h * rng.uniform(0.45, 0.9)], fill=(196, 168, 236, alpha)
+        )
     img = Image.alpha_composite(
         img.convert("RGBA"), streaks.filter(ImageFilter.GaussianBlur(6))
     ).convert("RGB")
@@ -99,7 +103,9 @@ def tent_background(rng):
     floor_y = int(h * 0.82)
     for y in range(floor_y, h):
         t = (y - floor_y) / max(1, h - floor_y)
-        draw.line([(0, y), (w, y)], fill=(int(26 - 10 * t), int(24 - 9 * t), int(22 - 8 * t)))
+        draw.line(
+            [(0, y), (w, y)], fill=(int(26 - 10 * t), int(24 - 9 * t), int(22 - 8 * t))
+        )
     return img
 
 
@@ -121,7 +127,7 @@ def leaflet(origin, angle, length, width, curve, rng):
 
 
 def blend(a, b, t):
-    return tuple(round(x + (y - x) * t) for x, y in zip(a, b))
+    return tuple(round(x + (y - x) * t) for x, y in zip(a, b, strict=True))
 
 
 def draw_fan_leaf(draw, origin, angle, length, rng, *, health, depth):
@@ -156,8 +162,10 @@ def draw_fan_leaf(draw, origin, angle, length, rng, *, health, depth):
         ys = [p[1] for p in pts]
         boxes.append((min(xs), min(ys), max(xs), max(ys)))
         # midrib
-        tip = (origin[0] + math.cos(a) * length * scale,
-               origin[1] - math.sin(a) * length * scale)
+        tip = (
+            origin[0] + math.cos(a) * length * scale,
+            origin[1] - math.sin(a) * length * scale,
+        )
         draw.line([origin, tip], fill=blend(fill, WHITE, 0.28), width=1)
     return (
         min(b[0] for b in boxes),
@@ -181,8 +189,7 @@ def necrotic_spots(draw, box, rng, count):
         )
 
 
-def draw_plant(draw, rng, *, base_x, base_y, height, health, depth, droop=0.0,
-               spots=0):
+def draw_plant(draw, rng, *, base_x, base_y, height, health, depth, droop=0.0, spots=0):
     """Pot, stem and a stack of fan leaves. Returns per-leaf bounding boxes."""
     pot_w = height * 0.42
     pot = [
@@ -194,14 +201,21 @@ def draw_plant(draw, rng, *, base_x, base_y, height, health, depth, droop=0.0,
     pot_fill = blend((30, 30, 34), (58, 58, 64), depth)
     draw.polygon(pot, fill=pot_fill, outline=blend(pot_fill, (0, 0, 0), 0.4))
     draw.ellipse(
-        [base_x - pot_w / 2, base_y - pot_w * 0.11,
-         base_x + pot_w / 2, base_y + pot_w * 0.11],
+        [
+            base_x - pot_w / 2,
+            base_y - pot_w * 0.11,
+            base_x + pot_w / 2,
+            base_y + pot_w * 0.11,
+        ],
         fill=blend(pot_fill, (18, 16, 14), 0.5),
     )
 
     stem_top = base_y - height
-    draw.line([(base_x, base_y), (base_x, stem_top)],
-              fill=blend((34, 60, 34), (62, 96, 54), depth), width=max(2, int(height * 0.02)))
+    draw.line(
+        [(base_x, base_y), (base_x, stem_top)],
+        fill=blend((34, 60, 34), (62, 96, 54), depth),
+        width=max(2, int(height * 0.02)),
+    )
 
     boxes = []
     nodes = 5
@@ -211,7 +225,10 @@ def draw_plant(draw, rng, *, base_x, base_y, height, health, depth, droop=0.0,
         leaf_len = height * (0.46 - 0.22 * t)
         for direction in (1, -1):
             # droop swings the leaf axis from above the horizon to below it
-            lift = math.radians(rng.uniform(4, 26)) * (1 - droop) - math.radians(34) * droop
+            lift = (
+                math.radians(rng.uniform(4, 26)) * (1 - droop)
+                - math.radians(34) * droop
+            )
             a = lift if direction > 0 else math.pi - lift
             boxes.append(
                 draw_fan_leaf(
@@ -244,8 +261,11 @@ def warning_triangle(draw, x, y, size, color):
         [(x + size / 2, y), (x + size, y + size * 0.88), (x, y + size * 0.88)],
         fill=color,
     )
-    draw.line([(x + size / 2, y + size * 0.24), (x + size / 2, y + size * 0.58)],
-              fill=(30, 22, 8), width=2)
+    draw.line(
+        [(x + size / 2, y + size * 0.24), (x + size / 2, y + size * 0.58)],
+        fill=(30, 22, 8),
+        width=2,
+    )
     draw.point((x + size / 2, y + size * 0.72), fill=(30, 22, 8))
 
 
@@ -286,7 +306,9 @@ def draw_hud(img, spec, boxes, rng):
     tag = "SIMULATED FIXTURE"
     tag_w = draw.textlength(tag, font=tiny)
     draw.text((w - tag_w - 12, h - bar_h + 10), tag, font=tiny, fill=(150, 150, 150))
-    draw.text((12, h - bar_h - 18), spec["subtitle"], font=tiny, fill=(190, 190, 190, 220))
+    draw.text(
+        (12, h - bar_h - 18), spec["subtitle"], font=tiny, fill=(190, 190, 190, 220)
+    )
 
 
 # --------------------------------------------------------------------------
@@ -307,8 +329,15 @@ def render_contrast(rng):
     draw = ImageDraw.Draw(img)
     draw_plant(draw, rng, base_x=92, base_y=356, height=168, health=0.72, depth=0.5)
     boxes = draw_plant(
-        draw, rng, base_x=338, base_y=430, height=306,
-        health=0.34, depth=1.0, droop=0.75, spots=4,
+        draw,
+        rng,
+        base_x=338,
+        base_y=430,
+        height=306,
+        health=0.34,
+        depth=1.0,
+        droop=0.75,
+        spots=4,
     )
     return sensor_grain(img, rng), boxes
 
@@ -386,7 +415,9 @@ def main(argv) -> int:
             display = dest
         print(f"  wrote {display}  ({dest.stat().st_size:,} bytes)")
 
-    print(f"  {len(FRAMES)} frames at {SIZE[0]}x{SIZE[1]} — served as camera.e2e_vision_1/2")
+    print(
+        f"  {len(FRAMES)} frames at {SIZE[0]}x{SIZE[1]} — served as camera.e2e_vision_1/2"
+    )
     return 0
 
 

@@ -1,0 +1,50 @@
+---
+name: PR Title
+
+"on":
+  pull_request:
+    # `edited` is what makes a failed check recoverable: without it, fixing a
+    # bad title leaves the red run stale forever with no way to re-run it.
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+
+permissions:
+  pull-requests: read
+
+concurrency:
+  group: >-
+    validation-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-title:
+    name: Conventional commit title
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate conventional-commit PR title
+        uses: amannn/action-semantic-pull-request@v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # The hub publishes nothing, so no type here drives a version bump —
+          # this is purely so the history stays readable. The list matches the
+          # card repository's, which is what the same authors write against.
+          types: |
+            feat
+            fix
+            ci
+            chore
+            docs
+            refactor
+            test
+            perf
+            build
+            style
+            revert
+          requireScope: false
+          # Merge commits are still an allowed merge method, so a single-commit
+          # PR does not necessarily land its PR title. Don't enforce here.
+          validateSingleCommit: false

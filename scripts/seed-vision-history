@@ -46,8 +46,6 @@ afterwards if the evidence store was not open when you seeded.
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
 import hashlib
 import importlib
 import importlib.machinery
@@ -66,6 +64,8 @@ import types
 import urllib.error
 import urllib.request
 import uuid
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 # --------------------------------------------------------------------------
@@ -84,9 +84,17 @@ def main_hub_checkout() -> pathlib.Path:
     """Return the main hub checkout, even when run from one of its worktrees."""
     try:
         common = subprocess.run(
-            ["git", "-C", str(HERE), "rev-parse", "--path-format=absolute",
-             "--git-common-dir"],
-            capture_output=True, text=True, check=True,
+            [
+                "git",
+                "-C",
+                str(HERE),
+                "rev-parse",
+                "--path-format=absolute",
+                "--git-common-dir",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return HERE
@@ -252,7 +260,8 @@ def resolve_target(wanted: str, cameras: list[str]) -> Target:
     growspace_id = wanted
     if found is None:
         matches = [
-            (gid, g) for gid, g in growspaces.items()
+            (gid, g)
+            for gid, g in growspaces.items()
             if str(g.get("name", "")).casefold() == wanted.casefold()
         ]
         if not matches:
@@ -265,8 +274,9 @@ def resolve_target(wanted: str, cameras: list[str]) -> Target:
         (found.get("environment_config") or {}).get("camera_entities") or ()
     )
     if cameras:
-        return Target(growspace_id, found.get("name", growspace_id),
-                      tuple(cameras), False)
+        return Target(
+            growspace_id, found.get("name", growspace_id), tuple(cameras), False
+        )
     if configured:
         return Target(growspace_id, found.get("name", growspace_id), configured, True)
     # A growspace with no camera configured still renders a full history — the
@@ -275,8 +285,10 @@ def resolve_target(wanted: str, cameras: list[str]) -> Target:
     # read as this tent's cameras rather than another growspace's.
     stem = slug(found.get("name", growspace_id))
     return Target(
-        growspace_id, found.get("name", growspace_id),
-        (f"camera.{stem}_canopy", f"camera.{stem}_closeup"), False,
+        growspace_id,
+        found.get("name", growspace_id),
+        (f"camera.{stem}_canopy", f"camera.{stem}_closeup"),
+        False,
     )
 
 
@@ -328,33 +340,41 @@ class VisionApp:
         self.model_version = model["model_version"]
         self.dimension = model["embedding_dimension"]
 
-    def analyze(self, image: bytes, *, camera_id: str, growspace_id: str,
-                captured_at: datetime, light_state: str) -> dict:
+    def analyze(
+        self,
+        image: bytes,
+        *,
+        camera_id: str,
+        growspace_id: str,
+        captured_at: datetime,
+        light_state: str,
+    ) -> dict:
         """Analyze one frame, returning the service's own response."""
         metadata = {
             "schema_version": 1,
             "camera_id": camera_id,
             "growspace_id": growspace_id,
-            "captured_at": captured_at.astimezone(UTC).isoformat().replace(
-                "+00:00", "Z"
-            ),
+            "captured_at": captured_at.astimezone(UTC)
+            .isoformat()
+            .replace("+00:00", "Z"),
             "light_state": light_state,
             "model_id": self.model_id,
             "model_version": self.model_version,
         }
         boundary = f"----growspace{uuid.uuid4().hex}"
         metadata_part = (
-            f'--{boundary}\r\n'
+            f"--{boundary}\r\n"
             f'Content-Disposition: form-data; name="metadata"\r\n'
             f"Content-Type: application/json\r\n\r\n"
             f"{json.dumps(metadata)}\r\n"
-            f'--{boundary}\r\n'
+            f"--{boundary}\r\n"
             f'Content-Disposition: form-data; name="image"; filename="capture.jpg"\r\n'
             f"Content-Type: {JPEG_CONTENT_TYPE}\r\n\r\n"
         )
         body = metadata_part.encode() + image + f"\r\n--{boundary}--\r\n".encode()
         request = urllib.request.Request(
-            f"{self._base_url}/analyze", data=body,
+            f"{self._base_url}/analyze",
+            data=body,
             headers={
                 "Authorization": f"Bearer {self._token}",
                 "Content-Type": f"multipart/form-data; boundary={boundary}",
@@ -381,10 +401,10 @@ def read_vision_token() -> str:
 class Scene:
     """What one frame shows — the only fabricated input to the whole pipeline."""
 
-    growth: float          # 0.0 at the start of the seeded run, 1.0 at its end
-    health: float          # draw_fan_leaf's colour health
-    droop: float           # leaf axis below the horizon
-    spots: int             # necrotic spotting call-outs
+    growth: float  # 0.0 at the start of the seeded run, 1.0 at its end
+    health: float  # draw_fan_leaf's colour health
+    droop: float  # leaf axis below the horizon
+    spots: int  # necrotic spotting call-outs
     environmental_risk: bool
     sensors_unavailable: bool
 
@@ -448,8 +468,11 @@ def storyline(day: int, days: int, angle: int, angles: int) -> Scene:
     )
 
 
-STRESS_REASONS = ("Humidity rising fast", "Night Temp High (27.4)",
-                  "VPD out of range (1.71)")
+STRESS_REASONS = (
+    "Humidity rising fast",
+    "Night Temp High (27.4)",
+    "VPD out of range (1.71)",
+)
 MOLD_REASONS = ("Humidity High (72)", "Leaf temperature near dew point")
 STALE_REASONS = ("stress_stale", "mold_stale")
 
@@ -466,9 +489,18 @@ def symptoms(scene: Scene) -> tuple[tuple[str, float], ...]:
     return tuple(found)
 
 
-def render(renderer, scene: Scene, *, camera_label: str, subtitle: str,
-           angle: int, moment: datetime, rng: random.Random,
-           capture_rng: random.Random, processed: bool) -> bytes:
+def render(
+    renderer,
+    scene: Scene,
+    *,
+    camera_label: str,
+    subtitle: str,
+    angle: int,
+    moment: datetime,
+    rng: random.Random,
+    capture_rng: random.Random,
+    processed: bool,
+) -> bytes:
     """Draw one tent frame with the generator's scene primitives.
 
     `rng` is seeded per camera and never per capture. A camera bolted to a
@@ -489,22 +521,56 @@ def render(renderer, scene: Scene, *, camera_label: str, subtitle: str,
     height = 205 + 40 * scene.growth
 
     if angle == 0:  # wide canopy: three plants, the subject centre-front
-        renderer.draw_plant(draw, capture_rng, base_x=138, base_y=372,
-                            height=height * 0.78, health=scene.health - 0.04,
-                            depth=0.55)
-        renderer.draw_plant(draw, capture_rng, base_x=506, base_y=368,
-                            height=height * 0.75, health=scene.health - 0.06,
-                            depth=0.55)
-        boxes = renderer.draw_plant(draw, capture_rng, base_x=320, base_y=402,
-                                    height=height, health=scene.health, depth=1.0,
-                                    droop=scene.droop, spots=scene.spots)
+        renderer.draw_plant(
+            draw,
+            capture_rng,
+            base_x=138,
+            base_y=372,
+            height=height * 0.78,
+            health=scene.health - 0.04,
+            depth=0.55,
+        )
+        renderer.draw_plant(
+            draw,
+            capture_rng,
+            base_x=506,
+            base_y=368,
+            height=height * 0.75,
+            health=scene.health - 0.06,
+            depth=0.55,
+        )
+        boxes = renderer.draw_plant(
+            draw,
+            capture_rng,
+            base_x=320,
+            base_y=402,
+            height=height,
+            health=scene.health,
+            depth=1.0,
+            droop=scene.droop,
+            spots=scene.spots,
+        )
     else:  # close, lower canopy
-        renderer.draw_plant(draw, capture_rng, base_x=92, base_y=356,
-                            height=height * 0.7, health=scene.health - 0.2,
-                            depth=0.5)
-        boxes = renderer.draw_plant(draw, capture_rng, base_x=338, base_y=430,
-                                    height=height * 1.2, health=scene.health,
-                                    depth=1.0, droop=scene.droop, spots=scene.spots)
+        renderer.draw_plant(
+            draw,
+            capture_rng,
+            base_x=92,
+            base_y=356,
+            height=height * 0.7,
+            health=scene.health - 0.2,
+            depth=0.5,
+        )
+        boxes = renderer.draw_plant(
+            draw,
+            capture_rng,
+            base_x=338,
+            base_y=430,
+            height=height * 1.2,
+            health=scene.health,
+            depth=1.0,
+            droop=scene.droop,
+            spots=scene.spots,
+        )
     image = renderer.sensor_grain(image, capture_rng)
 
     if processed:
@@ -541,8 +607,10 @@ def open_database() -> sqlite3.Connection:
     connection.execute("PRAGMA journal_mode = WAL")
     version = connection.execute("PRAGMA user_version").fetchone()[0]
     if version > SCHEMA.VISION_EVIDENCE_SCHEMA_VERSION:
-        die(f"{DATABASE} is at schema {version}, newer than the integration's "
-            f"{SCHEMA.VISION_EVIDENCE_SCHEMA_VERSION}")
+        die(
+            f"{DATABASE} is at schema {version}, newer than the integration's "
+            f"{SCHEMA.VISION_EVIDENCE_SCHEMA_VERSION}"
+        )
     while version < SCHEMA.VISION_EVIDENCE_SCHEMA_VERSION:
         connection.executescript(
             "BEGIN IMMEDIATE;\n"
@@ -585,8 +653,15 @@ def clear(connection: sqlite3.Connection, growspace_id: str) -> int:
     return captures
 
 
-def seed(target: Target, days: int, rng: random.Random, app: VisionApp,
-         renderer, connection: sqlite3.Connection, scene_seed: int) -> dict:
+def seed(
+    target: Target,
+    days: int,
+    rng: random.Random,
+    app: VisionApp,
+    renderer,
+    connection: sqlite3.Connection,
+    scene_seed: int,
+) -> dict:
     """Write one growspace's seeded Vision Checkup history."""
     policy = SCHEMA.VISION_SCORING_POLICY_VERSION
     engine = COMPARISON.VisualComparisonEngine()
@@ -635,8 +710,14 @@ def seed(target: Target, days: int, rng: random.Random, app: VisionApp,
                 " (checkup_id, growspace_id, growspace_name, trigger_source,"
                 " light_window, started_at, completed_at, status)"
                 " VALUES (?, ?, ?, 'scheduled', ?, ?, ?, 'completed')",
-                (checkup_id, target.growspace_id, target.name, window.value,
-                 utc_text(started), utc_text(completed)),
+                (
+                    checkup_id,
+                    target.growspace_id,
+                    target.name,
+                    window.value,
+                    utc_text(started),
+                    utc_text(completed),
+                ),
             )
             counts["checkups"] += 1
 
@@ -644,12 +725,23 @@ def seed(target: Target, days: int, rng: random.Random, app: VisionApp,
                 scene = storyline(day, days, angle, len(target.cameras))
                 captured_at = started + timedelta(seconds=angle * 2 + 1)
                 verdict, state = seed_capture(
-                    connection, engine, renderer, app, rng,
-                    target=target, camera_id=camera_id, checkup_id=checkup_id,
-                    grow_run_id=grow_run_id, epoch_id=epochs[camera_id],
-                    window=window, captured_at=captured_at, scene=scene,
-                    baselines=baselines, persistence=persistence,
-                    policy=policy, counts=counts,
+                    connection,
+                    engine,
+                    renderer,
+                    app,
+                    rng,
+                    target=target,
+                    camera_id=camera_id,
+                    checkup_id=checkup_id,
+                    grow_run_id=grow_run_id,
+                    epoch_id=epochs[camera_id],
+                    window=window,
+                    captured_at=captured_at,
+                    scene=scene,
+                    baselines=baselines,
+                    persistence=persistence,
+                    policy=policy,
+                    counts=counts,
                     scene_seed=f"{scene_seed}:{camera_id}",
                 )
                 if verdict:
@@ -661,38 +753,69 @@ def seed(target: Target, days: int, rng: random.Random, app: VisionApp,
     return {"counts": counts, "verdicts": verdicts, "states": states}
 
 
-def seed_capture(connection, engine, renderer, app, rng, *, target, camera_id,
-                 checkup_id, grow_run_id, epoch_id, window, captured_at, scene,
-                 baselines, persistence, policy, counts, scene_seed):
+def seed_capture(
+    connection,
+    engine,
+    renderer,
+    app,
+    rng,
+    *,
+    target,
+    camera_id,
+    checkup_id,
+    grow_run_id,
+    epoch_id,
+    window,
+    captured_at,
+    scene,
+    baselines,
+    persistence,
+    policy,
+    counts,
+    scene_seed,
+):
     """Render, analyze, score and fuse one capture, then persist every row."""
     capture_id = uuid7_at(captured_at, rng)
     angle = target.cameras.index(camera_id)
     label = f"CAM  {camera_id.split('.')[-1].replace('_', ' ').upper()}"
-    subtitle = (f"growspace {slug(target.name)}  ·  "
-                f"{'wide canopy' if angle == 0 else 'close, lower canopy'}")
+    subtitle = (
+        f"growspace {slug(target.name)}  ·  "
+        f"{'wide canopy' if angle == 0 else 'close, lower canopy'}"
+    )
 
     # The scene rng is keyed on the camera alone, so this tent looks like
     # itself on every one of the seeded days. The capture rng is keyed on the
     # capture and NOT on the variant: `raw` and `processed` have to be one
     # photograph differing only by the overlay, not two different moments.
     frames = {
-        variant: render(renderer, scene, camera_label=label, subtitle=subtitle,
-                        angle=angle, moment=captured_at,
-                        rng=random.Random(scene_seed),
-                        capture_rng=random.Random(capture_id),
-                        processed=variant == "processed")
+        variant: render(
+            renderer,
+            scene,
+            camera_label=label,
+            subtitle=subtitle,
+            angle=angle,
+            moment=captured_at,
+            rng=random.Random(scene_seed),
+            capture_rng=random.Random(capture_id),
+            processed=variant == "processed",
+        )
         for variant in ("raw", "processed")
     }
 
     light_state = MODELS.LightState.ON
     try:
         analysis = app.analyze(
-            frames["raw"], camera_id=camera_id, growspace_id=target.growspace_id,
-            captured_at=captured_at, light_state=light_state.value,
+            frames["raw"],
+            camera_id=camera_id,
+            growspace_id=target.growspace_id,
+            captured_at=captured_at,
+            light_state=light_state.value,
         )
     except (urllib.error.URLError, TimeoutError) as error:
-        die(f"Growspace Vision at {VISION_URL} failed on a frame: {error}\n"
-            f"       start it with ./scripts/ha dev up")
+        die(
+            f"Growspace Vision at {VISION_URL} failed on a frame: {error}\n"
+            f"       start it with ./scripts/ha dev up"
+        )
 
     signals = analysis["quality"]["signals"]
     reasons = analysis["quality"].get("reasons", [])
@@ -709,14 +832,28 @@ def seed_capture(connection, engine, renderer, app, rng, *, target, camera_id,
         " quality_reasons, created_at)"
         " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, ?, ?, ?, ?,"
         " ?, ?, ?)",
-        (capture_id, checkup_id, target.growspace_id, target.name, camera_id,
-         grow_run_id, epoch_id, utc_text(captured_at), window.value,
-         light_state.value,
-         hashlib.sha256(frames["raw"]).hexdigest(), state.value,
-         analysis["request_id"], analysis["schema_version"], app.service_version,
-         signals["mean_luminance"], signals["clipped_pixel_fraction"],
-         signals["mean_absolute_gradient"], json.dumps(reasons),
-         utc_text(captured_at)),
+        (
+            capture_id,
+            checkup_id,
+            target.growspace_id,
+            target.name,
+            camera_id,
+            grow_run_id,
+            epoch_id,
+            utc_text(captured_at),
+            window.value,
+            light_state.value,
+            hashlib.sha256(frames["raw"]).hexdigest(),
+            state.value,
+            analysis["request_id"],
+            analysis["schema_version"],
+            app.service_version,
+            signals["mean_luminance"],
+            signals["clipped_pixel_fraction"],
+            signals["mean_absolute_gradient"],
+            json.dumps(reasons),
+            utc_text(captured_at),
+        ),
     )
     counts["captures"] += 1
 
@@ -740,29 +877,42 @@ def seed_capture(connection, engine, renderer, app, rng, *, target, camera_id,
         "INSERT INTO vision_embedding"
         " (capture_id, model_id, model_version, dimension, values_f32, derived_at,"
         " source) VALUES (?, ?, ?, ?, ?, ?, 'live')",
-        (capture_id, app.model_id, app.model_version,
-         analysis["embedding"]["dimension"], pack_f32(values),
-         utc_text(captured_at)),
+        (
+            capture_id,
+            app.model_id,
+            app.model_version,
+            analysis["embedding"]["dimension"],
+            pack_f32(values),
+            utc_text(captured_at),
+        ),
     )
 
     key = COMPARISON.BaselineKey(
-        growspace_id=target.growspace_id, camera_id=camera_id, light_window=window,
-        grow_run_id=grow_run_id, model_id=app.model_id,
-        model_version=app.model_version, framing_epoch_id=epoch_id,
+        growspace_id=target.growspace_id,
+        camera_id=camera_id,
+        light_window=window,
+        grow_run_id=grow_run_id,
+        model_id=app.model_id,
+        model_version=app.model_version,
+        framing_epoch_id=epoch_id,
         scoring_policy_version=policy,
     )
     decision = engine.evaluate(
         key,
         COMPARISON.VisualEmbeddingCapture(
-            capture_id=capture_id, captured_at=captured_at, values=values,
-            trigger_source=MODELS.CaptureTrigger.SCHEDULED, quality_accepted=True,
+            capture_id=capture_id,
+            captured_at=captured_at,
+            values=values,
+            trigger_source=MODELS.CaptureTrigger.SCHEDULED,
+            quality_accepted=True,
         ),
         baselines.get(key),
     )
     if decision.baseline is not None:
         baselines[key] = decision.baseline
-        write_bucket(connection, decision.baseline, target.growspace_id,
-                     app, policy, captured_at)
+        write_bucket(
+            connection, decision.baseline, target.growspace_id, app, policy, captured_at
+        )
     comparison = decision.comparison
     if comparison is None:
         return None, "unscored"
@@ -775,52 +925,87 @@ def seed_capture(connection, engine, renderer, app, rng, *, target, camera_id,
         " comparison_confidence, admitted_to_baseline, unavailable_reasons,"
         " trigger_source, model_id, model_version, scoring_policy_version)"
         " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', 'scheduled', ?, ?, ?)",
-        (uuid7_at(captured_at, rng), capture_id, bucket_id, utc_text(captured_at),
-         comparison.outcome.value, comparison.baseline_state.value,
-         comparison.samples_collected, comparison.samples_required,
-         comparison.raw_distance, comparison.anomaly_score,
-         comparison.verdict.value if comparison.verdict else None,
-         comparison.comparison_confidence, int(decision.admitted),
-         app.model_id, app.model_version, policy),
+        (
+            uuid7_at(captured_at, rng),
+            capture_id,
+            bucket_id,
+            utc_text(captured_at),
+            comparison.outcome.value,
+            comparison.baseline_state.value,
+            comparison.samples_collected,
+            comparison.samples_required,
+            comparison.raw_distance,
+            comparison.anomaly_score,
+            comparison.verdict.value if comparison.verdict else None,
+            comparison.comparison_confidence,
+            int(decision.admitted),
+            app.model_id,
+            app.model_version,
+            policy,
+        ),
     )
 
     if decision.admitted and decision.baseline is not None:
-        phase = (MODELS.AdmissionPhase.NORMAL
-                 if comparison.outcome is MODELS.ComparisonOutcome.SCORED
-                 else MODELS.AdmissionPhase.BOOTSTRAP)
+        phase = (
+            MODELS.AdmissionPhase.NORMAL
+            if comparison.outcome is MODELS.ComparisonOutcome.SCORED
+            else MODELS.AdmissionPhase.BOOTSTRAP
+        )
         connection.execute(
             "INSERT INTO vision_baseline_member"
             " (bucket_id, capture_id, admitted_at, admission_phase)"
             " VALUES (?, ?, ?, ?)",
-            (decision.baseline.bucket_id, capture_id, utc_text(captured_at),
-             phase.value),
+            (
+                decision.baseline.bucket_id,
+                capture_id,
+                utc_text(captured_at),
+                phase.value,
+            ),
         )
     if decision.evicted_capture_id and decision.baseline is not None:
         connection.execute(
             "UPDATE vision_baseline_member SET evicted_at = ?,"
             " evicted_by_capture_id = ? WHERE bucket_id = ? AND capture_id = ?"
             " AND evicted_at IS NULL",
-            (utc_text(captured_at), capture_id, decision.baseline.bucket_id,
-             decision.evicted_capture_id),
+            (
+                utc_text(captured_at),
+                capture_id,
+                decision.baseline.bucket_id,
+                decision.evicted_capture_id,
+            ),
         )
 
     if comparison.outcome is MODELS.ComparisonOutcome.SCORED:
         counts["scored"] += 1
 
-    outcome = write_fusion(connection, rng, capture_id=capture_id,
-                           captured_at=captured_at, scene=scene,
-                           comparison=comparison, policy=policy,
-                           persistence=persistence, key=key,
-                           camera_id=camera_id, grow_run_id=grow_run_id,
-                           epoch_id=epoch_id)
+    outcome = write_fusion(
+        connection,
+        rng,
+        capture_id=capture_id,
+        captured_at=captured_at,
+        scene=scene,
+        comparison=comparison,
+        policy=policy,
+        persistence=persistence,
+        key=key,
+        camera_id=camera_id,
+        grow_run_id=grow_run_id,
+        epoch_id=epoch_id,
+    )
     # The explainer is optional and costs a cloud call, so the integration
     # only has prose where fusion found something to explain.
     if outcome is not None and (
         outcome.state is not FUSION.EvidenceFusionState.NO_DETECTED_CHANGE
     ):
-        write_report(connection, rng, capture_id=capture_id,
-                     captured_at=captured_at, scene=scene, outcome=outcome,
-                     policy=policy)
+        write_report(
+            connection,
+            rng,
+            capture_id=capture_id,
+            captured_at=captured_at,
+            scene=scene,
+            outcome=outcome,
+            policy=policy,
+        )
         counts["reports"] += 1
 
     verdict = comparison.verdict.value if comparison.verdict else None
@@ -845,20 +1030,45 @@ def write_bucket(connection, baseline, growspace_id, app, policy, moment) -> Non
         " last_admitted_at = excluded.last_admitted_at,"
         " recomputed_at = excluded.recomputed_at,"
         " scoring_policy_version = excluded.scoring_policy_version",
-        (baseline.bucket_id, growspace_id, baseline.key.camera_id,
-         baseline.key.light_window.value, baseline.key.grow_run_id, app.model_id,
-         app.model_version, baseline.key.framing_epoch_id, baseline.state.value,
-         len(baseline.members), COMPARISON.BASELINE_SIZE,
-         pack_f32(baseline.centroid) if baseline.centroid else None,
-         pack_f32(baseline.calibration_distances)
-         if baseline.calibration_distances else None,
-         utc_text(baseline.last_admitted_at) if baseline.last_admitted_at else None,
-         utc_text(moment), policy, utc_text(baseline.created_at)),
+        (
+            baseline.bucket_id,
+            growspace_id,
+            baseline.key.camera_id,
+            baseline.key.light_window.value,
+            baseline.key.grow_run_id,
+            app.model_id,
+            app.model_version,
+            baseline.key.framing_epoch_id,
+            baseline.state.value,
+            len(baseline.members),
+            COMPARISON.BASELINE_SIZE,
+            pack_f32(baseline.centroid) if baseline.centroid else None,
+            pack_f32(baseline.calibration_distances)
+            if baseline.calibration_distances
+            else None,
+            utc_text(baseline.last_admitted_at) if baseline.last_admitted_at else None,
+            utc_text(moment),
+            policy,
+            utc_text(baseline.created_at),
+        ),
     )
 
 
-def write_fusion(connection, rng, *, capture_id, captured_at, scene, comparison,
-                 policy, persistence, key, camera_id, grow_run_id, epoch_id):
+def write_fusion(
+    connection,
+    rng,
+    *,
+    capture_id,
+    captured_at,
+    scene,
+    comparison,
+    policy,
+    persistence,
+    key,
+    camera_id,
+    grow_run_id,
+    epoch_id,
+):
     """Fuse this capture's evidence with the integration's own truth table."""
     if scene.sensors_unavailable:
         environmental = FUSION.EnvironmentalEvidence(
@@ -883,13 +1093,18 @@ def write_fusion(connection, rng, *, capture_id, captured_at, scene, comparison,
         )
 
     persistence_key = FUSION.VisualPersistenceKey(
-        camera_id=camera_id, grow_run_id=grow_run_id, model_id=key.model_id,
-        model_version=key.model_version, framing_epoch_id=epoch_id,
+        camera_id=camera_id,
+        grow_run_id=grow_run_id,
+        model_id=key.model_id,
+        model_version=key.model_version,
+        framing_epoch_id=epoch_id,
     )
     persistence_decision = FUSION.evaluate_visual_persistence(
         persistence.get(camera_id),
         FUSION.VisualPersistenceEvent(
-            key=persistence_key, capture_id=capture_id, captured_at=captured_at,
+            key=persistence_key,
+            capture_id=capture_id,
+            captured_at=captured_at,
             trigger_source=MODELS.CaptureTrigger.SCHEDULED,
             verdict=comparison.verdict,
             comparison_confidence=comparison.comparison_confidence,
@@ -910,15 +1125,22 @@ def write_fusion(connection, rng, *, capture_id, captured_at, scene, comparison,
         " environmental_verdict, environmental_evaluated_at, stress_reasons,"
         " mold_reasons, fusion_state, fusion_confidence, fusion_coverage,"
         " unavailable_reasons) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (uuid7_at(captured_at, rng), capture_id, utc_text(captured_at), policy,
-         environmental.verdict.value,
-         None if scene.sensors_unavailable
-         else utc_text(captured_at - timedelta(minutes=2)),
-         json.dumps(stress), json.dumps(mold),
-         outcome.state.value if available else None,
-         outcome.confidence.value if available else None,
-         outcome.coverage.value if available else None,
-         json.dumps([] if available else list(outcome.unavailable_reasons))),
+        (
+            uuid7_at(captured_at, rng),
+            capture_id,
+            utc_text(captured_at),
+            policy,
+            environmental.verdict.value,
+            None
+            if scene.sensors_unavailable
+            else utc_text(captured_at - timedelta(minutes=2)),
+            json.dumps(stress),
+            json.dumps(mold),
+            outcome.state.value if available else None,
+            outcome.confidence.value if available else None,
+            outcome.coverage.value if available else None,
+            json.dumps([] if available else list(outcome.unavailable_reasons)),
+        ),
     )
     return outcome if available else None
 
@@ -952,14 +1174,17 @@ def observation_for(found) -> str:
     if not found:
         return OBSERVATION_HEALTHY
     clauses = [OBSERVATION_CLAUSES[label] for label, _confidence in found]
-    body = clauses[0] if len(clauses) == 1 else (
-        ", ".join(clauses[:-1]) + " and " + clauses[-1]
+    body = (
+        clauses[0]
+        if len(clauses) == 1
+        else (", ".join(clauses[:-1]) + " and " + clauses[-1])
     )
     return f"In this frame {body}. The rest of the plant reads as unchanged."
 
 
-def write_report(connection, rng, *, capture_id, captured_at, scene, outcome,
-                 policy) -> None:
+def write_report(
+    connection, rng, *, capture_id, captured_at, scene, outcome, policy
+) -> None:
     """Attach an explainer report, the way an AI-task-configured growspace has one.
 
     The observation is what the Visual Observation Pass saw and names nothing
@@ -1019,12 +1244,20 @@ def write_report(connection, rng, *, capture_id, captured_at, scene, outcome,
         " recommendations, fusion_state, fusion_confidence, fusion_coverage,"
         " fusion_unavailable_reasons)"
         " VALUES (?, ?, ?, ?, 'image_pass', ?, ?, ?, ?, ?, ?, ?, ?, '[]')",
-        (uuid7_at(captured_at, rng), capture_id,
-         utc_text(captured_at + timedelta(seconds=6)),
-         "ai_task.growspace_vision_explainer", policy,
-         observation_for(found),
-         environmental_risk, hypothesis, json.dumps(recommendations),
-         outcome.state.value, outcome.confidence.value, outcome.coverage.value),
+        (
+            uuid7_at(captured_at, rng),
+            capture_id,
+            utc_text(captured_at + timedelta(seconds=6)),
+            "ai_task.growspace_vision_explainer",
+            policy,
+            observation_for(found),
+            environmental_risk,
+            hypothesis,
+            json.dumps(recommendations),
+            outcome.state.value,
+            outcome.confidence.value,
+            outcome.coverage.value,
+        ),
     )
 
 
@@ -1036,18 +1269,35 @@ def parse_args(argv):
     parser = argparse.ArgumentParser(
         description="Seed the dev instance with a Vision Checkup history.",
     )
-    parser.add_argument("--growspace", default=DEFAULT_GROWSPACE,
-                        help="growspace id or name (default: %(default)s)")
-    parser.add_argument("--days", type=int, default=DEFAULT_DAYS,
-                        help="days of history (default: %(default)s)")
-    parser.add_argument("--camera", action="append", default=[],
-                        help="camera id to attribute captures to (repeatable)")
-    parser.add_argument("--seed", type=int, default=20260101,
-                        help="rng seed for the drawn frames (default: %(default)s)")
-    parser.add_argument("--clear", action="store_true",
-                        help="delete the growspace's evidence and exit")
-    parser.add_argument("--list", action="store_true",
-                        help="list the growspaces that can be seeded")
+    parser.add_argument(
+        "--growspace",
+        default=DEFAULT_GROWSPACE,
+        help="growspace id or name (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--days",
+        type=int,
+        default=DEFAULT_DAYS,
+        help="days of history (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--camera",
+        action="append",
+        default=[],
+        help="camera id to attribute captures to (repeatable)",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=20260101,
+        help="rng seed for the drawn frames (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--clear", action="store_true", help="delete the growspace's evidence and exit"
+    )
+    parser.add_argument(
+        "--list", action="store_true", help="list the growspaces that can be seeded"
+    )
     return parser.parse_args(argv)
 
 
@@ -1063,12 +1313,16 @@ def main(argv) -> int:
     # A bucket needs 30 daily samples before it can score, and the store prunes
     # images past its 90-day retention on the next start.
     if args.days < COMPARISON.BASELINE_SIZE + 4:
-        die(f"--days must be at least {COMPARISON.BASELINE_SIZE + 4}: a baseline "
+        die(
+            f"--days must be at least {COMPARISON.BASELINE_SIZE + 4}: a baseline "
             f"needs {COMPARISON.BASELINE_SIZE} daily samples per light window "
-            "before anything can be scored")
+            "before anything can be scored"
+        )
     if args.days > 90:
-        die("--days must be at most 90; the store prunes images older than its "
-            "90-day retention on the next start")
+        die(
+            "--days must be at most 90; the store prunes images older than its "
+            "90-day retention on the next start"
+        )
 
     target = resolve_target(args.growspace, args.camera)
     connection = open_database()
@@ -1090,26 +1344,43 @@ def main(argv) -> int:
     try:
         app.connect()
     except (urllib.error.URLError, TimeoutError) as error:
-        die(f"Growspace Vision is not reachable at {VISION_URL}: {error}\n"
-            "       start it with ./scripts/ha dev up")
-    print(f"  vision:    {VISION_URL}  {app.model_id} {app.model_version} "
-          f"(dim {app.dimension}), service {app.service_version}")
+        die(
+            f"Growspace Vision is not reachable at {VISION_URL}: {error}\n"
+            "       start it with ./scripts/ha dev up"
+        )
+    print(
+        f"  vision:    {VISION_URL}  {app.model_id} {app.model_version} "
+        f"(dim {app.dimension}), service {app.service_version}"
+    )
 
     renderer = load_renderer()
-    print(f"  seeding {args.days} days x {len(WINDOWS)} windows x "
-          f"{len(target.cameras)} cameras ...")
-    result = seed(target, args.days, random.Random(args.seed), app, renderer,
-                  connection, args.seed)
+    print(
+        f"  seeding {args.days} days x {len(WINDOWS)} windows x "
+        f"{len(target.cameras)} cameras ..."
+    )
+    result = seed(
+        target,
+        args.days,
+        random.Random(args.seed),
+        app,
+        renderer,
+        connection,
+        args.seed,
+    )
     connection.close()
 
     counts = result["counts"]
-    print(f"  wrote {counts['checkups']} checkups, {counts['captures']} captures, "
-          f"{counts['scored']} scored, {counts['reports']} explainer reports")
+    print(
+        f"  wrote {counts['checkups']} checkups, {counts['captures']} captures, "
+        f"{counts['scored']} scored, {counts['reports']} explainer reports"
+    )
     print(f"  verdicts:  {format_tally(result['verdicts'])}")
     print(f"  fusion:    {format_tally(result['states'])}")
     if not result["verdicts"]:
-        print("  NOTE: nothing scored — every bucket is still in bootstrap. "
-              "Seed more days.")
+        print(
+            "  NOTE: nothing scored — every bucket is still in bootstrap. "
+            "Seed more days."
+        )
     print()
     print("  The card reads this through growspace_manager/get_vision_history_v2.")
     print("  If HA was running when the evidence store failed to open, restart it:")
@@ -1122,8 +1393,7 @@ def format_tally(tally: dict) -> str:
     if not tally:
         return "(none)"
     return "  ".join(
-        f"{key} {count}"
-        for key, count in sorted(tally.items(), key=lambda kv: -kv[1])
+        f"{key} {count}" for key, count in sorted(tally.items(), key=lambda kv: -kv[1])
     )
 
 

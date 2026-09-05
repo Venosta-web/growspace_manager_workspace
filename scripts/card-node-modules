@@ -42,6 +42,9 @@ verify_install() {
     return 1
   fi
 
+  # The `node -e` body below is a JavaScript program: single quotes are what
+  # keep the shell out of it.
+  # shellcheck disable=SC2016
   if ! counts="$(
     printf '%s\n' "$plan" \
       | sed -n '/^{/,$p' \

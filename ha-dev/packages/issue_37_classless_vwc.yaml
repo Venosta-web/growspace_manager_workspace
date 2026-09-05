@@ -1,3 +1,4 @@
+---
 # Repro sensor for issue #37 — a soil-moisture probe with no device_class.
 #
 # ESPHome and template VWC probes overwhelmingly ship like this: a `%` unit and

@@ -14,12 +14,12 @@ add their renderer, rather than introducing another entity inventory.
 from __future__ import annotations
 
 import argparse
+import json
+import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
-import json
 from pathlib import Path
-import re
 from typing import Any
 
 DOCS_BEGIN = "<!-- BEGIN GENERATED E2E ENTITY COVERAGE -->"
@@ -556,9 +556,7 @@ def _telemetry_role(
     # it; the generic family fills every remaining dashboard, so no growspace is
     # left without the reading and none ends up with two of them.
     claimed = {assignment.profile for assignment in extra_assignments}
-    reachable = (
-        IRRIGATING_PROFILES if category == "irrigation" else DASHBOARD_PROFILES
-    )
+    reachable = IRRIGATING_PROFILES if category == "irrigation" else DASHBOARD_PROFILES
     generic_profiles = tuple(
         profile
         for profile in reachable
@@ -2432,9 +2430,7 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
         "",
         "template:",
     ]
-    instances = [
-        instance for profile in PROFILES for instance in profile.instances
-    ]
+    instances = [instance for profile in PROFILES for instance in profile.instances]
     for index, instance in enumerate(instances):
         phase = index * 600
         telemetry = [
@@ -2721,9 +2717,9 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
     ]
     for record in boolean_backings:
         object_id = record.entity_id.split(".", 1)[1]
-        if record.role_id.startswith("simulation.irrigation") or record.role_id.startswith(
-            "simulation.drain"
-        ):
+        if record.role_id.startswith(
+            "simulation.irrigation"
+        ) or record.role_id.startswith("simulation.drain"):
             kind = object_id.rsplit("_", 2)[-2] + "_pump"
             name = f"sim e2e {record.slug} {kind}"
         else:
@@ -2786,11 +2782,7 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
                 f"    max: {maximum}",
                 f"    step: {step}",
                 f"    initial: {initial}",
-                *(
-                    [f'    unit_of_measurement: "{sim.unit}"']
-                    if sim.unit
-                    else []
-                ),
+                *([f'    unit_of_measurement: "{sim.unit}"'] if sim.unit else []),
                 "    mode: box",
             ]
     for record in active:
@@ -2999,17 +2991,7 @@ def render_docs_section() -> str:
                 else f"planned in [#{assignment.delivery_ticket}](https://github.com/Venosta-web/growspace_manager_workspace/issues/{assignment.delivery_ticket})"
             )
             lines.append(
-                "| `{}` | {} | {} | `{}` | `{}` | {} ({}) | {} | {} |".format(
-                    role.id,
-                    role.category,
-                    profile_label,
-                    assignment.entity_id_rule,
-                    assignment.domain,
-                    role.cardinality.label,
-                    assignment.count,
-                    assignment.behavior.value,
-                    delivery,
-                )
+                f"| `{role.id}` | {role.category} | {profile_label} | `{assignment.entity_id_rule}` | `{assignment.domain}` | {role.cardinality.label} ({assignment.count}) | {assignment.behavior.value} | {delivery} |"
             )
     lines += ["", DOCS_END]
     return "\n".join(lines)

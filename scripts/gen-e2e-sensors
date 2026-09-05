@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """Generate every adapter derived from the E2E entity coverage contract."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 WORKSPACE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(WORKSPACE))
 
 from e2e.entity_coverage import main  # noqa: E402
-
 
 if __name__ == "__main__":
     raise SystemExit(main(["generate", *sys.argv[1:]]))

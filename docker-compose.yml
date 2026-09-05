@@ -1,3 +1,4 @@
+---
 # Growspace development runtime.
 #
 # Design rule: NOTHING lives only inside a container. Every path HA reads or

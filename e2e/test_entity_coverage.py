@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 import json
-from pathlib import Path
 import unittest
+from dataclasses import replace
+from pathlib import Path
 from unittest import mock
 
 from e2e import entity_coverage
@@ -777,9 +777,7 @@ class EntityCoverageContractTest(unittest.TestCase):
             },
             {
                 "exhaust_fan_entities": ["number.sim_e2e_vision_exhaust_fan"],
-                "circulation_fan_entities": [
-                    "number.sim_e2e_vision_circulation_fan"
-                ],
+                "circulation_fan_entities": ["number.sim_e2e_vision_circulation_fan"],
                 "humidifier_entities": ["number.sim_e2e_vision_humidifier"],
                 "dehumidifier_entities": ["switch.sim_e2e_vision_dehumidifier"],
                 "growlight_entities": ["number.sim_e2e_vision_growlight"],
