@@ -1,0 +1,387 @@
+#!/usr/bin/env node
+/*
+ * Check a card release that has just been published, by replaying the update
+ * an existing user is about to receive.
+ *
+ *   ./scripts/card-release-update-check --tag v1.3.0-next.49
+ *
+ * scripts/card-hacs-update reproduces one install-then-update pair on demand.
+ * This decides which pair a publish implies, runs it, and states the verdict
+ * where a forge shows it without anyone opening a log.
+ *
+ * It is deliberately post-publish. ADR-0025 in the card repository makes e2e a
+ * main-only release gate and leaves the dev prerelease job with no `needs` on
+ * purpose, so the frequent prerelease path stays fast; nothing here may change
+ * that. It would also not have helped: every broken release in the incident
+ * this comes from was a dev prerelease, so a main-only gate would have caught
+ * none of them, and an install-only check passes today because a fresh HACS
+ * download fetches every asset of the tag it was asked for. The update is the
+ * path that breaks, and the earliest moment it can be walked is after both
+ * releases exist.
+ *
+ * The predecessor is resolved per channel, because that is what a user's HACS
+ * would offer them:
+ *
+ *   stable      → the previous stable release. show_beta is off, so every
+ *                 prerelease in between is invisible to that install.
+ *   prerelease  → the previous release of any kind. show_beta is what puts a
+ *                 prerelease within reach at all, and it does not hide the
+ *                 stable ones.
+ */
+"use strict";
+
+const fs = require("node:fs");
+const path = require("node:path");
+const { spawnSync } = require("node:child_process");
+
+const { CARD_REPOSITORY, mainHubCheckout } = require("./card-hacs-update");
+
+const RELEASES_PER_PAGE = 100;
+/* Enough to reach the previous stable across a long prerelease run — the card
+ * has published dozens of `-next.N` tags between stable releases — without
+ * paging the whole history of the repository on every publish. */
+const MAX_RELEASE_PAGES = 5;
+/* GitHub renders the first ten annotations of a step and drops the rest. */
+const MAX_ANNOTATIONS = 10;
+
+/* ------------------------------------------------------------------ *
+ * Pure helpers — everything scripts/card-release-update-check.test.cjs
+ * asserts.
+ * ------------------------------------------------------------------ */
+
+/*
+ * GitHub's own prerelease flag is what HACS reads, so it decides. A tag that
+ * carries a semver prerelease component is one regardless: semantic-release
+ * has always set the flag on `-next.N`, and a release that somehow lost it
+ * still must not be offered to a stable install.
+ */
+function releaseChannel(release) {
+  const version = String(release.tag_name || "").replace(/^v/, "");
+  return release.prerelease === true || version.includes("-")
+    ? "prerelease"
+    : "stable";
+}
+
+function previousReleaseTag(releases, tag) {
+  const published = releases.filter(
+    (release) => release && !release.draft && release.tag_name && release.published_at,
+  );
+  const current = published.find((release) => release.tag_name === tag);
+  if (!current) throw new Error(`no published release is tagged ${tag}`);
+  const channel = releaseChannel(current);
+  const earlier = published
+    .filter(
+      (release) =>
+        release.tag_name !== tag &&
+        release.published_at < current.published_at &&
+        (channel === "prerelease" || releaseChannel(release) === "stable"),
+    )
+    .sort((left, right) => (left.published_at < right.published_at ? 1 : -1));
+  return earlier.length > 0 ? earlier[0].tag_name : null;
+}
+
+/*
+ * The release that was just published is on the first page by definition, so
+ * the pages that follow are only ever walked to reach a distant predecessor —
+ * a stable release with a hundred prereleases behind it. A publish with a
+ * predecessor near it costs exactly one request.
+ */
+async function resolvePreviousTag({ tag, fetchPage, maxPages = MAX_RELEASE_PAGES }) {
+  const releases = [];
+  for (let page = 1; page <= maxPages; page += 1) {
+    const batch = await fetchPage(page);
+    releases.push(...batch);
+    const previous = previousReleaseTag(releases, tag);
+    if (previous !== null) return previous;
+    if (batch.length < RELEASES_PER_PAGE) break;
+  }
+  return null;
+}
+
+/* A module URL as a person names it: the file, without HACS's ?hacstag. */
+function moduleName(url) {
+  return path.basename(String(url).split(/[?#]/)[0]);
+}
+
+function brokenModuleRows(report) {
+  return (report.steps || []).flatMap((step) =>
+    (step.modules || [])
+      .filter((module) => module.status !== null && module.status !== 200)
+      .map((module) => ({
+        step: step.label,
+        status: module.status,
+        module: moduleName(module.url),
+        url: module.url,
+        importer: module.importer ? moduleName(module.importer) : null,
+      })),
+  );
+}
+
+function escapeAnnotation(value) {
+  return String(value)
+    .replace(/%/g, "%25")
+    .replace(/\r/g, "%0D")
+    .replace(/\n/g, "%0A");
+}
+
+/*
+ * The acceptance this was written to is that a failure is legible without
+ * opening logs, so every annotation names the missing chunk and both tags —
+ * the title is what the run summary shows, and it has to stand alone there.
+ */
+function annotationLines({ from, to, rows, failure = null }) {
+  if (failure) {
+    return [
+      `::error title=${escapeAnnotation(
+        `HACS ${from} → ${to} could not be checked`,
+      )}::${escapeAnnotation(failure)}`,
+    ];
+  }
+  const shown = rows.slice(0, MAX_ANNOTATIONS).map((row) => {
+    const importer = row.importer ? `, imported by ${row.importer}` : "";
+    return `::error title=${escapeAnnotation(
+      `HACS ${from} → ${to} does not serve ${row.module}`,
+    )}::${escapeAnnotation(
+      `HTTP ${row.status} for ${row.url} ${row.step}${importer}`,
+    )}`;
+  });
+  const hidden = rows.length - shown.length;
+  if (hidden > 0) {
+    shown.push(
+      `::error title=${escapeAnnotation(
+        `HACS ${from} → ${to} is missing ${rows.length} modules`,
+      )}::${escapeAnnotation(
+        `${hidden} further missing module${hidden === 1 ? "" : "s"} are named in the run's report artifact`,
+      )}`,
+    );
+  }
+  return shown;
+}
+
+function jobSummary({ from, to, rows, report = null, failure = null, skipped = null }) {
+  if (skipped) return [`### HACS update check — skipped`, "", skipped, ""].join("\n");
+  if (failure) {
+    return [
+      `### HACS update check — could not run`,
+      "",
+      `\`${from}\` → \`${to}\``,
+      "",
+      failure,
+      "",
+    ].join("\n");
+  }
+  const lines = [];
+  if (rows.length === 0) {
+    const walked = (report?.steps || []).reduce(
+      (total, step) => total + (step.modules || []).length,
+      0,
+    );
+    lines.push(`### HACS update check — every module served`, "");
+    lines.push(`\`${from}\` → \`${to}\``, "");
+    lines.push(`${walked} modules walked across both installs, all 200.`, "");
+  } else {
+    lines.push(
+      `### HACS update check — ${rows.length} module${rows.length === 1 ? "" : "s"} not served`,
+      "",
+    );
+    lines.push(`\`${from}\` → \`${to}\``, "");
+    lines.push("| status | module | imported by | when |", "| --- | --- | --- | --- |");
+    for (const row of rows) {
+      lines.push(
+        `| ${row.status} | \`${row.module}\` | ${row.importer ? `\`${row.importer}\`` : "—"} | ${row.step} |`,
+      );
+    }
+    lines.push("");
+  }
+  for (const step of report?.steps || []) {
+    lines.push(`- ${step.label}: ${step.files.length} files in \`www/community\``);
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
+const OPTIONS = new Set(["--tag", "--from", "--repository", "--token"]);
+const SWITCHES = new Set(["--resolve-only", "--help"]);
+
+/*
+ * Anything this does not recognise is handed to scripts/card-hacs-update
+ * untouched, so `--reset`, `--base-url` and the rest keep one definition. The
+ * cost is that a typo reaches that command instead of this one, which rejects
+ * it there by the same name.
+ */
+function parseArguments(argv) {
+  const options = {};
+  const switches = new Set();
+  const passthrough = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (OPTIONS.has(argument)) {
+      const value = argv[index + 1];
+      if (value === undefined) throw new Error(`${argument} needs a value`);
+      options[argument] = value;
+      index += 1;
+    } else if (SWITCHES.has(argument)) {
+      switches.add(argument);
+    } else {
+      passthrough.push(argument);
+    }
+  }
+  return { options, switches, passthrough };
+}
+
+/* ------------------------------------------------------------------ *
+ * The live run.
+ * ------------------------------------------------------------------ */
+
+function log(message = "") {
+  console.log(message);
+}
+
+function emit({ from, to, rows, report, failure, skipped }) {
+  const summary = jobSummary({ from, to, rows, report, failure, skipped });
+  log();
+  log(summary.replace(/^#+ /gm, "").trimEnd());
+  if (!skipped) for (const line of annotationLines({ from, to, rows, failure })) log(line);
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary}\n`);
+  }
+}
+
+function githubToken(explicit) {
+  return (
+    explicit ||
+    process.env.HACS_GITHUB_TOKEN ||
+    process.env.GITHUB_TOKEN ||
+    (() => {
+      const result = spawnSync("gh", ["auth", "token"], { encoding: "utf8" });
+      return result.status === 0 ? result.stdout.trim() : "";
+    })()
+  );
+}
+
+function releasePageFetcher({ repository, token }) {
+  return async (page) => {
+    const url = `https://api.github.com/repos/${repository}/releases?per_page=${RELEASES_PER_PAGE}&page=${page}`;
+    const response = await fetch(url, {
+      headers: {
+        accept: "application/vnd.github+json",
+        "x-github-api-version": "2022-11-28",
+        "user-agent": "growspace-card-release-update-check",
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) {
+      throw new Error(
+        `GET ${url} answered HTTP ${response.status}. The card repository is private, so this needs a token that can read its releases.`,
+      );
+    }
+    return response.json();
+  };
+}
+
+function reportPath(hub, from, to) {
+  return path.join(hub, "artifacts/card-hacs-update", `${from}-to-${to}.json`);
+}
+
+async function main(argv = process.argv.slice(2)) {
+  const { options, switches, passthrough } = parseArguments(argv);
+  const tag = options["--tag"];
+  if (!tag || switches.has("--help")) {
+    log(
+      [
+        "usage: ./scripts/card-release-update-check --tag <published-tag> [options]",
+        "",
+        "  --tag TAG            the release that was just published (required)",
+        "  --from TAG           check against this predecessor instead of resolving one",
+        "  --repository OWNER/NAME  default " + CARD_REPOSITORY,
+        "  --token T            token to read the releases with (default: gh auth token)",
+        "  --resolve-only       print the pair that would be checked and stop",
+        "",
+        "Anything else is passed to ./scripts/card-hacs-update — --reset,",
+        "--base-url, --config-dir, --hacs-version, --github-token.",
+      ].join("\n"),
+    );
+    return switches.has("--help") ? 0 : 2;
+  }
+
+  const repository = options["--repository"] || CARD_REPOSITORY;
+  const token = githubToken(options["--token"]);
+  const from =
+    options["--from"] ||
+    (await resolvePreviousTag({
+      tag,
+      fetchPage: releasePageFetcher({ repository, token }),
+    }));
+
+  if (!from) {
+    const skipped = `\`${tag}\` is the first release on its channel — there is no earlier tag to update from.`;
+    emit({ from: null, to: tag, rows: [], report: null, failure: null, skipped });
+    return 0;
+  }
+
+  log(`checking the HACS update ${from} → ${tag} of ${repository}`);
+  if (switches.has("--resolve-only")) return 0;
+
+  const hub = mainHubCheckout();
+  const artifact = reportPath(hub, from, tag);
+  fs.rmSync(artifact, { force: true });
+
+  const reproducer = path.join(__dirname, "card-hacs-update");
+  const run = spawnSync(
+    process.execPath,
+    [reproducer, from, tag, ...passthrough],
+    { stdio: "inherit", env: { ...process.env, HACS_GITHUB_TOKEN: token } },
+  );
+
+  /* The report is written at the end of a completed run, so its absence is
+   * the difference between "the update serves a broken graph" and "the
+   * reproducer never got far enough to say". Those are not the same failure
+   * and must not read as the same one. */
+  if (!fs.existsSync(artifact)) {
+    emit({
+      from,
+      to: tag,
+      rows: [],
+      report: null,
+      failure: `scripts/card-hacs-update exited ${run.status ?? run.signal} before it walked the entry's imports, so this release is unverified. Its output is above; no report was written to ${path.relative(hub, artifact)}.`,
+      skipped: null,
+    });
+    return 1;
+  }
+
+  const report = JSON.parse(fs.readFileSync(artifact, "utf8"));
+  const rows = brokenModuleRows(report);
+  emit({ from, to: tag, rows, report, failure: null, skipped: null });
+  return rows.length === 0 ? 0 : 1;
+}
+
+module.exports = {
+  annotationLines,
+  brokenModuleRows,
+  escapeAnnotation,
+  jobSummary,
+  moduleName,
+  parseArguments,
+  previousReleaseTag,
+  releaseChannel,
+  reportPath,
+  resolvePreviousTag,
+};
+
+if (require.main === module) {
+  main()
+    .then((code) => {
+      process.exitCode = code;
+    })
+    .catch((error) => {
+      console.error(`\nERROR: ${error.message || error}`);
+      if (process.env.GITHUB_STEP_SUMMARY) {
+        fs.appendFileSync(
+          process.env.GITHUB_STEP_SUMMARY,
+          `### HACS update check — could not run\n\n${error.message || error}\n`,
+        );
+      }
+      process.exitCode = 1;
+    });
+}
