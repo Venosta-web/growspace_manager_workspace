@@ -97,6 +97,10 @@ check_card() {
   # gate that only CI was enforcing until it bit #750.
   run "eslint"           npm run --silent lint
   run "typecheck"        npm run --silent typecheck
+  # The bundle-shape rules' own unit tests. `validate:hacs-release` below
+  # exercises them against real dist/ output but never runs them, so without
+  # this stage a broken rule reads as a passing build.
+  run "ci policy tests"  npm run --silent test:ci-policy
   run "format:check"     npm run --silent format:check
   run "design tokens"    npm run --silent tokens:check
   run "colour literals"  npm run --silent tokens:audit -- --check
