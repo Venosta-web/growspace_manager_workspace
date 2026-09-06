@@ -33,7 +33,7 @@ services:
   # VISION DEV — the production App image with host-owned App options.
   # ---------------------------------------------------------------------
   vision-dev:
-    image: ${GROWSPACE_VISION_IMAGE:-growspace-vision:1.0.0-amd64}
+    image: ${GROWSPACE_VISION_IMAGE:-growspace-vision:1.0.1-amd64}
     pull_policy: never
     container_name: growspace-vision-dev
     restart: unless-stopped

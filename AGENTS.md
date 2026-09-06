@@ -110,7 +110,7 @@ generic and resolved by Supervisor.
 A contributor who is not iterating on Vision does not have to build it:
 
 ```bash
-GROWSPACE_VISION_IMAGE=ghcr.io/venosta-web/growspace-manager-vision:1.0.0 \
+GROWSPACE_VISION_IMAGE=ghcr.io/venosta-web/growspace-manager-vision:1.0.1 \
   ./scripts/ha dev restart
 ```
 
