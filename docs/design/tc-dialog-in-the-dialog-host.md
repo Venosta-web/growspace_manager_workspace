@@ -187,9 +187,10 @@ Two rules on the edges:
 - **Scope is TC.** Every portal still *mounts* on any dialog open, and the
   existing device-ownership guard stays exactly as it is for the other 23
   dialog types. Generalizing the token to the whole host — which would also
-  retire the irrigation duplicate — is a separate change to the card, and the
-  irrigation duplicate is a pre-existing bug to ticket there rather than
-  something this map fixes on the way past.
+  retire the irrigation duplicate — is a separate change to the card. That
+  duplicate is a pre-existing bug, filed as
+  [card#913](https://github.com/Venosta-web/lovelace-growspace-manager-card/issues/913),
+  rather than something this map fixes on the way past.
 
 ## The opener
 
