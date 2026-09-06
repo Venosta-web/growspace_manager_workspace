@@ -42,6 +42,7 @@ The failure names this command with the card checkout already filled in.
 | `environment.temperature` | environment | `irrigation_tanks` (irrigation_tanks) | `sensor.e2e_{slug}_temperature` | `sensor` | one or more (1) | read-only | covered |
 | `environment.temperature` | environment | `lighting` (lighting) | `sensor.e2e_{slug}_temperature` | `sensor` | one or more (1) | read-only | covered |
 | `environment.temperature` | environment | `vision` (vision) | `sensor.e2e_{slug}_temperature` | `sensor` | one or more (1) | read-only | covered |
+| `environment.temperature` | environment | `demo` (demo) | `sensor.e2e_{slug}_temperature` | `sensor` | one or more (1) | read-only | covered |
 | `environment.temperature` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_temperature{ordinal_suffix}` | `sensor` | one or more (2) | read-only | covered |
 | `environment.temperature` | environment | `climate_plain` (climate_plain) | `input_number.e2e_{slug}_temperature` | `input_number` | one or more (1) | controllable | covered |
 | `environment.temperature` | environment | `ac_infinity` (ac_infinity) | `input_number.e2e_{slug}_temperature` | `input_number` | one or more (1) | controllable | covered |
@@ -51,6 +52,7 @@ The failure names this command with the card checkout already filled in.
 | `environment.humidity` | environment | `irrigation_tanks` (irrigation_tanks) | `sensor.e2e_{slug}_humidity` | `sensor` | one or more (1) | read-only | covered |
 | `environment.humidity` | environment | `lighting` (lighting) | `sensor.e2e_{slug}_humidity` | `sensor` | one or more (1) | read-only | covered |
 | `environment.humidity` | environment | `vision` (vision) | `sensor.e2e_{slug}_humidity` | `sensor` | one or more (1) | read-only | covered |
+| `environment.humidity` | environment | `demo` (demo) | `sensor.e2e_{slug}_humidity` | `sensor` | one or more (1) | read-only | covered |
 | `environment.humidity` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_humidity{ordinal_suffix}` | `sensor` | one or more (2) | read-only | covered |
 | `environment.humidity` | environment | `climate_plain` (climate_plain) | `input_number.e2e_{slug}_humidity` | `input_number` | one or more (1) | controllable | covered |
 | `environment.humidity` | environment | `ac_infinity` (ac_infinity) | `input_number.e2e_{slug}_humidity` | `input_number` | one or more (1) | controllable | covered |
@@ -60,6 +62,7 @@ The failure names this command with the card checkout already filled in.
 | `environment.vpd` | environment | `irrigation_tanks` (irrigation_tanks) | `sensor.e2e_{slug}_vpd` | `sensor` | one or more (1) | read-only | covered |
 | `environment.vpd` | environment | `lighting` (lighting) | `sensor.e2e_{slug}_vpd` | `sensor` | one or more (1) | read-only | covered |
 | `environment.vpd` | environment | `vision` (vision) | `sensor.e2e_{slug}_vpd` | `sensor` | one or more (1) | read-only | covered |
+| `environment.vpd` | environment | `demo` (demo) | `sensor.e2e_{slug}_vpd` | `sensor` | one or more (1) | read-only | covered |
 | `environment.vpd` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_vpd{ordinal_suffix}` | `sensor` | one or more (2) | read-only | covered |
 | `environment.vpd` | environment | `climate_plain` (climate_plain) | `input_number.e2e_{slug}_vpd` | `input_number` | one or more (1) | controllable | covered |
 | `environment.vpd` | environment | `ac_infinity` (ac_infinity) | `input_number.e2e_{slug}_vpd` | `input_number` | one or more (1) | controllable | covered |
@@ -71,6 +74,7 @@ The failure names this command with the card checkout already filled in.
 | `environment.co2` | environment | `climate_plain` (climate_plain) | `sensor.e2e_{slug}_co2` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.co2` | environment | `ac_infinity` (ac_infinity) | `sensor.e2e_{slug}_co2` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.co2` | environment | `vision` (vision) | `sensor.e2e_{slug}_co2` | `sensor` | exactly one (1) | read-only | covered |
+| `environment.co2` | environment | `demo` (demo) | `sensor.e2e_{slug}_co2` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.co2` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_co2{ordinal_suffix}` | `sensor` | exactly one (1) | read-only | covered |
 | `irrigation.feed_ec` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_feed_ec` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.feed_ec` | irrigation | `vwc` (vwc_veg, vwc_flower) | `sensor.e2e_{slug}_feed_ec` | `sensor` | one or more (1) | read-only | covered |
@@ -105,6 +109,7 @@ The failure names this command with the card checkout already filled in.
 | `environment.substrate_temperature` | environment | `climate_plain` (climate_plain) | `sensor.e2e_{slug}_substrate_temperature` | `sensor` | one or more (1) | read-only | covered |
 | `environment.substrate_temperature` | environment | `ac_infinity` (ac_infinity) | `sensor.e2e_{slug}_substrate_temperature` | `sensor` | one or more (1) | read-only | covered |
 | `environment.substrate_temperature` | environment | `vision` (vision) | `sensor.e2e_{slug}_substrate_temperature` | `sensor` | one or more (1) | read-only | covered |
+| `environment.substrate_temperature` | environment | `demo` (demo) | `sensor.e2e_{slug}_substrate_temperature` | `sensor` | one or more (1) | read-only | covered |
 | `environment.substrate_temperature` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_substrate_temperature{ordinal_suffix}` | `sensor` | one or more (2) | read-only | covered |
 | `environment.substrate_moisture` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.substrate_moisture` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_substrate_moisture` | `input_number` | exactly one (1) | controllable | covered |
@@ -114,6 +119,7 @@ The failure names this command with the card checkout already filled in.
 | `environment.substrate_moisture` | environment | `climate_plain` (climate_plain) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.substrate_moisture` | environment | `ac_infinity` (ac_infinity) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.substrate_moisture` | environment | `vision` (vision) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
+| `environment.substrate_moisture` | environment | `demo` (demo) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.substrate_moisture` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_substrate_moisture{ordinal_suffix}` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.power` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_power` | `sensor` | one or more (1) | read-only | covered |
 | `environment.power` | environment | `vwc` (vwc_veg, vwc_flower) | `sensor.e2e_{slug}_power` | `sensor` | one or more (1) | read-only | covered |
@@ -123,6 +129,7 @@ The failure names this command with the card checkout already filled in.
 | `environment.power` | environment | `climate_plain` (climate_plain) | `sensor.e2e_{slug}_power` | `sensor` | one or more (1) | read-only | covered |
 | `environment.power` | environment | `ac_infinity` (ac_infinity) | `sensor.e2e_{slug}_power` | `sensor` | one or more (1) | read-only | covered |
 | `environment.power` | environment | `vision` (vision) | `sensor.e2e_{slug}_power` | `sensor` | one or more (1) | read-only | covered |
+| `environment.power` | environment | `demo` (demo) | `sensor.e2e_{slug}_power` | `sensor` | one or more (1) | read-only | covered |
 | `environment.power` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_power{ordinal_suffix}` | `sensor` | one or more (1) | read-only | covered |
 | `environment.energy` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_energy` | `sensor` | one or more (1) | read-only | covered |
 | `environment.energy` | environment | `vwc` (vwc_veg, vwc_flower) | `sensor.e2e_{slug}_energy` | `sensor` | one or more (1) | read-only | covered |
@@ -132,6 +139,7 @@ The failure names this command with the card checkout already filled in.
 | `environment.energy` | environment | `climate_plain` (climate_plain) | `sensor.e2e_{slug}_energy` | `sensor` | one or more (1) | read-only | covered |
 | `environment.energy` | environment | `ac_infinity` (ac_infinity) | `sensor.e2e_{slug}_energy` | `sensor` | one or more (1) | read-only | covered |
 | `environment.energy` | environment | `vision` (vision) | `sensor.e2e_{slug}_energy` | `sensor` | one or more (1) | read-only | covered |
+| `environment.energy` | environment | `demo` (demo) | `sensor.e2e_{slug}_energy` | `sensor` | one or more (1) | read-only | covered |
 | `environment.energy` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_energy{ordinal_suffix}` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.drain_volume` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_drain_volume` | `sensor` | one or more (1) | read-only | covered |
 | `irrigation.drain_volume` | irrigation | `irrigation_monitored` (irrigation_monitored) | `input_number.e2e_{slug}_drain_volume` | `input_number` | one or more (1) | controllable | covered |
@@ -163,6 +171,7 @@ The failure names this command with the card checkout already filled in.
 | `simulation.drain_pump_state` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_drain_pump` | `input_boolean` | exactly one (1) | controllable | covered |
 | `simulation.drain_pump_state` | internal | `irrigation_monitored` (irrigation_monitored) | `input_boolean.sim_e2e_{slug}_drain_pump` | `input_boolean` | exactly one (1) | controllable | covered |
 | `lighting.state` | lighting | `lighting` (lighting) | `binary_sensor.e2e_{slug}_light_state` | `binary_sensor` | one or more (1) | read-only | covered |
+| `lighting.state` | lighting | `demo` (demo) | `binary_sensor.e2e_{slug}_light_state` | `binary_sensor` | one or more (1) | read-only | covered |
 | `lighting.growlight_switch` | lighting | `lighting` (lighting) | `switch.e2e_{slug}_growlight_switch` | `switch` | one or more (1) | controllable | covered |
 | `lighting.growlight_dimmable` | lighting | `lighting` (lighting) | `light.e2e_{slug}_growlight_dimmable` | `light` | one or more (1) | controllable | covered |
 | `simulation.growlight_switch_state` | internal | `lighting` (lighting) | `input_boolean.e2e_{slug}_growlight_switch` | `input_boolean` | exactly one (1) | controllable | covered |
@@ -210,6 +219,7 @@ The failure names this command with the card checkout already filled in.
 | `dashboard_equipment.exhaust_fan` | climate | `irrigation_tanks` (irrigation_tanks) | `number.sim_e2e_{slug}_exhaust_fan` | `number` | one or more (1) | controllable | covered |
 | `dashboard_equipment.exhaust_fan` | climate | `lighting` (lighting) | `number.sim_e2e_{slug}_exhaust_fan` | `number` | one or more (1) | controllable | covered |
 | `dashboard_equipment.exhaust_fan` | climate | `vision` (vision) | `number.sim_e2e_{slug}_exhaust_fan` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.exhaust_fan` | climate | `demo` (demo) | `number.sim_e2e_{slug}_exhaust_fan` | `number` | one or more (1) | controllable | covered |
 | `simulation.dashboard_exhaust_fan_level` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_number.sim_e2e_{slug}_exhaust_fan_level` | `input_number` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_exhaust_fan_level` | internal | `vwc` (vwc_veg, vwc_flower) | `input_number.sim_e2e_{slug}_exhaust_fan_level` | `input_number` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_exhaust_fan_level` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_exhaust_fan_level` | `input_number` | exactly one (1) | controllable | covered |
@@ -217,6 +227,7 @@ The failure names this command with the card checkout already filled in.
 | `simulation.dashboard_exhaust_fan_level` | internal | `irrigation_tanks` (irrigation_tanks) | `input_number.sim_e2e_{slug}_exhaust_fan_level` | `input_number` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_exhaust_fan_level` | internal | `lighting` (lighting) | `input_number.sim_e2e_{slug}_exhaust_fan_level` | `input_number` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_exhaust_fan_level` | internal | `vision` (vision) | `input_number.sim_e2e_{slug}_exhaust_fan_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_exhaust_fan_level` | internal | `demo` (demo) | `input_number.sim_e2e_{slug}_exhaust_fan_level` | `input_number` | exactly one (1) | controllable | covered |
 | `dashboard_equipment.circulation_fan` | climate | `stage` (veg, clone, mother, flower, dry, cure) | `number.sim_e2e_{slug}_circulation_fan` | `number` | one or more (1) | controllable | covered |
 | `dashboard_equipment.circulation_fan` | climate | `vwc` (vwc_veg, vwc_flower) | `number.sim_e2e_{slug}_circulation_fan` | `number` | one or more (1) | controllable | covered |
 | `dashboard_equipment.circulation_fan` | climate | `telemetry_multi` (telemetry_multi) | `number.sim_e2e_{slug}_circulation_fan` | `number` | one or more (1) | controllable | covered |
@@ -224,6 +235,7 @@ The failure names this command with the card checkout already filled in.
 | `dashboard_equipment.circulation_fan` | climate | `irrigation_tanks` (irrigation_tanks) | `number.sim_e2e_{slug}_circulation_fan` | `number` | one or more (1) | controllable | covered |
 | `dashboard_equipment.circulation_fan` | climate | `lighting` (lighting) | `number.sim_e2e_{slug}_circulation_fan` | `number` | one or more (1) | controllable | covered |
 | `dashboard_equipment.circulation_fan` | climate | `vision` (vision) | `number.sim_e2e_{slug}_circulation_fan` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.circulation_fan` | climate | `demo` (demo) | `number.sim_e2e_{slug}_circulation_fan` | `number` | one or more (1) | controllable | covered |
 | `simulation.dashboard_circulation_fan_level` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_number.sim_e2e_{slug}_circulation_fan_level` | `input_number` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_circulation_fan_level` | internal | `vwc` (vwc_veg, vwc_flower) | `input_number.sim_e2e_{slug}_circulation_fan_level` | `input_number` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_circulation_fan_level` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_circulation_fan_level` | `input_number` | exactly one (1) | controllable | covered |
@@ -231,6 +243,7 @@ The failure names this command with the card checkout already filled in.
 | `simulation.dashboard_circulation_fan_level` | internal | `irrigation_tanks` (irrigation_tanks) | `input_number.sim_e2e_{slug}_circulation_fan_level` | `input_number` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_circulation_fan_level` | internal | `lighting` (lighting) | `input_number.sim_e2e_{slug}_circulation_fan_level` | `input_number` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_circulation_fan_level` | internal | `vision` (vision) | `input_number.sim_e2e_{slug}_circulation_fan_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_circulation_fan_level` | internal | `demo` (demo) | `input_number.sim_e2e_{slug}_circulation_fan_level` | `input_number` | exactly one (1) | controllable | covered |
 | `dashboard_equipment.humidifier` | climate | `stage` (veg, clone, mother, flower, dry, cure) | `number.sim_e2e_{slug}_humidifier` | `number` | one or more (1) | controllable | covered |
 | `dashboard_equipment.humidifier` | climate | `vwc` (vwc_veg, vwc_flower) | `number.sim_e2e_{slug}_humidifier` | `number` | one or more (1) | controllable | covered |
 | `dashboard_equipment.humidifier` | climate | `telemetry_multi` (telemetry_multi) | `number.sim_e2e_{slug}_humidifier` | `number` | one or more (1) | controllable | covered |
@@ -238,6 +251,7 @@ The failure names this command with the card checkout already filled in.
 | `dashboard_equipment.humidifier` | climate | `irrigation_tanks` (irrigation_tanks) | `number.sim_e2e_{slug}_humidifier` | `number` | one or more (1) | controllable | covered |
 | `dashboard_equipment.humidifier` | climate | `lighting` (lighting) | `number.sim_e2e_{slug}_humidifier` | `number` | one or more (1) | controllable | covered |
 | `dashboard_equipment.humidifier` | climate | `vision` (vision) | `number.sim_e2e_{slug}_humidifier` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.humidifier` | climate | `demo` (demo) | `number.sim_e2e_{slug}_humidifier` | `number` | one or more (1) | controllable | covered |
 | `simulation.dashboard_humidifier_level` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_number.sim_e2e_{slug}_humidifier_level` | `input_number` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_humidifier_level` | internal | `vwc` (vwc_veg, vwc_flower) | `input_number.sim_e2e_{slug}_humidifier_level` | `input_number` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_humidifier_level` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_humidifier_level` | `input_number` | exactly one (1) | controllable | covered |
@@ -245,6 +259,7 @@ The failure names this command with the card checkout already filled in.
 | `simulation.dashboard_humidifier_level` | internal | `irrigation_tanks` (irrigation_tanks) | `input_number.sim_e2e_{slug}_humidifier_level` | `input_number` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_humidifier_level` | internal | `lighting` (lighting) | `input_number.sim_e2e_{slug}_humidifier_level` | `input_number` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_humidifier_level` | internal | `vision` (vision) | `input_number.sim_e2e_{slug}_humidifier_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_humidifier_level` | internal | `demo` (demo) | `input_number.sim_e2e_{slug}_humidifier_level` | `input_number` | exactly one (1) | controllable | covered |
 | `dashboard_equipment.growlight` | lighting | `stage` (veg, clone, mother, flower, dry, cure) | `number.sim_e2e_{slug}_growlight` | `number` | one or more (1) | controllable | covered |
 | `dashboard_equipment.growlight` | lighting | `vwc` (vwc_veg, vwc_flower) | `number.sim_e2e_{slug}_growlight` | `number` | one or more (1) | controllable | covered |
 | `dashboard_equipment.growlight` | lighting | `telemetry_multi` (telemetry_multi) | `number.sim_e2e_{slug}_growlight` | `number` | one or more (1) | controllable | covered |
@@ -252,6 +267,7 @@ The failure names this command with the card checkout already filled in.
 | `dashboard_equipment.growlight` | lighting | `irrigation_tanks` (irrigation_tanks) | `number.sim_e2e_{slug}_growlight` | `number` | one or more (1) | controllable | covered |
 | `dashboard_equipment.growlight` | lighting | `climate_plain` (climate_plain) | `number.sim_e2e_{slug}_growlight` | `number` | one or more (1) | controllable | covered |
 | `dashboard_equipment.growlight` | lighting | `vision` (vision) | `number.sim_e2e_{slug}_growlight` | `number` | one or more (1) | controllable | covered |
+| `dashboard_equipment.growlight` | lighting | `demo` (demo) | `number.sim_e2e_{slug}_growlight` | `number` | one or more (1) | controllable | covered |
 | `simulation.dashboard_growlight_level` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_number.sim_e2e_{slug}_growlight_level` | `input_number` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_growlight_level` | internal | `vwc` (vwc_veg, vwc_flower) | `input_number.sim_e2e_{slug}_growlight_level` | `input_number` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_growlight_level` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_growlight_level` | `input_number` | exactly one (1) | controllable | covered |
@@ -259,6 +275,7 @@ The failure names this command with the card checkout already filled in.
 | `simulation.dashboard_growlight_level` | internal | `irrigation_tanks` (irrigation_tanks) | `input_number.sim_e2e_{slug}_growlight_level` | `input_number` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_growlight_level` | internal | `climate_plain` (climate_plain) | `input_number.sim_e2e_{slug}_growlight_level` | `input_number` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_growlight_level` | internal | `vision` (vision) | `input_number.sim_e2e_{slug}_growlight_level` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_growlight_level` | internal | `demo` (demo) | `input_number.sim_e2e_{slug}_growlight_level` | `input_number` | exactly one (1) | controllable | covered |
 | `dashboard_equipment.dehumidifier` | climate | `stage` (veg, clone, mother, flower, dry, cure) | `switch.sim_e2e_{slug}_dehumidifier` | `switch` | one or more (1) | controllable | covered |
 | `dashboard_equipment.dehumidifier` | climate | `vwc` (vwc_veg, vwc_flower) | `switch.sim_e2e_{slug}_dehumidifier` | `switch` | one or more (1) | controllable | covered |
 | `dashboard_equipment.dehumidifier` | climate | `telemetry_multi` (telemetry_multi) | `switch.sim_e2e_{slug}_dehumidifier` | `switch` | one or more (1) | controllable | covered |
@@ -266,6 +283,7 @@ The failure names this command with the card checkout already filled in.
 | `dashboard_equipment.dehumidifier` | climate | `irrigation_tanks` (irrigation_tanks) | `switch.sim_e2e_{slug}_dehumidifier` | `switch` | one or more (1) | controllable | covered |
 | `dashboard_equipment.dehumidifier` | climate | `lighting` (lighting) | `switch.sim_e2e_{slug}_dehumidifier` | `switch` | one or more (1) | controllable | covered |
 | `dashboard_equipment.dehumidifier` | climate | `vision` (vision) | `switch.sim_e2e_{slug}_dehumidifier` | `switch` | one or more (1) | controllable | covered |
+| `dashboard_equipment.dehumidifier` | climate | `demo` (demo) | `switch.sim_e2e_{slug}_dehumidifier` | `switch` | one or more (1) | controllable | covered |
 | `simulation.dashboard_dehumidifier_state` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_boolean.sim_e2e_{slug}_dehumidifier` | `input_boolean` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_dehumidifier_state` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_dehumidifier` | `input_boolean` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_dehumidifier_state` | internal | `telemetry_multi` (telemetry_multi) | `input_boolean.sim_e2e_{slug}_dehumidifier` | `input_boolean` | exactly one (1) | controllable | covered |
@@ -273,6 +291,7 @@ The failure names this command with the card checkout already filled in.
 | `simulation.dashboard_dehumidifier_state` | internal | `irrigation_tanks` (irrigation_tanks) | `input_boolean.sim_e2e_{slug}_dehumidifier` | `input_boolean` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_dehumidifier_state` | internal | `lighting` (lighting) | `input_boolean.sim_e2e_{slug}_dehumidifier` | `input_boolean` | exactly one (1) | controllable | covered |
 | `simulation.dashboard_dehumidifier_state` | internal | `vision` (vision) | `input_boolean.sim_e2e_{slug}_dehumidifier` | `input_boolean` | exactly one (1) | controllable | covered |
+| `simulation.dashboard_dehumidifier_state` | internal | `demo` (demo) | `input_boolean.sim_e2e_{slug}_dehumidifier` | `input_boolean` | exactly one (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_boolean.sim_e2e_{slug}_exhaust_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_exhaust_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `telemetry_multi` (telemetry_multi) | `input_boolean.sim_e2e_{slug}_exhaust_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
@@ -280,6 +299,7 @@ The failure names this command with the card checkout already filled in.
 | `simulation.manual_equipment` | internal | `irrigation_tanks` (irrigation_tanks) | `input_boolean.sim_e2e_{slug}_exhaust_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `lighting` (lighting) | `input_boolean.sim_e2e_{slug}_exhaust_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `vision` (vision) | `input_boolean.sim_e2e_{slug}_exhaust_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `demo` (demo) | `input_boolean.sim_e2e_{slug}_exhaust_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_boolean.sim_e2e_{slug}_circulation_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_circulation_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `telemetry_multi` (telemetry_multi) | `input_boolean.sim_e2e_{slug}_circulation_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
@@ -287,6 +307,7 @@ The failure names this command with the card checkout already filled in.
 | `simulation.manual_equipment` | internal | `irrigation_tanks` (irrigation_tanks) | `input_boolean.sim_e2e_{slug}_circulation_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `lighting` (lighting) | `input_boolean.sim_e2e_{slug}_circulation_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `vision` (vision) | `input_boolean.sim_e2e_{slug}_circulation_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `demo` (demo) | `input_boolean.sim_e2e_{slug}_circulation_fan_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_boolean.sim_e2e_{slug}_humidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_humidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `telemetry_multi` (telemetry_multi) | `input_boolean.sim_e2e_{slug}_humidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
@@ -294,6 +315,7 @@ The failure names this command with the card checkout already filled in.
 | `simulation.manual_equipment` | internal | `irrigation_tanks` (irrigation_tanks) | `input_boolean.sim_e2e_{slug}_humidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `lighting` (lighting) | `input_boolean.sim_e2e_{slug}_humidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `vision` (vision) | `input_boolean.sim_e2e_{slug}_humidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `demo` (demo) | `input_boolean.sim_e2e_{slug}_humidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_boolean.sim_e2e_{slug}_growlight_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_growlight_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `telemetry_multi` (telemetry_multi) | `input_boolean.sim_e2e_{slug}_growlight_manual` | `input_boolean` | one or more (1) | controllable | covered |
@@ -301,6 +323,7 @@ The failure names this command with the card checkout already filled in.
 | `simulation.manual_equipment` | internal | `irrigation_tanks` (irrigation_tanks) | `input_boolean.sim_e2e_{slug}_growlight_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `climate_plain` (climate_plain) | `input_boolean.sim_e2e_{slug}_growlight_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `vision` (vision) | `input_boolean.sim_e2e_{slug}_growlight_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `demo` (demo) | `input_boolean.sim_e2e_{slug}_growlight_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_boolean.sim_e2e_{slug}_dehumidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_dehumidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `telemetry_multi` (telemetry_multi) | `input_boolean.sim_e2e_{slug}_dehumidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
@@ -308,6 +331,7 @@ The failure names this command with the card checkout already filled in.
 | `simulation.manual_equipment` | internal | `irrigation_tanks` (irrigation_tanks) | `input_boolean.sim_e2e_{slug}_dehumidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `lighting` (lighting) | `input_boolean.sim_e2e_{slug}_dehumidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `simulation.manual_equipment` | internal | `vision` (vision) | `input_boolean.sim_e2e_{slug}_dehumidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
+| `simulation.manual_equipment` | internal | `demo` (demo) | `input_boolean.sim_e2e_{slug}_dehumidifier_manual` | `input_boolean` | one or more (1) | controllable | covered |
 | `ac_infinity.circulation.mode_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `select.e2e_{slug}_circulation_active_mode` | `select` | exactly one (1) | controllable | covered |
 | `ac_infinity.circulation.speed_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `number.e2e_{slug}_circulation_speed` | `number` | exactly one (1) | controllable | covered |
 | `ac_infinity.exhaust.mode_entity` | ac_infinity | `ac_infinity` (ac_infinity) | `select.e2e_{slug}_exhaust_active_mode` | `select` | exactly one (1) | controllable | covered |
@@ -470,21 +494,61 @@ and does not depend on Pillow. Run the script by hand after changing what a
 frame should depict, then reload the two Local File entries — an entry that was
 set up while its file was missing stays `unavailable` until it is reloaded.
 
+### The demo growspace
+
+The `demo` profile owns **Demo Tent** — the growspace a demo walks a person
+through. It is declared here for one reason: it used to be hand-made in
+gitignored storage and wired to another growspace's sensors, so it was the one
+growspace no regeneration reached. When the simulated equipment changed shape
+from on/off switches to free-running 0-10 `number` entities, every declared
+profile followed and Demo Tent was left pointing at four entity IDs that no
+longer existed.
+
+It therefore carries no faithful hardware of its own and takes the generic
+telemetry and simulated-equipment families whole, under its own `e2e_demo`
+entity IDs. Two shapes are specific to it:
+
+* Its grow light is the simulated 0-10 `number`, whose intensity tracks a
+  photoperiod and reaches zero, rather than the AC Infinity port bundle — a
+  demo wants a moving dial, not a faithful vendor.
+* It senses its light cycle through `binary_sensor.e2e_demo_light_state`, which
+  reads that grow light above zero. That is why the numeric light family
+  excludes it: two light sources would give one growspace two answers.
+
+Its service defaults are the climate and lighting profiles' verbatim, so every
+one of the five controllers runs at tuning those profiles already test. The
+consequence is deliberate: a controller writing a simulated device trips that
+device's manual gate, and the value becomes controller output rather than a
+free-running waveform. That is the product demoing itself.
+
+The growspace it adopts already existed and keeps its name, its ID, its plants
+and the Vision evidence seeded against it — see
+[`./scripts/seed-vision-history`](../AGENTS.md). Setup matches it by name, so
+"Demo Tent" is adopted rather than duplicated.
+
 ## 2. Growspaces
 
 `tests/e2e/fixtures/e2e-setup.ts` applies the install-wide global fixtures,
-creates the 15 growspaces, places an anchor plant in each, links the sensors
+creates the 16 growspaces, places an anchor plant in each, links the sensors
 above, and writes the resulting IDs back into
 `tests/e2e/.env.test`. It is idempotent — every profile-owned sensor list is set
 outright, so a rerun replaces it rather than growing it, while fields outside
 that profile's generated service payload remain untouched.
 
 A growspace's own entities are named after the growspace, its simulated sensors
-after the profile slug, and setup waits for `sensor.e2e_<slug>_overview` to
-appear. The two must therefore agree: an instance named "E2E Multi Telemetry"
-would get `sensor.e2e_multi_telemetry_overview` and setup would hang forever
-waiting for `sensor.e2e_telemetry_multi_overview`. `validate_contract` checks
-the name against the slug so this fails at generation time instead.
+after the profile slug. Setup matches an existing growspace on the declared
+name and preflight reads the `overview_entity_id` the manifest states, so
+neither predicts an entity ID from the slug any more — which is what lets the
+`demo` profile adopt a growspace that was already called "Demo Tent".
+
+The card's focused specs still address their growspace as a literal
+`sensor.e2e_<slug>_overview`, so for every instance that claims the `E2E `
+naming convention those specs read, the name and the slug must still agree: an
+instance named "E2E Multi Telemetry" would get
+`sensor.e2e_multi_telemetry_overview` and its spec would look at
+`sensor.e2e_telemetry_multi_overview`. `validate_contract` checks the name
+against the slug so this fails at generation time instead. An instance named
+outside the convention is nobody's literal and is not checked.
 
 `./scripts/e2e provision` invokes this fixture with the generated manifest and
 the selected card checkout. No fixture compilation, entity editing, or manual

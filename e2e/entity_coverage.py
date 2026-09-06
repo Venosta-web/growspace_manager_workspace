@@ -27,6 +27,8 @@ DOCS_END = "<!-- END GENERATED E2E ENTITY COVERAGE -->"
 CARD_MANIFEST = Path("tests/e2e/fixtures/e2e-entity-coverage.generated.json")
 HA_PACKAGE = Path("ha-dev/packages/e2e_simulated_sensors.yaml")
 DOCS_FILE = Path("docs/E2E.md")
+# The naming convention the card's focused specs address their growspace by.
+E2E_NAME_PREFIX = "E2E "
 LOCAL_FILE_CAMERA = "local_file_camera"
 TEMPLATE_WEATHER = "template_weather"
 
@@ -242,7 +244,10 @@ VISION_SERVICE_DEFAULTS: dict[str, dict[str, Any]] = {
     },
 }
 
-AC_INFINITY_SERVICE_DEFAULTS: dict[str, dict[str, Any]] = {
+# Every controller a growspace can run, at the tuning the focused climate and
+# lighting profiles are already tested against. A profile that owns the whole
+# device set takes this rather than restating either half.
+CLIMATE_AND_LIGHTING_SERVICE_DEFAULTS: dict[str, dict[str, Any]] = {
     **CLIMATE_SERVICE_DEFAULTS,
     **LIGHTING_SERVICE_DEFAULTS,
     "configure_environment": {
@@ -337,7 +342,7 @@ PROFILES: tuple[CapabilityProfile, ...] = (
                 "ac_infinity",
                 "E2E AC Infinity",
                 "flower_start",
-                service_defaults=AC_INFINITY_SERVICE_DEFAULTS,
+                service_defaults=CLIMATE_AND_LIGHTING_SERVICE_DEFAULTS,
             ),
         ),
         20,
@@ -360,6 +365,24 @@ PROFILES: tuple[CapabilityProfile, ...] = (
         "Install-wide source-air and outdoor-condition fixtures",
         (ProfileInstance("source_air", "E2E Source Air"),),
         23,
+    ),
+    CapabilityProfile(
+        "demo",
+        "The hand-made demo growspace, on equipment of its own",
+        (
+            ProfileInstance(
+                "demo",
+                # The growspace this profile adopts already exists and keeps its
+                # name; nothing derives an entity ID from it any more.
+                "Demo Tent",
+                "flower_start",
+                # Far enough into flower that the stage reads as established
+                # rather than as something a demo just started.
+                40,
+                service_defaults=CLIMATE_AND_LIGHTING_SERVICE_DEFAULTS,
+            ),
+        ),
+        169,
     ),
 )
 
@@ -974,9 +997,10 @@ ROLES: tuple[CoverageRole, ...] = (
         control_minimum=0,
         control_maximum=10,
         control_step=1,
-        # The lighting profile senses its cycle through a binary light-state
-        # sensor; a second, numeric light source would give it two answers.
-        exclude_profiles=("lighting",),
+        # The lighting and demo profiles sense their cycle through a binary
+        # light-state sensor; a second, numeric light source would give either
+        # of them two answers.
+        exclude_profiles=("lighting", "demo"),
     ),
     CoverageRole(
         "irrigation.irrigation_pump",
@@ -1145,6 +1169,17 @@ ROLES: tuple[CoverageRole, ...] = (
         (
             Assignment(
                 "lighting",
+                "binary_sensor.e2e_{slug}_light_state",
+                "binary_sensor",
+                Behavior.READ_ONLY,
+                Status.COVERED,
+                generator="aggregate_light_sensor",
+                setup=_setup("light_sensors", "list"),
+            ),
+            # The demo has no plain or dimmable actuator to read: its grow light
+            # is the simulated 0-10 number, so the aggregate senses that instead.
+            Assignment(
+                "demo",
                 "binary_sensor.e2e_{slug}_light_state",
                 "binary_sensor",
                 Behavior.READ_ONLY,
@@ -1940,10 +1975,16 @@ def validate_contract(
     for profile in profiles:
         for instance in profile.instances:
             # A growspace's own entities are named after the growspace, its
-            # simulated sensors after this slug. When the two disagree, setup
-            # waits forever for an overview sensor that Home Assistant named
-            # something else — so the name is part of the contract.
+            # simulated sensors after this slug. Setup and preflight now read
+            # the overview sensor this module states rather than predicting one
+            # from the slug, but the card's focused specs still address theirs
+            # as a literal `sensor.e2e_<slug>_overview`. So the two must agree
+            # for every instance that claims the `E2E ` convention those specs
+            # read; an instance named outside it — the demo growspace, which
+            # keeps the name it already had — is nobody's literal.
             if instance.plant_stage_field is None:
+                continue
+            if not instance.name.startswith(E2E_NAME_PREFIX):
                 continue
             expected = f"e2e_{instance.slug}"
             actual = _ha_object_id(instance.name)
@@ -2108,6 +2149,12 @@ def build_card_manifest(
                 "profile": profile.id,
                 "slug": instance.slug,
                 "name": instance.name,
+                # Home Assistant derives an overview sensor's entity ID from the
+                # growspace name, so state it here rather than leaving every
+                # consumer to guess it back out of the slug.
+                "overview_entity_id": (
+                    f"sensor.{_ha_object_id(instance.name)}_overview"
+                ),
                 "plant_stage_field": instance.plant_stage_field,
                 "stage_days_ago": instance.stage_days_ago,
                 "services": services,
@@ -2659,13 +2706,19 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
         ]
     for record in binary_light_sensors:
         unique_id = record.entity_id.split(".", 1)[1]
-        actuators = [
-            candidate.entity_id
-            for candidate in by_slug[record.slug]
-            if candidate.role_id
-            in {"lighting.growlight_switch", "lighting.growlight_dimmable"}
-        ]
-        state = " or ".join(f"is_state('{entity_id}', 'on')" for entity_id in actuators)
+        terms: list[str] = []
+        for candidate in by_slug[record.slug]:
+            if candidate.role_id in {
+                "lighting.growlight_switch",
+                "lighting.growlight_dimmable",
+            }:
+                terms.append(f"is_state('{candidate.entity_id}', 'on')")
+            elif candidate.role_id == "dashboard_equipment.growlight":
+                # A simulated grow light has no on/off state of its own: its
+                # 0-10 intensity reaching zero *is* lights-off, which is why the
+                # waveform is declared to reach zero.
+                terms.append(f"states('{candidate.entity_id}') | float(0) > 0")
+        state = " or ".join(terms)
         lines += [
             f"      - name: {unique_id.replace('_', ' ')}",
             f"        unique_id: {unique_id}",

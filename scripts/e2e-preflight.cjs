@@ -71,7 +71,10 @@ function validateBackendPayloads(manifest, states) {
   const expectedOverviews = new Set();
 
   for (const profile of manifest.profiles) {
-    const overviewId = `sensor.e2e_${profile.slug}_overview`;
+    // The manifest states the overview sensor Home Assistant derives from the
+    // growspace name; a slug-derived guess is only right while every profile
+    // is named `E2E <Slug>`, which the demo growspace is not.
+    const overviewId = profile.overview_entity_id;
     expectedOverviews.add(overviewId);
     const overview = live.get(overviewId);
     if (!overview) {

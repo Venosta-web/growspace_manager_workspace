@@ -73,18 +73,18 @@ class EntityCoverageContractTest(unittest.TestCase):
         self.assertEqual(
             counts,
             {
-                "sensor": 204,
-                "input_number": 92,
-                "input_boolean": 108,
-                "binary_sensor": 1,
+                "sensor": 212,
+                "input_number": 96,
+                "input_boolean": 114,
+                "binary_sensor": 2,
                 "light": 1,
                 "fan": 2,
                 "humidifier": 2,
                 "camera": 2,
                 "select": 5,
-                "number": 58,
+                "number": 62,
                 "time": 2,
-                "switch": 38,
+                "switch": 39,
                 "weather": 1,
             },
         )
@@ -106,6 +106,7 @@ class EntityCoverageContractTest(unittest.TestCase):
                 "climate_plain",
                 "vision",
                 "ac_infinity",
+                "demo",
             },
         )
 
@@ -409,6 +410,88 @@ class EntityCoverageContractTest(unittest.TestCase):
                 "sensor.e2e_telemetry_multi_overview"
             ],
         )
+
+    def test_every_profile_states_the_overview_sensor_its_name_generates(
+        self,
+    ) -> None:
+        overviews = {
+            profile["slug"]: profile["overview_entity_id"]
+            for profile in build_card_manifest()["profiles"]
+        }
+
+        self.assertEqual(
+            overviews["telemetry_multi"], "sensor.e2e_telemetry_multi_overview"
+        )
+        # The demo growspace already existed under a name of its own, so the
+        # sensor Home Assistant registered for it is not slug-shaped at all.
+        self.assertEqual(overviews["demo"], "sensor.demo_tent_overview")
+
+    def test_growspace_named_outside_the_e2e_convention_is_accepted(self) -> None:
+        demo = next(profile for profile in PROFILES if profile.id == "demo")
+
+        self.assertEqual(demo.instances[0].name, "Demo Tent")
+        self.assertEqual(validate_contract(), [])
+
+    def test_demo_profile_senses_its_cycle_from_the_simulated_grow_light(
+        self,
+    ) -> None:
+        profile = next(
+            profile
+            for profile in build_card_manifest()["profiles"]
+            if profile["profile"] == "demo"
+        )
+        environment = profile["services"]["configure_environment"]
+
+        # One light source, not two: the binary sensor is the growspace's whole
+        # answer to "are the lights on", and it reads the grow light itself.
+        self.assertEqual(
+            environment["light_sensors"], ["binary_sensor.e2e_demo_light_state"]
+        )
+        self.assertEqual(
+            environment["growlight_entities"], ["number.sim_e2e_demo_growlight"]
+        )
+        self.assertIn(
+            "        state: \"{{ states('number.sim_e2e_demo_growlight') "
+            '| float(0) > 0 }}"',
+            render_ha_package(),
+        )
+
+    def test_demo_profile_runs_every_controller_on_its_own_equipment(self) -> None:
+        profile = next(
+            profile
+            for profile in build_card_manifest()["profiles"]
+            if profile["profile"] == "demo"
+        )
+        services = profile["services"]
+        environment = services["configure_environment"]
+
+        for service in (
+            "configure_exhaust_fan",
+            "configure_circulation_fan",
+            "set_humidifier_control",
+            "set_dehumidifier_control",
+        ):
+            with self.subTest(service=service):
+                self.assertIs(services[service]["enabled"], True)
+        self.assertIs(environment["growlight_config"]["enabled"], True)
+        self.assertIs(environment["control_humidifier"], True)
+        self.assertIs(environment["control_dehumidifier"], True)
+
+        # Nothing the demo is configured with belongs to another growspace.
+        candidates = [
+            item
+            for value in environment.values()
+            for item in (value if isinstance(value, list) else [value])
+        ]
+        configured = [
+            item
+            for item in candidates
+            if isinstance(item, str) and item.partition(".")[1]
+        ]
+        self.assertGreater(len(configured), 10)
+        for entity_id in configured:
+            with self.subTest(entity_id=entity_id):
+                self.assertIn("_demo_", entity_id)
 
     def test_lighting_profile_wires_tracking_controller_and_plain_actuators(
         self,

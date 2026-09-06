@@ -33,6 +33,7 @@ const MANIFEST = {
     profile: 'climate',
     slug: 'profile',
     name: 'E2E Profile',
+    overview_entity_id: 'sensor.e2e_profile_overview',
     growspace_id: 'growspace-1',
     services: { configure_environment: { temperature_sensor: ENTITY.entity_id } },
   }],
@@ -68,6 +69,31 @@ test('validates available entities and a retained backend payload', () => {
   ];
   assert.deepEqual(validateEntityStates(MANIFEST, states), []);
   assert.deepEqual(validateBackendPayloads(MANIFEST, states), []);
+});
+
+test('reads the overview sensor the manifest states, not one derived from the slug', () => {
+  // The demo growspace keeps the name it already had, so Home Assistant names
+  // its overview sensor after that rather than after `e2e_<slug>`.
+  const manifest = {
+    ...MANIFEST,
+    profiles: [{
+      ...MANIFEST.profiles[0],
+      profile: 'demo',
+      slug: 'demo',
+      name: 'Demo Tent',
+      overview_entity_id: 'sensor.demo_tent_overview',
+    }],
+  };
+  const overview = {
+    ...OVERVIEW,
+    entity_id: 'sensor.demo_tent_overview',
+    attributes: { ...OVERVIEW.attributes, identity: { name: 'Demo Tent', growspace_id: 'growspace-1' } },
+  };
+
+  assert.deepEqual(validateBackendPayloads(manifest, [overview]), []);
+  assert.deepEqual(validateBackendPayloads(manifest, []), [
+    'demo/demo: missing backend payload sensor.demo_tent_overview',
+  ]);
 });
 
 test('extracts nested configured entities and maps writable domains to safe no-op calls', () => {
