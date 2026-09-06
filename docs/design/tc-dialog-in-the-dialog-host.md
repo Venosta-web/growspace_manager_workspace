@@ -146,13 +146,13 @@ Reaching this chunk means the presence probe already answered `present`
 (#152), so a failure here is a stale install to report, never an absent
 integration to hide.
 
-## The portal guard, and what it does not currently do
+## The portal guard, and what it could not do
 
 `activeDialog$` is one page-global atom, and every manager card and grid card
 mounts its own dialog-host portal (`growspace-manager-card.ts:143-144,163-197`,
-`cards/growspace-grid-card.ts:88-96`). The existing guard at
-`growspace-dialog-host.container.ts:214-220` suppresses a portal when the
-payload's `growspaceId` is not in that portal's `devices`.
+`cards/growspace-grid-card.ts:88-96`). The guard this section was written
+against suppressed a portal when the payload's `growspaceId` was not in that
+portal's `devices`.
 
 **That test cannot separate two portals on one dashboard.**
 `makePerCardGridSlice()` computes `$activeDevices` from the page-global
@@ -163,34 +163,55 @@ two carousel cards produce two stacked dialogs. It is a device-ownership guard
 — useful before hydration, or for a portal whose collection genuinely lacks the
 growspace — not an instance guard, and its comment overstates it.
 
-The TC dialog therefore does not inherit a working guard, and cannot borrow
-one: it is not growspace-scoped, so there is no growspace to discriminate on
-even in principle.
+The TC dialog therefore inherited no working guard, and could not borrow one:
+it is not growspace-scoped, so there is no growspace to discriminate on even in
+principle. That guard is still there and still does that job — it is only no
+longer the thing standing between two portals.
 
-**Decision: the payload names the portal.** `GrowspaceStore` gains a
+**Decision: the payload names the portal.** `GrowspaceStore` carries a
 `readonly instanceId: string`, minted per instance. A store is created once per
 card and handed to both the header (through the store context) and that card's
 portal (`growspace-manager-card.ts:193`), so the store instance *is* the portal
-identity. The opener captures `store.instanceId` as `portalId`; the host
-renders the TC dialog only when `payload.portalId === this.store.instanceId`.
+identity. The opener captures `store.instanceId` as `portalId`, and the host
+renders only in the portal that minted it.
 
 This is ADR-0027's own principle — bind at open time, never re-derive from
 ambient page state — applied to portal identity instead of growspace identity,
-and it earns an ADR in the card repository alongside 0027.
+which is why it earned an ADR in the card repository alongside 0027.
+
+**TC no longer has to build this.** It was built for the irrigation duplicate
+below, as card ADR-0055
+([card#916](https://github.com/Venosta-web/lovelace-growspace-manager-card/pull/916)),
+and the host's test is generic over dialog type — it reads `portalId` off
+whatever payload is active. TC adopts portal identity by setting the field in
+its payload and its opener; there is no new branch to add to the host.
 
 Two rules on the edges:
 
-- **Absent `portalId` fails open**: every portal renders, which is today's
-  behaviour. A dialog that opens nowhere is worse than one that opens twice,
-  and the field is absent only in tests, because the single opener always sets
-  it.
-- **Scope is TC.** Every portal still *mounts* on any dialog open, and the
-  existing device-ownership guard stays exactly as it is for the other 23
-  dialog types. Generalizing the token to the whole host — which would also
-  retire the irrigation duplicate — is a separate change to the card. That
-  duplicate is a pre-existing bug, filed as
-  [card#913](https://github.com/Venosta-web/lovelace-growspace-manager-card/issues/913),
-  rather than something this map fixes on the way past.
+- **Fails open twice over.** A payload that names no portal renders in every
+  one, and so does a payload that names a portal which is **not mounted**. A
+  dialog that opens nowhere is worse than one that opens twice. The first case
+  is absent only in tests, because the single opener always sets the field; the
+  second is not hypothetical, and it is why the mechanism needs a page-global
+  registry rather than a bare id comparison. Seven cards provide the store
+  context — manager, grid, analytics, subarea, tank, logbook, AI-insight — and
+  only the first two mount a portal, so an opener reached from one of the other
+  five names a portal nobody has. `slices/ui/dialog-portals.ts` holds the
+  mounted set; hosts register themselves in `connectedCallback`, and the set is
+  a nanostores atom the host subscribes to, because portals mount lazily on the
+  first dialog open: a click in a card whose portal does not exist yet is first
+  rendered by a sibling, and only that subscription makes the sibling stand down
+  when the named portal arrives a tick later. The TC opener lives in the header
+  container, whose store always owns a portal, so TC itself never reaches the
+  second case — but it inherits the behaviour and must not be specified against
+  a strict `payload.portalId === this.store.instanceId`, which would fail closed.
+- **Adoption is per dialog.** Every portal still *mounts* on any dialog open,
+  and the device-ownership guard stays exactly as it is for the dialog types
+  that name no portal. card#916 retired the irrigation duplicate — the
+  pre-existing bug filed as
+  [card#913](https://github.com/Venosta-web/lovelace-growspace-manager-card/issues/913)
+  — and left the other twenty-two alone; each is a one-line opener change when
+  it is wanted. TC is one of those changes, not a new mechanism.
 
 ## The opener
 
@@ -263,12 +284,15 @@ when `tcPresence$` reads `present` (#152).
    `console.error`, and both surfaces render their own error.
 8. Two manager cards on one dashboard, TC opened from the second: exactly one
    dialog renders, in the second card's portal.
-9. A payload with no `portalId` renders in every portal (fail open).
+9. A payload with no `portalId` renders in every portal, and so does one naming
+   a portal that is not mounted (fail open, both cases).
 10. `growspaceId` reaches the payload from the opening card's `device`, and no
     TC request is filtered by it.
 
-Existing coverage to extend: `growspace-dialog-host.container.test.ts:486-542`
-for the portal guard, and the `chunk-missing` pattern in
+Existing coverage to extend: the `render() portal identity` and
+`render() device-ownership guard` describes in
+`growspace-dialog-host.container.test.ts`, the registry's own
+`slices/ui/dialog-portals.test.ts`, and the `chunk-missing` pattern in
 `tests/cards/growspace-tc-card.chunk-missing.test.ts` for the dialog's
 equivalent. No tests were run for this documentation-only decision; no runtime
 or bundles changed.
