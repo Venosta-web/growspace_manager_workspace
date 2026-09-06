@@ -1296,6 +1296,68 @@ template:
         state: >-
           {{ (((as_timestamp(now()) + 8400) % 86400) / 86400 * 12.0) | round(3) }}
   # ---------------------------------------------------------------
+  # e2e_demo
+  # ---------------------------------------------------------------
+  - trigger:
+      - platform: time_pattern
+        seconds: "/30"
+    sensor:
+      - name: e2e demo temperature
+        unique_id: e2e_demo_temperature
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {{ (24.0 + 4.0 * sin( ((as_timestamp(now()) + 9600) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e demo humidity
+        unique_id: e2e_demo_humidity
+        unit_of_measurement: "%"
+        device_class: humidity
+        state_class: measurement
+        state: >-
+          {{ (57.5 + 12.5 * sin( ((as_timestamp(now()) + 9600) % 5400) / 5400 * 2 * pi )) | round(2) }}
+      - name: e2e demo vpd
+        unique_id: e2e_demo_vpd
+        unit_of_measurement: "kPa"
+        state_class: measurement
+        state: >-
+          {{ (1.1 + 0.29999999999999993 * sin( ((as_timestamp(now()) + 9600) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e demo co2
+        unique_id: e2e_demo_co2
+        unit_of_measurement: "ppm"
+        device_class: carbon_dioxide
+        state_class: measurement
+        state: >-
+          {{ (800.0 + 400.0 * sin( ((as_timestamp(now()) + 9600) % 1800) / 1800 * 2 * pi )) | round(0) }}
+      - name: e2e demo substrate_temperature
+        unique_id: e2e_demo_substrate_temperature
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: >-
+          {{ (21.0 + 3.0 * sin( ((as_timestamp(now()) + 9600) % 5400) / 5400 * 2 * pi )) | round(2) }}
+      - name: e2e demo substrate_moisture
+        unique_id: e2e_demo_substrate_moisture
+        unit_of_measurement: "%"
+        device_class: moisture
+        state_class: measurement
+        state: >-
+          {{ (52.5 + 17.5 * sin( ((as_timestamp(now()) + 9600) % 2700) / 2700 * 2 * pi )) | round(2) }}
+      - name: e2e demo power
+        unique_id: e2e_demo_power
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >-
+          {{ (320.0 + 280.0 * sin( ((as_timestamp(now()) + 9600) % 3600) / 3600 * 2 * pi )) | round(2) }}
+      - name: e2e demo energy
+        unique_id: e2e_demo_energy
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: >-
+          {{ (((as_timestamp(now()) + 9600) % 86400) / 86400 * 12.0) | round(3) }}
+  # ---------------------------------------------------------------
   # e2e_telemetry_multi — every reading mirrors a writable input
   # ---------------------------------------------------------------
   - trigger:
@@ -1971,6 +2033,25 @@ template:
           - action: input_boolean.turn_on
             target:
               entity_id: input_boolean.sim_e2e_vision_dehumidifier_manual
+      - name: sim e2e demo dehumidifier
+        unique_id: sim_e2e_demo_dehumidifier
+        state: >-
+          {{ is_state('input_boolean.sim_e2e_demo_dehumidifier', 'on') if is_state('input_boolean.sim_e2e_demo_dehumidifier_manual', 'on')
+             else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 9600) % 9000) / 9000 * 2 * pi )) | round(0) > 5.0 }}
+        turn_on:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_demo_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_demo_dehumidifier_manual
+        turn_off:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.sim_e2e_demo_dehumidifier
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_demo_dehumidifier_manual
   # ---------------------------------------------------------------
   # simulated 0-10 devices (free-running until written, then pinned)
   # ---------------------------------------------------------------
@@ -2807,6 +2888,70 @@ template:
           - action: input_boolean.turn_on
             target:
               entity_id: input_boolean.sim_e2e_vision_growlight_manual
+      - name: sim e2e demo exhaust fan
+        unique_id: sim_e2e_demo_exhaust_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_demo_exhaust_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_demo_exhaust_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 9600) % 3600) / 3600 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_demo_exhaust_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_demo_exhaust_fan_manual
+      - name: sim e2e demo circulation fan
+        unique_id: sim_e2e_demo_circulation_fan
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_demo_circulation_fan_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_demo_circulation_fan_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 9600) % 5400) / 5400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_demo_circulation_fan_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_demo_circulation_fan_manual
+      - name: sim e2e demo humidifier
+        unique_id: sim_e2e_demo_humidifier
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_demo_humidifier_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_demo_humidifier_manual', 'on') else (5.5 + 4.5 * sin( ((as_timestamp(now()) + 9600) % 7200) / 7200 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_demo_humidifier_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_demo_humidifier_manual
+      - name: sim e2e demo growlight
+        unique_id: sim_e2e_demo_growlight
+        min: 0
+        max: 10
+        step: 1
+        state: >-
+          {{ states('input_number.sim_e2e_demo_growlight_level') | float(0) | round(0) if is_state('input_boolean.sim_e2e_demo_growlight_manual', 'on') else (5.0 + 5.0 * sin( ((as_timestamp(now()) + 9600) % 86400) / 86400 * 2 * pi )) | round(0) }}
+        set_value:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sim_e2e_demo_growlight_level
+            data:
+              value: "{{ value }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sim_e2e_demo_growlight_manual
   # ---------------------------------------------------------------
   # percentage fans (state and percentage backed by helpers)
   # ---------------------------------------------------------------
@@ -2885,6 +3030,10 @@ template:
         unique_id: e2e_lighting_light_state
         device_class: light
         state: "{{ is_state('switch.e2e_lighting_growlight_switch', 'on') or is_state('light.e2e_lighting_growlight_dimmable', 'on') }}"
+      - name: e2e demo light state
+        unique_id: e2e_demo_light_state
+        device_class: light
+        state: "{{ states('number.sim_e2e_demo_growlight') | float(0) > 0 }}"
   # ---------------------------------------------------------------
   # dimmable lights (state and level backed by helpers)
   # ---------------------------------------------------------------
@@ -3041,6 +3190,9 @@ input_boolean:
   sim_e2e_vision_dehumidifier:
     name: sim e2e vision dehumidifier
     initial: false
+  sim_e2e_demo_dehumidifier:
+    name: sim e2e demo dehumidifier
+    initial: false
   sim_e2e_veg_exhaust_fan_manual:
     name: sim e2e veg exhaust fan manual
     initial: false
@@ -3079,6 +3231,9 @@ input_boolean:
     initial: false
   sim_e2e_vision_exhaust_fan_manual:
     name: sim e2e vision exhaust fan manual
+    initial: false
+  sim_e2e_demo_exhaust_fan_manual:
+    name: sim e2e demo exhaust fan manual
     initial: false
   sim_e2e_veg_circulation_fan_manual:
     name: sim e2e veg circulation fan manual
@@ -3119,6 +3274,9 @@ input_boolean:
   sim_e2e_vision_circulation_fan_manual:
     name: sim e2e vision circulation fan manual
     initial: false
+  sim_e2e_demo_circulation_fan_manual:
+    name: sim e2e demo circulation fan manual
+    initial: false
   sim_e2e_veg_humidifier_manual:
     name: sim e2e veg humidifier manual
     initial: false
@@ -3157,6 +3315,9 @@ input_boolean:
     initial: false
   sim_e2e_vision_humidifier_manual:
     name: sim e2e vision humidifier manual
+    initial: false
+  sim_e2e_demo_humidifier_manual:
+    name: sim e2e demo humidifier manual
     initial: false
   sim_e2e_veg_growlight_manual:
     name: sim e2e veg growlight manual
@@ -3197,6 +3358,9 @@ input_boolean:
   sim_e2e_vision_growlight_manual:
     name: sim e2e vision growlight manual
     initial: false
+  sim_e2e_demo_growlight_manual:
+    name: sim e2e demo growlight manual
+    initial: false
   sim_e2e_veg_dehumidifier_manual:
     name: sim e2e veg dehumidifier manual
     initial: false
@@ -3235,6 +3399,9 @@ input_boolean:
     initial: false
   sim_e2e_vision_dehumidifier_manual:
     name: sim e2e vision dehumidifier manual
+    initial: false
+  sim_e2e_demo_dehumidifier_manual:
+    name: sim e2e demo dehumidifier manual
     initial: false
 
 input_number:
@@ -3642,6 +3809,13 @@ input_number:
     step: 1
     initial: 0
     mode: slider
+  sim_e2e_demo_exhaust_fan_level:
+    name: sim e2e demo exhaust fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
   sim_e2e_veg_circulation_fan_level:
     name: sim e2e veg circulation fan level
     min: 0
@@ -3728,6 +3902,13 @@ input_number:
     mode: slider
   sim_e2e_vision_circulation_fan_level:
     name: sim e2e vision circulation fan level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_demo_circulation_fan_level:
+    name: sim e2e demo circulation fan level
     min: 0
     max: 10
     step: 1
@@ -3824,6 +4005,13 @@ input_number:
     step: 1
     initial: 0
     mode: slider
+  sim_e2e_demo_humidifier_level:
+    name: sim e2e demo humidifier level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
   sim_e2e_veg_growlight_level:
     name: sim e2e veg growlight level
     min: 0
@@ -3910,6 +4098,13 @@ input_number:
     mode: slider
   sim_e2e_vision_growlight_level:
     name: sim e2e vision growlight level
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    mode: slider
+  sim_e2e_demo_growlight_level:
+    name: sim e2e demo growlight level
     min: 0
     max: 10
     step: 1
