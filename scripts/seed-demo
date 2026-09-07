@@ -2,9 +2,10 @@
 """
 Seed the dev instance's Demo Tent with the content a demo walks through.
 
-  ./scripts/seed-demo                          # plants, then Vision history
+  ./scripts/seed-demo                          # plants, Vision, tissue culture
   ./scripts/seed-demo --growspace "E2E Vision"
-  ./scripts/seed-demo --no-vision              # plants only
+  ./scripts/seed-demo --no-vision              # skip the Vision history
+  ./scripts/seed-demo --no-tc                  # skip the tissue-culture bench
   ./scripts/seed-demo --list                   # what can be targeted
   ./scripts/seed-demo --clear                  # remove what this seeded
 
@@ -21,14 +22,18 @@ shipped implementation, exactly as if a grower had typed them into the card. The
 one thing that is invented is the calendar: stage dates are expressed as days
 before today, so the tent reads the same on any day it is seeded.
 
-Vision evidence is not reimplemented here. `./scripts/seed-vision-history` owns
-it, and this script calls it, so the two cannot drift and one command leaves a
-fresh clone demo-ready.
+Neither of the other two halves is reimplemented here. `seed-vision-history`
+owns the Vision Checkup evidence and `seed-tc-world` owns the tissue-culture
+bench; this script calls both, so none of the three can drift and one command
+leaves a fresh clone demo-ready.
 
 Prerequisites: Home Assistant must be up with the growspace already declared
 (`./scripts/ha dev up`, then `./scripts/e2e provision` on a fresh clone), and a
 long-lived token in `.ha-token` (`./scripts/ha dev token`). The delegated Vision
-seeding additionally needs the Vision App; `--no-vision` skips it.
+seeding additionally needs the Vision App; `--no-vision` skips it. The tissue
+culture bench is written straight to its store and therefore needs a Home
+Assistant restart afterwards, which `seed-tc-world` says for itself; `--no-tc`
+skips it.
 """
 
 from __future__ import annotations
@@ -87,6 +92,7 @@ TOKEN_FILE = pathlib.Path(os.environ.get("E2E_TOKEN_FILE", WORKSPACE / ".ha-toke
 HA_URL = os.environ.get("HA_BASE_URL", "http://127.0.0.1:8123")
 
 SEED_VISION_HISTORY = HERE / "scripts" / "seed-vision-history"
+SEED_TC_WORLD = HERE / "scripts" / "seed-tc-world"
 COVERAGE = HERE / "e2e" / "entity_coverage.py"
 
 # The demo dashboard (.storage/lovelace.demo_tent) is a panel view holding one
@@ -690,24 +696,37 @@ def clear_plants(hass: HomeAssistant, plants: list[Plant]) -> int:
 
 
 # --------------------------------------------------------------------------
-# the Vision evidence, which this script does not own
+# the two halves this script does not own
+#
+# The Vision evidence and the tissue-culture bench each have a script of their
+# own, and each is worth running alone; this one calls them so that the demo is
+# one command without any of the three holding a copy of another's rules.
 # --------------------------------------------------------------------------
-def seed_vision_history(target: Growspace, extra: list[str]) -> int:
-    """Delegate to ./scripts/seed-vision-history for the Vision Checkup history."""
-    if not SEED_VISION_HISTORY.exists():
-        die(f"no {SEED_VISION_HISTORY}")
-    command = [
-        sys.executable,
-        str(SEED_VISION_HISTORY),
-        "--growspace",
-        target.growspace_id,
-        *extra,
-    ]
+def delegate(script: pathlib.Path, arguments: list[str]) -> int:
+    """Run a sibling seeding script, letting it write straight to the terminal."""
+    if not script.exists():
+        die(f"no {script}")
+    command = [sys.executable, str(script), *arguments]
     print(f"  $ {' '.join(command[1:])}")
     # The child writes straight to the terminal; flush first so its output does
     # not land above this script's when stdout is a pipe rather than a tty.
     sys.stdout.flush()
     return subprocess.run(command, check=False).returncode
+
+
+def seed_vision_history(target: Growspace, extra: list[str]) -> int:
+    """Delegate to ./scripts/seed-vision-history for the Vision Checkup history."""
+    return delegate(SEED_VISION_HISTORY, ["--growspace", target.growspace_id, *extra])
+
+
+def seed_tc_world(extra: list[str]) -> int:
+    """Delegate to ./scripts/seed-tc-world for the tissue-culture bench.
+
+    No growspace: a bench is not inside a tent. Its Culture Lines reference the
+    phenotypes the roster above put into the strain library, which is why it
+    runs after the plants and refuses on its own if they are not there.
+    """
+    return delegate(SEED_TC_WORLD, extra)
 
 
 # --------------------------------------------------------------------------
@@ -729,6 +748,11 @@ def parse_args(argv):
         help="skip the delegated Vision Checkup history",
     )
     parser.add_argument(
+        "--no-tc",
+        action="store_true",
+        help="skip the delegated tissue-culture bench",
+    )
+    parser.add_argument(
         "--vision-days",
         type=int,
         default=None,
@@ -737,7 +761,7 @@ def parse_args(argv):
     parser.add_argument(
         "--clear",
         action="store_true",
-        help="remove the plants this seeded, and the evidence, and exit",
+        help="remove the plants this seeded, the evidence and the bench, and exit",
     )
     parser.add_argument(
         "--list", action="store_true", help="list the growspaces that can be seeded"
@@ -769,10 +793,15 @@ def main(argv) -> int:
             f"  removed {plural(removed, 'seeded plant')};"
             " the growspace itself is untouched"
         )
-        if args.no_vision:
-            return 0
-        print("  clearing the Vision evidence ...")
-        return seed_vision_history(target, ["--clear"])
+        status = 0
+        if not args.no_vision:
+            print("  clearing the Vision evidence ...")
+            status = seed_vision_history(target, ["--clear"]) or status
+        if not args.no_tc:
+            print()
+            print("  clearing the tissue-culture bench ...")
+            status = seed_tc_world(["--clear"]) or status
+        return status
 
     print(f"  strains:   {ensure_strains(hass)} library entries")
     print(f"  grid:      {ensure_grid(hass, target)}")
@@ -795,23 +824,38 @@ def main(argv) -> int:
             f"    {cohort.label:<14} {plural(len(cohort.slots), 'plant'):>9}   {stages}"
         )
 
+    status = 0
     if args.no_vision:
         print()
         print("  Vision history skipped. Seed it with:")
         print(f"    ./scripts/seed-vision-history --growspace {target.name!r}")
-        return 0
+    else:
+        print()
+        print("  seeding the Vision Checkup history ...")
+        extra = [] if args.vision_days is None else ["--days", str(args.vision_days)]
+        status = seed_vision_history(target, extra)
+        if status != 0:
+            print()
+            print(
+                "  NOTE: the roster is in place; only the Vision history failed. "
+                "Retry it on its own once the Vision App is up."
+            )
+
+    # The bench goes last so that its Home Assistant restart requirement — the
+    # one thing here that is not live through the API — is the last thing said.
+    if args.no_tc:
+        print()
+        print("  Tissue culture skipped. Seed it with:")
+        print("    ./scripts/seed-tc-world")
+        return status
 
     print()
-    print("  seeding the Vision Checkup history ...")
-    extra = [] if args.vision_days is None else ["--days", str(args.vision_days)]
-    status = seed_vision_history(target, extra)
-    if status != 0:
+    print("  seeding the tissue-culture bench ...")
+    tc_status = seed_tc_world([])
+    if tc_status != 0:
         print()
-        print(
-            "  NOTE: the roster is in place; only the Vision history failed. "
-            "Retry it on its own once the Vision App is up."
-        )
-    return status
+        print("  NOTE: the roster is in place; only the tissue-culture bench failed.")
+    return status or tc_status
 
 
 if __name__ == "__main__":

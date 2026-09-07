@@ -1,0 +1,1014 @@
+#!/usr/bin/env python3
+"""
+Seed the dev instance's Tissue Culture world, so the TC dialog opens onto work.
+
+  ./scripts/seed-tc-world            # media, lines, cultures, history, pairings
+  ./scripts/seed-tc-world --clear    # remove what this seeded
+  ./scripts/seed-tc-world --report   # say what the store holds, change nothing
+
+A fresh install of Growspace Manager TC is functional and empty, so the dialog
+opens onto "Nothing is due. Every vessel still has time on the medium it is on."
+— the same screen an install with a full bench would show if nothing happened to
+be due, and therefore the one screen a demo must not land on.
+
+**This writes the store directly, and drives TC's own models to build it.**
+`MaintenanceAction.recorded()` takes an optional `now`, but no TC WebSocket
+schema exposes `recorded_at` and no handler passes one: every act an API-driven
+seed could record would be stamped today, every Replate Due Date would land at
+today plus its interval, and the Worklist would still be empty — the same empty
+screen, with ninety days of history behind it. So the calendar is the one thing
+invented here. Everything else — the Medium Version a Plating pins, the Replate
+Due Date, what a division does to a Culture's identity, which acts an ended
+vessel refuses — comes from the integration's own models and repository, imported
+out of the TC checkout. They cannot drift from the shipped rules without this
+script failing loudly, which is the same bargain `seed-vision-history` strikes
+with the Vision evidence schema.
+
+**Home Assistant holds this state in memory and saves over the file.** Seed with
+it down, or restart it afterwards; the script says which of the two applies on
+the run you just did.
+
+Prerequisites: the growspace_manager_tc checkout (`GROWSPACE_TC` to select
+another), and a strain library holding the phenotypes the Culture Lines
+reference — `./scripts/seed-demo` puts them there. Home Assistant need not be
+running, and the TC integration need not be set up: the store is a plain host
+file, and an entry added later loads it.
+"""
+
+from __future__ import annotations
+
+import argparse
+import importlib
+import json
+import os
+import pathlib
+import sqlite3
+import subprocess
+import sys
+import types
+import urllib.error
+import urllib.request
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+
+# --------------------------------------------------------------------------
+# checkouts
+#
+# The runtime belongs to the MAIN hub checkout: ha-dev/ is bind-mounted from
+# beside docker-compose.yml, so its store is the one Home Assistant reads
+# whichever checkout this script was invoked from. The models, in contrast, are
+# code — those come from the TC checkout, so a worktree exercises its branch.
+# --------------------------------------------------------------------------
+HERE = pathlib.Path(__file__).resolve().parent.parent
+
+
+def main_hub_checkout() -> pathlib.Path:
+    """Return the main hub checkout, even when run from one of its worktrees."""
+    try:
+        common = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(HERE),
+                "rev-parse",
+                "--path-format=absolute",
+                "--git-common-dir",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return HERE
+    return pathlib.Path(common).parent.resolve()
+
+
+WORKSPACE = main_hub_checkout()
+HA_DEV = WORKSPACE / "ha-dev"
+STORAGE = HA_DEV / ".storage"
+STRAIN_LIBRARY = HA_DEV / "strain_library.db"
+
+TC = pathlib.Path(
+    os.environ.get("GROWSPACE_TC", WORKSPACE / ".." / "growspace_manager_tc")
+).resolve()
+
+HA_URL = os.environ.get("HA_BASE_URL", "http://127.0.0.1:8123")
+
+
+def die(message: str) -> None:
+    """Exit with a message on stderr."""
+    sys.exit(f"error: {message}")
+
+
+# --------------------------------------------------------------------------
+# imported implementations — nothing below is reimplemented here
+# --------------------------------------------------------------------------
+def load_tc():
+    """Import TC's constants, models and repository from the TC checkout.
+
+    `custom_components.growspace_manager_tc.__init__` imports Home Assistant,
+    which is not on this interpreter's path and has no business being — the
+    models and the repository are pure by design, so that the rules can be
+    argued with without a `hass`. The package chain is therefore registered as
+    bare namespace modules pointing at the real directories and only the leaves
+    are executed; they import each other by absolute name and resolve through
+    those `__path__` entries exactly as they would inside Home Assistant.
+    """
+    root = TC / "custom_components" / "growspace_manager_tc"
+    if not root.is_dir():
+        die(f"no TC integration at {TC} (set GROWSPACE_TC)")
+
+    packages = {
+        "custom_components": TC / "custom_components",
+        "custom_components.growspace_manager_tc": root,
+        "custom_components.growspace_manager_tc.models": root / "models",
+        "custom_components.growspace_manager_tc.data_access": root / "data_access",
+    }
+    for name, path in packages.items():
+        if name in sys.modules:
+            continue
+        package = types.ModuleType(name)
+        package.__path__ = [str(path)]
+        package.__package__ = name
+        sys.modules[name] = package
+
+    try:
+        leaves = [
+            importlib.import_module(f"custom_components.growspace_manager_tc.{name}")
+            for name in (
+                "const",
+                "models.common",
+                "models.culture_line",
+                "models.culture_medium",
+                "data_access.culture_repository",
+            )
+        ]
+    except (ImportError, SyntaxError) as error:
+        die(
+            f"cannot import TC's models from {TC}: {error}\n"
+            f"       (this interpreter is Python {sys.version_info.major}."
+            f"{sys.version_info.minor}; the integration targets 3.14)"
+        )
+    return tuple(leaves)
+
+
+CONST, COMMON, LINE_MODEL, MEDIUM_MODEL, REPOSITORY = load_tc()
+
+STORE = STORAGE / CONST.STORAGE_KEY
+COLLECTIONS = (
+    CONST.COLLECTION_CULTURE_MEDIA,
+    CONST.COLLECTION_CULTURE_LINES,
+    CONST.COLLECTION_CULTURES,
+    CONST.COLLECTION_MAINTENANCE_ACTIONS,
+    CONST.COLLECTION_PAIRINGS,
+)
+
+
+# --------------------------------------------------------------------------
+# the calendar — the one thing this script invents
+#
+# Every stamp is a whole number of days before today at the same hour, so the
+# bench reads the same on any day it is seeded and a vessel that is meant to be
+# four days overdue is four days overdue whenever you look.
+# --------------------------------------------------------------------------
+EPOCH = datetime.now(UTC).replace(hour=9, minute=0, second=0, microsecond=0)
+
+
+def stamp(days_ago: int) -> str:
+    """Return the ISO instant `days_ago` days before this morning."""
+    return (EPOCH - timedelta(days=days_ago)).isoformat()
+
+
+# --------------------------------------------------------------------------
+# the bench
+# --------------------------------------------------------------------------
+SHELF_A = "Shelf A"
+SHELF_B = "Shelf B"
+SHELF_C = "Shelf C"
+GROWTH_ROOM = "Growth room 2"
+ROOTING_CABINET = "Rooting cabinet"
+
+
+def component(name: str, amount: float, unit: str) -> dict[str, object]:
+    """One additive or hormone entry, as the model validates it."""
+    return {"name": name, "amount": amount, "unit": unit}
+
+
+VITAMINS = (
+    component("myo-inositol", 100.0, "mg/L"),
+    component("thiamine-HCl", 0.4, "mg/L"),
+)
+
+
+@dataclass(frozen=True)
+class Medium:
+    """One Culture Medium, and the edit that forked its second version.
+
+    `revision` is a formulation and the day it was saved. Whether that produces
+    a Medium Version is `CultureMedium.edited`'s decision, not this script's —
+    which is exactly why the demo's version history is worth showing.
+    """
+
+    name: str
+    created_days_ago: int
+    formulation: dict[str, object]
+    revision: tuple[int, dict[str, object]] | None = None
+
+
+MS_BAP = "MS + BAP"
+MS_IBA = "MS + IBA"
+MS_BASAL = "MS basal"
+DKW_TDZ = "DKW + TDZ"
+
+MEDIA: tuple[Medium, ...] = (
+    Medium(
+        MS_BAP,
+        110,
+        {
+            "base_salts": "Murashige & Skoog",
+            "additives": list(VITAMINS),
+            "hormones": [component("BAP", 1.0, "mg/L")],
+            "agar_g_per_l": 7.0,
+            "sugar_g_per_l": 30.0,
+            "ph_target": 5.8,
+            "notes": "The workhorse multiplication plate. Four-week cycle.",
+        },
+        (
+            45,
+            {
+                "base_salts": "Murashige & Skoog",
+                "additives": list(VITAMINS),
+                "hormones": [
+                    component("BAP", 1.5, "mg/L"),
+                    component("NAA", 0.05, "mg/L"),
+                ],
+                "agar_g_per_l": 7.0,
+                "sugar_g_per_l": 30.0,
+                "ph_target": 5.8,
+                "notes": (
+                    "BAP raised after a slow winter batch, with a touch of NAA to"
+                    " keep the bases clean."
+                ),
+            },
+        ),
+    ),
+    Medium(
+        MS_IBA,
+        100,
+        {
+            "base_salts": "Murashige & Skoog (half strength)",
+            "additives": [component("myo-inositol", 100.0, "mg/L")],
+            "hormones": [component("IBA", 0.5, "mg/L")],
+            "agar_g_per_l": 6.5,
+            "sugar_g_per_l": 20.0,
+            "ph_target": 5.7,
+            "notes": "Rooting plate. Three weeks in the cabinet, then out to soil.",
+        },
+    ),
+    Medium(
+        MS_BASAL,
+        100,
+        {
+            "base_salts": "Murashige & Skoog",
+            "additives": [component("myo-inositol", 100.0, "mg/L")],
+            "hormones": [],
+            "agar_g_per_l": 7.0,
+            "sugar_g_per_l": 30.0,
+            "ph_target": 5.8,
+            "notes": "No hormones. The holding plate between rounds.",
+        },
+    ),
+    Medium(
+        DKW_TDZ,
+        30,
+        {
+            "base_salts": "Driver & Kuniyuki Walnut",
+            "additives": [
+                component("myo-inositol", 100.0, "mg/L"),
+                component("ascorbic acid", 50.0, "mg/L"),
+            ],
+            "hormones": [component("TDZ", 0.2, "mg/L")],
+            "agar_g_per_l": 7.0,
+            "sugar_g_per_l": 30.0,
+            "ph_target": 5.6,
+            "notes": "Trial plate: TDZ against BAP on the same cut.",
+        },
+    ),
+)
+
+
+# --------------------------------------------------------------------------
+# the lines
+#
+# A Phenotype Reference is Growspace Manager's key for a phenotype —
+# "<strain>|<phenotype>", the string the card's own client-side join indexes on
+# — and six of these name phenotypes the Demo Tent's plants are grown from, so
+# the bench and the tent read as one grow.
+#
+# The seventh names a phenotype that is not in the library and never will be.
+# A Missing Phenotype is the one TC state that cannot appear without being
+# constructed on purpose: it is what a grower sees after deleting a strain
+# Growspace Manager's side, and the whole point of the display-name snapshot
+# (TC ADR-0006).
+# --------------------------------------------------------------------------
+@dataclass(frozen=True)
+class Line:
+    """One Culture Line and the Introduction that started it."""
+
+    key: str
+    phenotype_id: str
+    phenotype_name: str
+    multiplication: int
+    rooting: int
+    introduced_days_ago: int
+    plantlet_count: int
+    location: str
+    resolves: bool = True
+
+
+LINES: tuple[Line, ...] = (
+    Line(
+        "wc", "Wedding Cake|Pheno #2", "Wedding Cake — Pheno #2", 30, 21, 92, 4, SHELF_A
+    ),
+    Line("gelato", "Gelato 33|Purple", "Gelato 33 — Purple", 28, 21, 80, 3, SHELF_B),
+    Line(
+        "gg4",
+        "Gorilla Glue #4|Cut A",
+        "Gorilla Glue #4 — Cut A",
+        35,
+        24,
+        70,
+        5,
+        SHELF_C,
+    ),
+    Line(
+        "nl5", "Northern Lights|NL#5", "Northern Lights — NL#5", 30, 21, 64, 4, SHELF_B
+    ),
+    Line("ogk", "OG Kush|Cut B", "OG Kush — Cut B", 26, 18, 56, 3, SHELF_A),
+    Line(
+        "sourd",
+        "Sour Diesel|East Cut",
+        "Sour Diesel — East Cut",
+        32,
+        21,
+        45,
+        4,
+        GROWTH_ROOM,
+    ),
+    Line(
+        "lost",
+        "Sunset Sherbet|Mother S1",
+        "Sunset Sherbet — Mother S1",
+        30,
+        21,
+        86,
+        4,
+        SHELF_C,
+        resolves=False,
+    ),
+)
+
+
+# --------------------------------------------------------------------------
+# the history
+#
+# Ninety days of acts, applied oldest first. A vessel is named by its index in
+# its own line's creation order, because that is the only handle that exists
+# before the repository has minted an ID for it.
+# --------------------------------------------------------------------------
+@dataclass(frozen=True)
+class Act:
+    """One Maintenance Action against one vessel of one line."""
+
+    days_ago: int
+    line: str
+    vessel: int
+    kind: str
+    note: str = ""
+    medium: str = ""
+    reason: str = ""
+    # Replate only. Each entry is (plantlet count, location); a `None` location
+    # means "wherever it already was", which is what the model reads it as.
+    vessels: tuple[tuple[int | None, str | None], ...] = ()
+
+
+HISTORY: tuple[Act, ...] = (
+    # Wedding Cake — the mother line, divided twice and now the bulk of the work
+    Act(
+        88,
+        "wc",
+        0,
+        "note",
+        note="Explant off the tent's mother. Four of six survived the sterilisation.",
+    ),
+    Act(
+        62,
+        "wc",
+        0,
+        "replate",
+        medium=MS_BAP,
+        vessels=((5, None), (4, None), (4, SHELF_B)),
+    ),
+    Act(34, "wc", 0, "replate", medium=MS_BAP, vessels=((6, None), (5, SHELF_C))),
+    Act(31, "wc", 1, "replate", medium=MS_BAP, vessels=((5, None),)),
+    Act(
+        20,
+        "wc",
+        2,
+        "note",
+        note="Slight vitrification on two plantlets — half a gram more agar next plate.",
+    ),
+    Act(18, "wc", 2, "replate", medium=MS_BASAL, vessels=((4, None),)),
+    # Gelato 33 — one vessel taken all the way out of vitro
+    Act(52, "gelato", 0, "replate", medium=MS_BAP, vessels=((5, None), (4, None))),
+    Act(24, "gelato", 0, "replate", medium=MS_BAP, vessels=((6, None),)),
+    Act(
+        23,
+        "gelato",
+        1,
+        "move_to_rooting",
+        note="Enough stock on the shelf; this one goes out to the tent.",
+    ),
+    Act(
+        22,
+        "gelato",
+        1,
+        "replate",
+        medium=MS_IBA,
+        vessels=((4, ROOTING_CABINET), (3, ROOTING_CABINET)),
+    ),
+    Act(
+        3,
+        "gelato",
+        2,
+        "graduate",
+        note="Potted into the veg row — the first of this cut out of vitro.",
+    ),
+    # Gorilla Glue #4 — the line that lost a vessel to contamination
+    Act(40, "gg4", 0, "replate", medium=MS_BAP, vessels=((6, None), (5, None))),
+    Act(38, "gg4", 0, "note", note="Vigorous cut — split into four next round."),
+    Act(14, "gg4", 1, "replate", medium=MS_BAP, vessels=((5, None),)),
+    Act(
+        9,
+        "gg4",
+        0,
+        "discard",
+        reason="contamination",
+        note="Bacterial haze around the base. Plate autoclaved, bench re-flamed.",
+    ),
+    # Northern Lights — two vessels parked in the growth room and forgotten
+    Act(
+        34,
+        "nl5",
+        0,
+        "replate",
+        medium=MS_BASAL,
+        vessels=((4, None), (3, GROWTH_ROOM), (3, GROWTH_ROOM)),
+    ),
+    Act(6, "nl5", 0, "replate", medium=MS_BAP, vessels=((5, None),)),
+    # OG Kush — a rooting trial that ran long before it was plated
+    Act(30, "ogk", 0, "replate", medium=MS_BAP, vessels=((4, None), (4, GROWTH_ROOM))),
+    Act(28, "ogk", 1, "move_to_rooting", note="Rooting trial on the second vessel."),
+    Act(5, "ogk", 1, "replate", medium=MS_IBA, vessels=((4, ROOTING_CABINET),)),
+    # Sour Diesel — the newest line, divided four ways onto the trial medium
+    Act(
+        13,
+        "sourd",
+        0,
+        "replate",
+        medium=DKW_TDZ,
+        vessels=((5, None), (4, None), (4, SHELF_C), (3, SHELF_C)),
+    ),
+    Act(
+        2,
+        "sourd",
+        1,
+        "note",
+        note="TDZ trial: leaves thicker than the BAP plates of the same age.",
+    ),
+    # The line whose phenotype no longer resolves, and the worst overdue on the
+    # bench — a vessel nobody looks at because its name reads as missing.
+    Act(
+        82,
+        "lost",
+        0,
+        "note",
+        note="The last of the 2024 mother. If this line goes, that cut is gone.",
+    ),
+    Act(56, "lost", 0, "replate", medium=MS_BASAL, vessels=((4, None), (3, None))),
+    Act(20, "lost", 0, "replate", medium=MS_BAP, vessels=((5, None),)),
+)
+
+
+# --------------------------------------------------------------------------
+# the pairings — the grower's endorsements, one of them of a lost phenotype
+# --------------------------------------------------------------------------
+@dataclass(frozen=True)
+class Endorsement:
+    """One curated phenotype–medium pairing."""
+
+    days_ago: int
+    line: str
+    medium: str
+    notes: str
+
+
+PAIRINGS: tuple[Endorsement, ...] = (
+    Endorsement(
+        40,
+        "wc",
+        MS_BAP,
+        "Four to five plantlets a plate at 1.5 mg/L BAP. The most reliable cut here.",
+    ),
+    Endorsement(
+        20,
+        "gelato",
+        MS_IBA,
+        "Roots in about three weeks. Do not push the auxin — it callouses instead.",
+    ),
+    Endorsement(
+        33,
+        "nl5",
+        MS_BASAL,
+        "Holds cleanly on basal between rounds. Slow, but nothing is ever lost.",
+    ),
+    Endorsement(
+        70,
+        "lost",
+        MS_BAP,
+        "Kept from the 2024 mother. Whatever it was, it liked this plate.",
+    ),
+)
+
+
+# --------------------------------------------------------------------------
+# declarations, cross-checked
+# --------------------------------------------------------------------------
+MEDIUM_NAMES = {medium.name for medium in MEDIA}
+LINES_BY_KEY = {line.key: line for line in LINES}
+PHENOTYPE_IDS = {line.phenotype_id for line in LINES}
+
+
+def check_declarations() -> None:
+    """Refuse a world that cannot be built before touching anything."""
+    if len(LINES_BY_KEY) != len(LINES):
+        die("two culture lines share a key")
+    if len(PHENOTYPE_IDS) != len(LINES):
+        die("two culture lines reference the same phenotype")
+    for act in HISTORY:
+        if act.line not in LINES_BY_KEY:
+            die(f"the history acts on an undeclared line {act.line!r}")
+        if act.medium and act.medium not in MEDIUM_NAMES:
+            die(f"the history plates onto an undeclared medium {act.medium!r}")
+    for endorsement in PAIRINGS:
+        if endorsement.line not in LINES_BY_KEY:
+            die(f"a pairing endorses an undeclared line {endorsement.line!r}")
+        if endorsement.medium not in MEDIUM_NAMES:
+            die(f"a pairing endorses an undeclared medium {endorsement.medium!r}")
+
+
+def check_strain_library() -> None:
+    """Refuse a bench whose names would all read as missing.
+
+    Six of the seven lines exist so the audience recognises the names off the
+    tent, and a run before `./scripts/seed-demo` has filled the library would
+    produce seven Missing Phenotypes instead — a demo of the failure state.
+
+    The seventh is checked the other way round. If the demo roster ever grows
+    the strain this line references, the Missing Phenotype quietly resolves and
+    the one TC state that has to be constructed on purpose is gone; better to
+    fail here than to discover it on stage.
+    """
+    if not STRAIN_LIBRARY.exists():
+        die(
+            f"no strain library at {STRAIN_LIBRARY}\n"
+            "       seed the tent first: ./scripts/seed-demo"
+        )
+    connection = sqlite3.connect(f"file:{STRAIN_LIBRARY}?mode=ro", uri=True)
+    try:
+        known = {
+            f"{strain}|{phenotype}"
+            for strain, phenotype in connection.execute(
+                "SELECT s.strain_name, p.phenotype_name FROM phenotypes p"
+                " JOIN strains s ON s.strain_id = p.strain_id"
+            )
+        }
+    except sqlite3.DatabaseError as error:
+        die(f"cannot read the strain library at {STRAIN_LIBRARY}: {error}")
+    finally:
+        connection.close()
+
+    missing = sorted(
+        line.phenotype_id
+        for line in LINES
+        if line.resolves and line.phenotype_id not in known
+    )
+    if missing:
+        die(
+            "the strain library does not hold the phenotypes these culture lines"
+            f" reference: {', '.join(missing)}\n"
+            "       seed the tent first: ./scripts/seed-demo"
+        )
+    resolved = sorted(
+        line.phenotype_id
+        for line in LINES
+        if not line.resolves and line.phenotype_id in known
+    )
+    if resolved:
+        die(
+            f"the strain library now holds {', '.join(resolved)}, which this script"
+            " keeps unresolvable on purpose so the demo can show a Missing"
+            " Phenotype;\n       point that line at a phenotype nobody grows, or"
+            " drop the strain from the roster"
+        )
+
+
+# --------------------------------------------------------------------------
+# building the world through TC's own repository
+# --------------------------------------------------------------------------
+@dataclass
+class Built:
+    """What one build produced, for the report."""
+
+    media: dict[str, object] = field(default_factory=dict)
+    versions: int = 0
+    lines: dict[str, object] = field(default_factory=dict)
+    vessels: dict[str, list[object]] = field(default_factory=dict)
+    actions: int = 0
+    pairings: int = 0
+
+
+def version_in_force(medium, at: str) -> int:
+    """Return the Medium Version a Plating at `at` would have pinned.
+
+    Derived from the medium's own history rather than chosen, so a Replate
+    recorded before an edit pins what was actually poured — which is the whole
+    reason Medium Versions are immutable (TC ADR-0004).
+    """
+    for version in reversed(medium.versions):
+        if version.created_at <= at:
+            return version.version
+    return medium.versions[0].version
+
+
+def build(repository) -> Built:
+    """Write the whole bench into `repository`, oldest act first."""
+    built = Built()
+
+    for medium in MEDIA:
+        record = repository.create_culture_medium(
+            MEDIUM_MODEL.validate_medium_name(medium.name),
+            MEDIUM_MODEL.MediumFormulation.from_payload(medium.formulation),
+            now=stamp(medium.created_days_ago),
+        )
+        if medium.revision is not None:
+            days_ago, formulation = medium.revision
+            record = repository.update_culture_medium(
+                record.id,
+                record.name,
+                MEDIUM_MODEL.MediumFormulation.from_payload(formulation),
+                now=stamp(days_ago),
+            )
+        built.media[medium.name] = record
+        built.versions += len(record.versions)
+
+    for line in LINES:
+        introduced = stamp(line.introduced_days_ago)
+        record, culture = repository.introduce_culture_line(
+            LINE_MODEL.PhenotypeReference.taken(
+                line.phenotype_id, line.phenotype_name, now=introduced
+            ),
+            LINE_MODEL.ReplateIntervals.from_payload(
+                {"multiplication": line.multiplication, "rooting": line.rooting}
+            ),
+            stage=LINE_MODEL.CultureStage.MULTIPLICATION.value,
+            plantlet_count=line.plantlet_count,
+            location=line.location,
+            now=introduced,
+        )
+        built.lines[line.key] = record
+        built.vessels[line.key] = [culture]
+
+    for act in sorted(HISTORY, key=lambda entry: -entry.days_ago):
+        at = stamp(act.days_ago)
+        vessels = built.vessels[act.line]
+        if act.vessel >= len(vessels):
+            die(
+                f"the history plates {act.line} vessel {act.vessel} {act.days_ago} days"
+                " ago, before any act had created it"
+            )
+        culture_id = vessels[act.vessel].id
+
+        if act.kind == "replate":
+            medium = built.media[act.medium]
+            action = repository.replate_culture(
+                culture_id,
+                medium.id,
+                version_in_force(medium, at),
+                [
+                    {"plantlet_count": count, "location": location}
+                    for count, location in act.vessels
+                ],
+                note=act.note,
+                now=at,
+            )
+            # The first vessel is the Culture that was replated — its identity
+            # survives the transfer — and every further one is new to the line.
+            vessels[act.vessel] = repository.culture(action.vessels[0].culture_id)
+            vessels.extend(
+                repository.culture(vessel.culture_id) for vessel in action.vessels[1:]
+            )
+        elif act.kind == "note":
+            repository.note_on_culture(culture_id, act.note, now=at)
+        elif act.kind == "move_to_rooting":
+            repository.move_culture_to_rooting(culture_id, note=act.note, now=at)
+            vessels[act.vessel] = repository.culture(culture_id)
+        elif act.kind == "discard":
+            repository.discard_culture(culture_id, act.reason, note=act.note, now=at)
+            vessels[act.vessel] = repository.culture(culture_id)
+        elif act.kind == "graduate":
+            repository.graduate_culture(culture_id, note=act.note, now=at)
+            vessels[act.vessel] = repository.culture(culture_id)
+        else:
+            die(f"the history carries an act this script cannot record: {act.kind!r}")
+        built.actions += 1
+
+    for endorsement in PAIRINGS:
+        line = LINES_BY_KEY[endorsement.line]
+        repository.save_pairing(
+            {
+                "phenotype_id": line.phenotype_id,
+                "phenotype_name": line.phenotype_name,
+                "medium_id": built.media[endorsement.medium].id,
+                "notes": endorsement.notes,
+            },
+            now=stamp(endorsement.days_ago),
+        )
+        built.pairings += 1
+
+    return built
+
+
+# --------------------------------------------------------------------------
+# the store — a plain host file, written the way Home Assistant writes it
+# --------------------------------------------------------------------------
+def read_store() -> tuple[dict, dict]:
+    """Return the store's envelope and its data, both empty if there is none."""
+    envelope = {
+        "version": CONST.STORAGE_VERSION,
+        "minor_version": 1,
+        "key": CONST.STORAGE_KEY,
+        "data": {},
+    }
+    if not STORE.exists():
+        return envelope, {}
+    try:
+        stored = json.loads(STORE.read_text())
+    except (OSError, ValueError) as error:
+        die(f"cannot read {STORE}: {error}")
+    if not isinstance(stored, dict) or not isinstance(stored.get("data"), dict):
+        die(f"{STORE} is not a Home Assistant store; move it aside and rerun")
+    envelope.update({key: value for key, value in stored.items() if key != "data"})
+    return envelope, stored["data"]
+
+
+def write_store(envelope: dict, data: dict) -> None:
+    """Write the store atomically, so a reader never sees half of it."""
+    STORAGE.mkdir(parents=True, exist_ok=True)
+    temporary = STORE.with_suffix(STORE.suffix + ".seeding")
+    temporary.write_text(json.dumps({**envelope, "data": data}, indent=2))
+    os.replace(temporary, STORE)
+
+
+def records(data: dict, collection: str) -> dict:
+    """Return one collection from the store, empty if it is not there or not one."""
+    held = data.get(collection)
+    return held if isinstance(held, dict) else {}
+
+
+def reference_id(row: object, field_name: str) -> str | None:
+    """Return a nested phenotype reference's ID, or None."""
+    if not isinstance(row, dict):
+        return None
+    reference = row.get(field_name)
+    return reference.get("id") if isinstance(reference, dict) else None
+
+
+def seeded(data: dict) -> dict[str, set[str]]:
+    """Return the record IDs in the store that this script wrote.
+
+    Recognised by declaration rather than by a marker of its own, the way
+    `seed-demo` recognises its plants: a medium this script named, a line
+    pointing at a phenotype it references, and everything hanging off such a
+    line. A medium somebody mixed by hand, a line they introduced from the
+    card, and the whole history of both are therefore left alone by `--clear`
+    and are never counted as this script's.
+    """
+    media = {
+        medium_id
+        for medium_id, row in records(data, CONST.COLLECTION_CULTURE_MEDIA).items()
+        if isinstance(row, dict) and row.get("name") in MEDIUM_NAMES
+    }
+    lines = {
+        line_id
+        for line_id, row in records(data, CONST.COLLECTION_CULTURE_LINES).items()
+        if reference_id(row, "phenotype") in PHENOTYPE_IDS
+    }
+    return {
+        CONST.COLLECTION_CULTURE_MEDIA: media,
+        CONST.COLLECTION_CULTURE_LINES: lines,
+        CONST.COLLECTION_CULTURES: {
+            culture_id
+            for culture_id, row in records(data, CONST.COLLECTION_CULTURES).items()
+            if isinstance(row, dict) and row.get("line_id") in lines
+        },
+        CONST.COLLECTION_MAINTENANCE_ACTIONS: {
+            action_id
+            for action_id, row in records(
+                data, CONST.COLLECTION_MAINTENANCE_ACTIONS
+            ).items()
+            if isinstance(row, dict) and row.get("line_id") in lines
+        },
+        CONST.COLLECTION_PAIRINGS: {
+            pairing_id
+            for pairing_id, row in records(data, CONST.COLLECTION_PAIRINGS).items()
+            if reference_id(row, "phenotype") in PHENOTYPE_IDS
+            and isinstance(row, dict)
+            and row.get("medium_id") in media
+        },
+    }
+
+
+def drop(data: dict, found: dict[str, set[str]]) -> int:
+    """Remove the given IDs from the store's collections, in place.
+
+    Done to the persisted dictionary rather than through the repository on
+    purpose: Maintenance Actions are append-only by design and the repository
+    has no method that removes one, which is a rule about the product's history
+    and not about a demo's scaffolding.
+    """
+    removed = 0
+    for collection, identifiers in found.items():
+        held = data.get(collection)
+        if not isinstance(held, dict):
+            continue
+        for identifier in identifiers:
+            held.pop(identifier, None)
+            removed += 1
+    return removed
+
+
+# --------------------------------------------------------------------------
+# Home Assistant, which is not driven here but does hold this state
+# --------------------------------------------------------------------------
+def home_assistant_is_up() -> bool:
+    """Whether something is answering as Home Assistant on the dev port."""
+    try:
+        with urllib.request.urlopen(f"{HA_URL}/api/", timeout=5):
+            return True
+    except urllib.error.HTTPError:
+        # 401 without a token is Home Assistant answering, which is the question.
+        return True
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return False
+
+
+def report_liveness() -> None:
+    """State which of the two restart requirements applies to this run."""
+    print()
+    if not home_assistant_is_up():
+        print(f"  Home Assistant is not running at {HA_URL}.")
+        print("  It reads this store on its next start; nothing further is needed.")
+        return
+    print("  ! Home Assistant IS RUNNING, and Growspace Manager TC holds this state")
+    print("    in memory and saves over the file. Restart it before you demo:")
+    print()
+    print("      ./scripts/ha dev restart          # from the main hub checkout")
+    print()
+    print("    Until then the running instance still shows the empty bench, and the")
+    print("    next TC command it serves would write that emptiness back over this.")
+
+
+# --------------------------------------------------------------------------
+# entry point
+# --------------------------------------------------------------------------
+def plural(count: int, noun: str) -> str:
+    """Render a count with its noun, so a report of one reads like English."""
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
+def describe(found: dict[str, set[str]]) -> str:
+    """Render what the store holds of this script's, collection by collection."""
+    return ", ".join(
+        f"{len(found[collection])} {collection.replace('_', ' ')}"
+        for collection in COLLECTIONS
+    )
+
+
+def parse_args(argv):
+    """Parse the command line."""
+    parser = argparse.ArgumentParser(
+        description="Seed the dev instance's Tissue Culture world.",
+    )
+    parser.add_argument(
+        "--clear", action="store_true", help="remove what this seeded, and exit"
+    )
+    parser.add_argument(
+        "--report",
+        action="store_true",
+        help="say what the store holds of this script's, and exit",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv) -> int:
+    """Seed, clear or report."""
+    args = parse_args(argv)
+    check_declarations()
+
+    print(f"  workspace: {WORKSPACE}")
+    print(f"  tc:        {TC}")
+    print(f"  store:     {STORE}")
+
+    envelope, data = read_store()
+    found = seeded(data)
+
+    if args.report:
+        print(f"  seeded:    {describe(found)}")
+        return 0
+
+    if args.clear:
+        removed = drop(data, found)
+        if not removed:
+            print("  nothing of this script's is in the store; it is untouched")
+            return 0
+        write_store(envelope, data)
+        print(f"  removed {describe(found)}")
+        report_liveness()
+        return 0
+
+    if any(found.values()):
+        print(f"  already seeded: {describe(found)} — nothing changed")
+        print(
+            "  to rebuild it:  ./scripts/seed-tc-world --clear && ./scripts/seed-tc-world"
+        )
+        return 0
+
+    check_strain_library()
+
+    repository = REPOSITORY.CultureRepository()
+    repository.load(data)
+    try:
+        built = build(repository)
+    except (COMMON.TcValidationError, COMMON.TcNotFoundError) as error:
+        # The models' rejections carry a sentence written for the grower, and it
+        # is the right thing to show: a refusal here means this script declared
+        # a bench the shipped rules do not allow, and the rule says so itself.
+        die(f"TC refused a record this script built: {error}")
+    write_store(envelope, repository.as_dict())
+
+    due = repository.due_replates()
+    overdue = [entry for entry in due if entry[2] < EPOCH.isoformat()]
+    locations = sorted(
+        {
+            vessel.location
+            for vessels in built.vessels.values()
+            for vessel in vessels
+            if vessel.location
+        }
+    )
+
+    vessels = sum(len(held) for held in built.vessels.values())
+    oldest = max(act.days_ago for act in HISTORY)
+    media = (
+        "1 culture medium"
+        if len(built.media) == 1
+        else f"{len(built.media)} culture media"
+    )
+    print(f"  media:     {media} over {plural(built.versions, 'medium version')}")
+    print(
+        f"  lines:     {plural(len(built.lines), 'culture line')},"
+        " one of them a Missing Phenotype"
+    )
+    print(
+        f"  cultures:  {plural(vessels, 'vessel')}"
+        f" across {plural(len(locations), 'location')}"
+    )
+    print(
+        f"  history:   {plural(built.actions, 'maintenance action')},"
+        f" the oldest {oldest} days back"
+    )
+    print(f"  pairings:  {plural(built.pairings, 'pairing')}")
+    print(
+        f"  worklist:  {plural(len(overdue), 'vessel')} overdue,"
+        f" {plural(len(due) - len(overdue), 'vessel')} still on time"
+    )
+    for line, culture, at in overdue:
+        name = line.phenotype.name_snapshot
+        print(f"    due {at[:10]}   {name:<28} {culture.location}")
+    report_liveness()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
