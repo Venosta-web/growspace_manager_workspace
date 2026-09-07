@@ -1,0 +1,253 @@
+#!/usr/bin/env node
+/*
+ * Create the panel dashboard every README capture is taken from.
+ *
+ *   ./scripts/demo-dashboard                          # Demo Tent
+ *   ./scripts/demo-dashboard --growspace "E2E Vision"
+ *   ./scripts/demo-dashboard --remove
+ *
+ * `scripts/e2e provision` gives every capability profile a dashboard, and each
+ * one is a **sections** view holding the card in a four-row grid tile. That is
+ * right for a spec, which wants the card in an ordinary dashboard the way a
+ * user would place it, and wrong for a photograph: the card renders into one
+ * narrow column and the header chips are clipped before the plant grid begins.
+ *
+ * A capture wants the opposite — a `panel` view, where the card is the whole
+ * page and its own layout decides the width. That dashboard was hand-made on
+ * one laptop and written down nowhere, so a fresh clone following the
+ * screenshot convention had no way to reach the frame the existing images were
+ * taken in. This is that dashboard, as a command.
+ *
+ * It writes through Home Assistant's own Lovelace WebSocket commands rather
+ * than `.storage/lovelace.demo_tent`, because Home Assistant holds dashboards
+ * in memory and saves over the file.
+ *
+ * See docs/SCREENSHOTS.md for what to do with it.
+ */
+'use strict';
+
+const fs = require('node:fs');
+const path = require('node:path');
+const { execFileSync } = require('node:child_process');
+
+const {
+  connectHaWebSocket,
+  ensureCardResource,
+  parseEnvFile,
+} = require('./gen-e2e-dashboards.cjs');
+
+const HERE = path.resolve(__dirname, '..');
+
+/*
+ * The runtime belongs to the MAIN hub checkout — `scripts/ha` refuses to drive
+ * it from anywhere else, so its `.ha-token` and its sibling repositories are
+ * the ones to read whichever checkout this was invoked from. The same rule
+ * `scripts/seed-demo` follows, for the same reason.
+ */
+function mainHubCheckout() {
+  try {
+    const common = execFileSync(
+      'git',
+      ['-C', HERE, 'rev-parse', '--path-format=absolute', '--git-common-dir'],
+      { encoding: 'utf8' },
+    ).trim();
+    return common ? path.dirname(common) : HERE;
+  } catch {
+    return HERE;
+  }
+}
+
+const WORKSPACE = mainHubCheckout();
+
+// One fixed dashboard, whatever it is pointed at. A path derived from the
+// growspace name would collide with the generated profile dashboards — the
+// slug of "E2E Vision" is `e2e-vision`, which is one of them — and there is
+// only ever one capture session in progress.
+const DASHBOARD_PATH = 'demo-tent';
+
+const DEFAULT_GROWSPACE = 'Demo Tent';
+
+function buildCaptureConfig(title, growspaceId) {
+  return {
+    views: [{
+      title,
+      path: '0',
+      type: 'panel',
+      cards: [{
+        type: 'custom:growspace-manager-card',
+        default_growspace: growspaceId,
+      }],
+    }],
+  };
+}
+
+/*
+ * A dashboard this tool would have written: one panel view holding one
+ * Growspace Manager card and nothing else. `--remove` refuses anything else,
+ * so a dashboard someone built on top of this path is never deleted for them.
+ */
+function isCaptureConfig(config) {
+  const views = config && Array.isArray(config.views) ? config.views : [];
+  if (views.length !== 1) return false;
+  const [view] = views;
+  if (view.type !== 'panel') return false;
+  const cards = Array.isArray(view.cards) ? view.cards : [];
+  return cards.length === 1 && cards[0].type === 'custom:growspace-manager-card';
+}
+
+/* Every growspace, read off the overview sensors' identity block. */
+function readGrowspaces(states) {
+  const found = [];
+  for (const state of states) {
+    const identity = state && state.attributes && state.attributes.identity;
+    if (!identity || typeof identity !== 'object' || !identity.growspace_id) continue;
+    found.push({ growspaceId: identity.growspace_id, name: identity.name || '' });
+  }
+  return found;
+}
+
+function resolveGrowspace(wanted, growspaces) {
+  const byId = growspaces.find((growspace) => growspace.growspaceId === wanted);
+  if (byId) return byId;
+  const matches = growspaces.filter(
+    (growspace) => growspace.name.toLowerCase() === wanted.toLowerCase(),
+  );
+  if (matches.length === 0) {
+    throw new Error(
+      `no growspace ${JSON.stringify(wanted)} — ./scripts/seed-demo --list shows the choices.\n`
+      + '       On a fresh clone the demo growspace is declared by ./scripts/e2e provision.',
+    );
+  }
+  if (matches.length > 1) {
+    throw new Error(`${JSON.stringify(wanted)} names ${matches.length} growspaces; pass an id instead`);
+  }
+  return matches[0];
+}
+
+function messageError(message) {
+  return JSON.stringify((message && message.error) || message);
+}
+
+async function listDashboards(send) {
+  const listed = await send({ type: 'lovelace/dashboards/list' });
+  if (!listed.success) throw new Error(`Could not list dashboards: ${messageError(listed)}`);
+  return listed.result || [];
+}
+
+async function syncCaptureDashboard({ send, urlPath, title, growspaceId, log = console.log }) {
+  const existing = await listDashboards(send);
+  if (!existing.some((dashboard) => dashboard.url_path === urlPath)) {
+    const created = await send({
+      type: 'lovelace/dashboards/create',
+      url_path: urlPath,
+      title,
+      show_in_sidebar: true,
+      require_admin: false,
+    });
+    if (!created.success) {
+      throw new Error(`Could not create /${urlPath}: ${messageError(created)}`);
+    }
+    log(`  created dashboard /${urlPath}`);
+  } else {
+    log(`  dashboard /${urlPath} already exists`);
+  }
+
+  const saved = await send({
+    type: 'lovelace/config/save',
+    url_path: urlPath,
+    config: buildCaptureConfig(title, growspaceId),
+  });
+  if (!saved.success) throw new Error(`Could not save /${urlPath}: ${messageError(saved)}`);
+  log(`  panel view saved -> ${title} (${growspaceId})`);
+  log(`  capture from http://localhost:8123/${urlPath}/0`);
+}
+
+async function removeCaptureDashboard({ send, urlPath, log = console.log }) {
+  const existing = await listDashboards(send);
+  const dashboard = existing.find((item) => item.url_path === urlPath);
+  if (!dashboard) {
+    log(`  no dashboard /${urlPath} — nothing to remove`);
+    return;
+  }
+  const config = await send({ type: 'lovelace/config', url_path: urlPath });
+  if (config.success && !isCaptureConfig(config.result)) {
+    throw new Error(
+      `/${urlPath} is not the capture dashboard any more — it holds something else.\n`
+      + '       Remove it from Settings > Dashboards if that is really what you want.',
+    );
+  }
+  const deleted = await send({
+    type: 'lovelace/dashboards/delete',
+    dashboard_id: dashboard.id,
+  });
+  if (!deleted.success) throw new Error(`Could not remove /${urlPath}: ${messageError(deleted)}`);
+  log(`  removed dashboard /${urlPath}`);
+}
+
+function readOption(argv, name, fallback) {
+  const index = argv.indexOf(name);
+  return index === -1 ? fallback : argv[index + 1];
+}
+
+async function readStates(baseUrl, token) {
+  const response = await fetch(new URL('/api/states', baseUrl), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    throw new Error(`GET /api/states failed: ${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
+async function main(argv = process.argv.slice(2)) {
+  const cardRoot = path.resolve(readOption(
+    argv,
+    '--card-root',
+    process.env.GROWSPACE_CARD || path.join(WORKSPACE, '..', 'lovelace-growspace-manager-card'),
+  ));
+  const envFile = path.resolve(readOption(argv, '--env-file', path.join(cardRoot, 'tests/e2e/.env.test')));
+  const tokenFile = path.resolve(readOption(argv, '--token-file', path.join(WORKSPACE, '.ha-token')));
+  const env = { ...parseEnvFile(envFile), ...process.env };
+  const token = env.HA_ACCESS_TOKEN || (fs.existsSync(tokenFile) ? fs.readFileSync(tokenFile, 'utf8').trim() : '');
+  const baseUrl = readOption(argv, '--base-url', env.HA_BASE_URL || 'http://localhost:8123');
+  const wanted = readOption(argv, '--growspace', DEFAULT_GROWSPACE);
+  const remove = argv.includes('--remove');
+  if (!token) throw new Error(`HA_ACCESS_TOKEN is empty and no token exists at ${tokenFile}`);
+
+  const WebSocket = require(require.resolve('ws', { paths: [cardRoot] }));
+  const connection = await connectHaWebSocket({ WebSocket, baseUrl, token });
+  try {
+    if (remove) {
+      await removeCaptureDashboard({ send: connection.send, urlPath: DASHBOARD_PATH });
+      return;
+    }
+    const growspace = resolveGrowspace(wanted, readGrowspaces(await readStates(baseUrl, token)));
+    await ensureCardResource({ send: connection.send });
+    await syncCaptureDashboard({
+      send: connection.send,
+      urlPath: DASHBOARD_PATH,
+      title: growspace.name,
+      growspaceId: growspace.growspaceId,
+    });
+  } finally {
+    connection.close();
+  }
+}
+
+module.exports = {
+  DASHBOARD_PATH,
+  DEFAULT_GROWSPACE,
+  buildCaptureConfig,
+  isCaptureConfig,
+  readGrowspaces,
+  removeCaptureDashboard,
+  resolveGrowspace,
+  syncCaptureDashboard,
+};
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(`ERROR: ${error.message || error}`);
+    process.exitCode = 1;
+  });
+}
