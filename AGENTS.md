@@ -53,6 +53,7 @@ the host path instead.
 ./scripts/ha test up       # http://localhost:8124 — virgin config, HACS test
 ./scripts/vision build     # build the locked native amd64 Vision App image
 ./scripts/vision smoke     # analyze both deterministic camera fixtures
+./scripts/seed-demo             # the demo's own content: plants, then Vision
 ./scripts/seed-vision-history   # fake Vision Checkup history for the demo
 ```
 
@@ -179,6 +180,52 @@ The Vision App must be up. Home Assistant need not be, but restart it afterwards
 if its store failed to open when you seeded. Both the database and the images
 are gitignored, and the script writes to the **main** hub checkout's `ha-dev/`
 even when run from a worktree, because that is the only one the runtime mounts.
+
+### One command for the whole demo
+
+Vision evidence is half of it. The other half is that a fresh clone's Demo Tent
+is an **empty tent**: the `demo` capability profile owns the growspace's entities
+and wiring, and the card fixture that applies it drops one anchor plant into a
+2x2 grid — right for a test fixture, wrong for a demo.
+
+`./scripts/seed-demo` owns the content:
+
+```bash
+./scripts/seed-demo                     # plants, then the Vision history
+./scripts/seed-demo --growspace "E2E Vision"
+./scripts/seed-demo --no-vision         # plants only
+./scripts/seed-demo --list              # what can be targeted
+./scripts/seed-demo --clear             # remove what it seeded, evidence included
+```
+
+It grows the tent to 4x5, puts the twelve strains it draws on into the strain
+library, evicts the fixture's anchor plant, and places seventeen plants in
+cohorts a fortnight or so apart — late, mid and early flower, one plant four
+days past the flip, and the veg pair behind it — leaving three positions empty
+so there is somewhere to demonstrate adding one. Then it **calls
+`seed-vision-history`** rather than reimplementing evidence seeding, so one
+command leaves a fresh clone demo-ready.
+
+Two things keep it honest. Everything goes in through `add_strain`, `add_plant`
+and `update_growspace` on the **running instance**, so the entities, the timeline
+and the stage arithmetic are the shipped implementation's rather than rows
+written behind Home Assistant's back — which is also why plants are read back
+from `/api/states` (each plant is an entity carrying its own `plant_id`) instead
+of from `.storage/growspace_manager.plants`, a file Home Assistant only flushes
+ten seconds late and which would make a second run place duplicates. And the
+stage dates are days before *today*, anchored on the `stage_days_ago` the demo
+profile declares in `e2e/entity_coverage.py`, so the tent the dashboard describes
+and the plants standing in it cannot drift apart.
+
+A position already occupied is reported and left alone, so a rerun is a no-op
+and never overwrites something added while demoing; `--clear` removes only the
+plants standing on a declared position under that position's declared strain,
+and leaves the growspace itself. Home Assistant must be up, with a token in
+`.ha-token` (`./scripts/ha dev token`) and the growspace already declared —
+`./scripts/e2e provision` on a fresh clone. Like `seed-vision-history` it reads
+and writes the **main** hub checkout's runtime even when run from a worktree,
+while the roster and the declarations come from the checkout it was invoked
+from, so a worktree exercises its own branch.
 
 The card is **code-split**: a thin `growspace-manager-card.js` entry plus ~16
 lazy `growspace-[name]-[hash].js` chunks. The whole `dist/` directory is

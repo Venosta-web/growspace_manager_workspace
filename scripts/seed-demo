@@ -1,0 +1,818 @@
+#!/usr/bin/env python3
+"""
+Seed the dev instance's Demo Tent with the content a demo walks through.
+
+  ./scripts/seed-demo                          # plants, then Vision history
+  ./scripts/seed-demo --growspace "E2E Vision"
+  ./scripts/seed-demo --no-vision              # plants only
+  ./scripts/seed-demo --list                   # what can be targeted
+  ./scripts/seed-demo --clear                  # remove what this seeded
+
+The `demo` capability profile in `e2e/entity_coverage.py` owns the growspace's
+entities and wiring; the card fixture that applies it places a single anchor
+plant in a 2x2 grid, which is right for a test fixture and wrong for a demo.
+This script owns the other half — the tent's **content** — so one command turns
+a fresh clone's Demo Tent into something worth showing.
+
+Nothing here is written behind Home Assistant's back. The roster goes in through
+`growspace_manager.add_strain` and `add_plant` on the running instance, so the
+plants get their entities, their timeline and their stage arithmetic from the
+shipped implementation, exactly as if a grower had typed them into the card. The
+one thing that is invented is the calendar: stage dates are expressed as days
+before today, so the tent reads the same on any day it is seeded.
+
+Vision evidence is not reimplemented here. `./scripts/seed-vision-history` owns
+it, and this script calls it, so the two cannot drift and one command leaves a
+fresh clone demo-ready.
+
+Prerequisites: Home Assistant must be up with the growspace already declared
+(`./scripts/ha dev up`, then `./scripts/e2e provision` on a fresh clone), and a
+long-lived token in `.ha-token` (`./scripts/ha dev token`). The delegated Vision
+seeding additionally needs the Vision App; `--no-vision` skips it.
+"""
+
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+import os
+import pathlib
+import subprocess
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from dataclasses import dataclass
+from datetime import date, timedelta
+
+# --------------------------------------------------------------------------
+# checkouts
+#
+# The runtime belongs to the MAIN hub checkout: ha-dev/ is bind-mounted from
+# beside docker-compose.yml and `scripts/ha` refuses to drive it from anywhere
+# else, so its token and its growspace store are the ones to read whichever
+# checkout this script was invoked from. The declarations and the sibling
+# scripts, in contrast, are code — those come from THIS checkout, so a worktree
+# exercises its own branch.
+# --------------------------------------------------------------------------
+HERE = pathlib.Path(__file__).resolve().parent.parent
+
+
+def main_hub_checkout() -> pathlib.Path:
+    """Return the main hub checkout, even when run from one of its worktrees."""
+    try:
+        common = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(HERE),
+                "rev-parse",
+                "--path-format=absolute",
+                "--git-common-dir",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return HERE
+    return pathlib.Path(common).parent.resolve()
+
+
+WORKSPACE = main_hub_checkout()
+HA_DEV = WORKSPACE / "ha-dev"
+CONFIG_STORE = HA_DEV / ".storage" / "growspace_manager.config"
+TOKEN_FILE = pathlib.Path(os.environ.get("E2E_TOKEN_FILE", WORKSPACE / ".ha-token"))
+HA_URL = os.environ.get("HA_BASE_URL", "http://127.0.0.1:8123")
+
+SEED_VISION_HISTORY = HERE / "scripts" / "seed-vision-history"
+COVERAGE = HERE / "e2e" / "entity_coverage.py"
+
+# The demo dashboard (.storage/lovelace.demo_tent) is a panel view holding one
+# card pinned to this growspace, so it is what "the demo setup" means here.
+DEFAULT_GROWSPACE = "Demo Tent"
+
+# The placeholder the card's own setup fixture drops into every growspace it
+# creates. It is a test fixture's anchor, not demo content, and it sits on
+# (1,1) — the first position this roster wants — so the demo evicts it.
+FIXTURE_ANCHOR_STRAIN = "E2E Anchor"
+
+
+def die(message: str) -> None:
+    """Exit with a message on stderr."""
+    sys.exit(f"error: {message}")
+
+
+# --------------------------------------------------------------------------
+# Home Assistant
+#
+# Everything the roster needs is on the REST API. Plants are entities — each one
+# carries its own `plant_id`, `growspace_id`, `row`, `col`, `strain` and
+# `phenotype` — so `/api/states` is a live read of the roster, with none of the
+# staleness of `.storage/growspace_manager.plants`, which Home Assistant only
+# flushes ten seconds after the fact and would make a second run place
+# duplicates.
+# --------------------------------------------------------------------------
+class HomeAssistant:
+    """The running dev instance, over its REST API."""
+
+    def __init__(self, base_url: str, token: str) -> None:
+        """Hold the endpoint and the long-lived token."""
+        self._base_url = base_url.rstrip("/")
+        self._token = token
+
+    def _request(self, method: str, path: str, payload: dict | None = None) -> object:
+        request = urllib.request.Request(
+            f"{self._base_url}{path}",
+            method=method,
+            data=None if payload is None else json.dumps(payload).encode(),
+            headers={
+                "Authorization": f"Bearer {self._token}",
+                "Content-Type": "application/json",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=60) as response:
+            body = response.read()
+        return json.loads(body) if body else None
+
+    def connect(self) -> None:
+        """Fail early and legibly rather than mid-roster."""
+        try:
+            self._request("GET", "/api/")
+        except urllib.error.HTTPError as error:
+            die(
+                f"Home Assistant rejected the token from {TOKEN_FILE}: {error}\n"
+                "       mint a new one with ./scripts/ha dev token"
+            )
+        except (urllib.error.URLError, TimeoutError) as error:
+            die(
+                f"Home Assistant is not reachable at {self._base_url}: {error}\n"
+                "       start it with ./scripts/ha dev up"
+            )
+        services = self._request("GET", "/api/services")
+        if not any(row.get("domain") == "growspace_manager" for row in services):
+            die(
+                "the growspace_manager integration is not set up on this instance;"
+                " run ./scripts/e2e provision"
+            )
+
+    def states(self) -> list[dict]:
+        """Every entity state, with attributes."""
+        return self._request("GET", "/api/states")
+
+    def call(self, service: str, data: dict) -> None:
+        """Call a growspace_manager service."""
+        try:
+            self._request("POST", f"/api/services/growspace_manager/{service}", data)
+        except urllib.error.HTTPError as error:
+            detail = error.read().decode(errors="replace").strip()
+            die(f"growspace_manager.{service} failed: {error} {detail}")
+
+
+def read_token() -> str:
+    """Read the long-lived token the same way scripts/e2e does."""
+    token = os.environ.get("HA_ACCESS_TOKEN", "")
+    if token:
+        return token.strip()
+    if not TOKEN_FILE.exists():
+        die(f"{TOKEN_FILE} not found — create one with ./scripts/ha dev token")
+    token = TOKEN_FILE.read_text().strip()
+    if not token:
+        die(f"{TOKEN_FILE} is empty — create one with ./scripts/ha dev token")
+    return token
+
+
+@dataclass(frozen=True)
+class Growspace:
+    """A growspace this script can target, as the running instance reports it."""
+
+    growspace_id: str
+    name: str
+
+
+@dataclass(frozen=True)
+class Plant:
+    """One plant already in the target, as its own entity reports it."""
+
+    plant_id: str
+    row: int
+    col: int
+    strain: str
+    phenotype: str
+
+
+def read_growspaces(states: list[dict]) -> list[Growspace]:
+    """Every growspace, read off the overview sensors' identity block."""
+    found = []
+    for state in states:
+        identity = state["attributes"].get("identity")
+        if not isinstance(identity, dict) or not identity.get("growspace_id"):
+            continue
+        found.append(
+            Growspace(identity["growspace_id"], identity.get("name", "") or "")
+        )
+    return found
+
+
+def read_plants(states: list[dict], growspace_id: str) -> list[Plant]:
+    """Every plant in one growspace. A plant state is one carrying a plant_id."""
+    plants = []
+    for state in states:
+        attributes = state["attributes"]
+        if not attributes.get("plant_id"):
+            continue
+        if attributes.get("growspace_id") != growspace_id:
+            continue
+        plants.append(
+            Plant(
+                attributes["plant_id"],
+                int(attributes.get("row", 0)),
+                int(attributes.get("col", 0)),
+                str(attributes.get("strain", "")),
+                str(attributes.get("phenotype", "") or ""),
+            )
+        )
+    return plants
+
+
+def read_stored_growspace(growspace_id: str) -> dict | None:
+    """Return the integration's own record for a growspace, or None.
+
+    The grid is the one thing the roster needs that no entity exposes, so it
+    comes from the store on the host — the file the hub's design rule says to
+    read rather than reach into a container for. A growspace created moments ago
+    is not in it yet, because Home Assistant flushes on a delay, and None says so
+    rather than guessing; that is safe here because a growspace that new is the
+    2x2 the card's fixture just made.
+    """
+    if not CONFIG_STORE.exists():
+        return None
+    growspaces = json.loads(CONFIG_STORE.read_text())["data"]["growspaces"]
+    return growspaces.get(growspace_id)
+
+
+def read_grid(growspace_id: str) -> tuple[int, int] | None:
+    """Return the growspace's (rows, plants_per_row), or None if not on disk yet."""
+    stored = read_stored_growspace(growspace_id)
+    if not stored:
+        return None
+    return int(stored.get("rows", 0)), int(stored.get("plants_per_row", 0))
+
+
+# --------------------------------------------------------------------------
+# the stage anchor
+#
+# The demo profile declares what stage the growspace is in — `flower_start`, 40
+# days back as this is written — and the dashboard, the controllers and the VPD
+# targets all read off that. The roster's main cohort therefore sits exactly on
+# it and every other cohort is an offset from it in days, so the tent the profile
+# describes and the plants standing in it cannot drift apart.
+# --------------------------------------------------------------------------
+def demo_stage_anchor() -> tuple[str, int]:
+    """Return the demo profile's declared (stage date field, days ago)."""
+    if not COVERAGE.exists():
+        die(f"no entity-coverage declaration at {COVERAGE}")
+    spec = importlib.util.spec_from_file_location("entity_coverage", COVERAGE)
+    module = importlib.util.module_from_spec(spec)
+    # `dataclasses` resolves a field's declaring module through sys.modules, so a
+    # module executed out of a file has to be registered before it is run.
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    for profile in module.PROFILES:
+        for instance in profile.instances:
+            if instance.name == DEFAULT_GROWSPACE:
+                return instance.plant_stage_field, instance.stage_days_ago
+    die(f"no profile instance declares a growspace named {DEFAULT_GROWSPACE!r}")
+
+
+STAGE_FIELD, ANCHOR_DAYS = demo_stage_anchor()
+if STAGE_FIELD != "flower_start":
+    die(
+        f"the demo profile now declares {STAGE_FIELD!r} rather than 'flower_start';"
+        " this roster tells a flowering tent's story and has to be rewritten"
+    )
+
+LATE_FLOWER = ANCHOR_DAYS + 19  # nine weeks in — the cohort coming down first
+MID_FLOWER = ANCHOR_DAYS  # the stage the profile declares for the growspace
+EARLY_FLOWER = ANCHOR_DAYS - 10  # four weeks in, stretch over and bulking
+JUST_FLIPPED = 4  # switched to 12/12 four days ago
+VEG = 37  # in veg since before that flip
+
+
+@dataclass(frozen=True)
+class Slot:
+    """One plant, at the grid position the demo expects to find it in."""
+
+    row: int
+    col: int
+    strain: str
+    phenotype: str = ""
+
+
+@dataclass(frozen=True)
+class Cohort:
+    """One planting: the same stage dates across a run of grid positions."""
+
+    label: str
+    stages: dict[str, int]
+    slots: tuple[Slot, ...]
+
+
+# --------------------------------------------------------------------------
+# the roster
+#
+# Plantings a fortnight or so apart, which is what makes the tent worth
+# demonstrating: one growspace showing late, mid and early flower, a plant four
+# days past the flip, and the veg pair coming up behind it. Rows are cohorts
+# because that is how a perpetual tent is actually run. The last three positions
+# are left empty on purpose — a demo should have somewhere to add a plant.
+# --------------------------------------------------------------------------
+ROSTER: tuple[Cohort, ...] = (
+    Cohort(
+        "late flower",
+        {"flower_start": LATE_FLOWER},
+        (
+            Slot(1, 1, "Wedding Cake", "Pheno #2"),
+            Slot(1, 2, "Gelato 33", "Purple"),
+            Slot(1, 3, "Gorilla Glue #4", "Cut A"),
+            Slot(1, 4, "Wedding Cake", "Pheno #2"),
+            Slot(1, 5, "Zkittlez"),
+        ),
+    ),
+    Cohort(
+        "mid flower",
+        {"flower_start": MID_FLOWER},
+        (
+            Slot(2, 1, "Blue Dream"),
+            Slot(2, 2, "Northern Lights", "NL#5"),
+            Slot(2, 3, "Purple Punch"),
+            Slot(2, 4, "Blue Dream"),
+            Slot(2, 5, "OG Kush", "Cut B"),
+        ),
+    ),
+    Cohort(
+        "early flower",
+        {"flower_start": EARLY_FLOWER},
+        (
+            Slot(3, 1, "Bruce Banner"),
+            Slot(3, 2, "White Widow"),
+            Slot(3, 3, "Sour Diesel", "East Cut"),
+            Slot(3, 4, "Amnesia Haze"),
+        ),
+    ),
+    Cohort(
+        "just flipped",
+        {"veg_start": VEG, "flower_start": JUST_FLIPPED},
+        (Slot(4, 1, "Gelato 33", "Purple"),),
+    ),
+    Cohort(
+        "veg",
+        {"veg_start": VEG},
+        (
+            Slot(4, 2, "Zkittlez"),
+            Slot(4, 3, "Wedding Cake", "Pheno #2"),
+        ),
+    ),
+)
+
+
+# --------------------------------------------------------------------------
+# the strain library
+#
+# A plant names a strain, so the strains have to be in the library before the
+# roster can draw on them — on a fresh clone it is empty. `add_strain` is an
+# upsert that COALESCEs over what is already stored, so seeding these is
+# idempotent and never overwrites a field somebody filled in by hand.
+# --------------------------------------------------------------------------
+STRAINS: tuple[dict[str, object], ...] = (
+    {
+        "strain": "Blue Dream",
+        "breeder": "Humboldt Seed Co",
+        "type": "Sativa-dominant Hybrid",
+        "lineage": "Blueberry x Haze",
+        "flower_days_min": 63,
+        "flower_days_max": 70,
+        "description": (
+            "Balanced daytime hybrid with a sweet berry nose and gentle cerebral lift."
+        ),
+    },
+    {
+        "strain": "Gorilla Glue #4",
+        "breeder": "GG Strains",
+        "type": "Hybrid",
+        "lineage": "Chem Sis x Sour Dubb x Chocolate Diesel",
+        "flower_days_min": 56,
+        "flower_days_max": 63,
+        "description": "Heavy resin producer. Pungent, earthy and famously sticky.",
+    },
+    {
+        "strain": "Northern Lights",
+        "breeder": "Sensi Seeds",
+        "type": "Indica",
+        "lineage": "Afghani x Thai",
+        "flower_days_min": 45,
+        "flower_days_max": 50,
+        "description": "Classic fast-flowering indica. Compact, forgiving and resinous.",
+    },
+    {
+        "strain": "Wedding Cake",
+        "breeder": "Seed Junky Genetics",
+        "type": "Indica-dominant Hybrid",
+        "lineage": "Triangle Kush x Animal Mints",
+        "flower_days_min": 56,
+        "flower_days_max": 63,
+        "description": "Dense, frosty colas with a sweet vanilla and pepper profile.",
+    },
+    {
+        "strain": "Gelato 33",
+        "breeder": "Cookies Fam",
+        "type": "Hybrid",
+        "lineage": "Sunset Sherbet x Thin Mint GSC",
+        "flower_days_min": 56,
+        "flower_days_max": 63,
+        "description": "Dessert terps with strong purple expression in cooler nights.",
+    },
+    {
+        "strain": "Zkittlez",
+        "breeder": "3rd Gen Family",
+        "type": "Indica-dominant Hybrid",
+        "lineage": "Grape Ape x Grapefruit",
+        "flower_days_min": 56,
+        "flower_days_max": 63,
+        "description": "Candy-sweet tropical nose, short and bushy structure.",
+    },
+    {
+        "strain": "OG Kush",
+        "breeder": "DNA Genetics",
+        "type": "Hybrid",
+        "lineage": "Chemdawg x Hindu Kush",
+        "flower_days_min": 56,
+        "flower_days_max": 63,
+        "description": "Fuel-forward classic. Stretchy — top early and often.",
+    },
+    {
+        "strain": "Purple Punch",
+        "breeder": "Supernova Gardens",
+        "type": "Indica",
+        "lineage": "Larry OG x Granddaddy Purple",
+        "flower_days_min": 49,
+        "flower_days_max": 56,
+        "description": "Grape and blueberry candy; heavy late-evening effect.",
+    },
+    {
+        "strain": "Sour Diesel",
+        "breeder": "Reserva Privada",
+        "type": "Sativa",
+        "lineage": "Chemdawg 91 x Super Skunk",
+        "flower_days_min": 70,
+        "flower_days_max": 77,
+        "description": "Long-flowering sativa with an unmistakable diesel bite.",
+    },
+    {
+        "strain": "Amnesia Haze",
+        "breeder": "Soma Seeds",
+        "type": "Sativa",
+        "lineage": "Original Haze x Afghani-Hawaiian",
+        "flower_days_min": 70,
+        "flower_days_max": 84,
+        "description": "Citrus haze, very high yield, needs vertical headroom.",
+    },
+    {
+        "strain": "White Widow",
+        "breeder": "Green House Seeds",
+        "type": "Hybrid",
+        "lineage": "Brazilian Sativa x South Indian Indica",
+        "flower_days_min": 56,
+        "flower_days_max": 63,
+        "description": "Trichome-heavy all-rounder; extremely stable phenotypes.",
+    },
+    {
+        "strain": "Bruce Banner",
+        "breeder": "Dark Horse Genetics",
+        "type": "Sativa-dominant Hybrid",
+        "lineage": "OG Kush x Strawberry Diesel",
+        "flower_days_min": 56,
+        "flower_days_max": 70,
+        "description": "Vigorous and hungry — rewards higher feed EC in mid-flower.",
+    },
+)
+
+
+def slots() -> tuple[tuple[Slot, Cohort], ...]:
+    """Every roster slot with its cohort, refusing two plants on one position."""
+    seen: dict[tuple[int, int], str] = {}
+    pairs = []
+    for cohort in ROSTER:
+        for slot in cohort.slots:
+            position = (slot.row, slot.col)
+            if position in seen:
+                die(
+                    f"the roster puts two plants on ({slot.row},{slot.col}): "
+                    f"{seen[position]} and {cohort.label}"
+                )
+            seen[position] = cohort.label
+            pairs.append((slot, cohort))
+    return tuple(pairs)
+
+
+def roster_extent() -> tuple[int, int]:
+    """The smallest grid the roster fits in."""
+    return (
+        max(slot.row for slot, _ in slots()),
+        max(slot.col for slot, _ in slots()),
+    )
+
+
+def plural(count: int, noun: str) -> str:
+    """Render a count with its noun, so a report of one reads like English."""
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
+def stage_date(days_ago: int) -> str:
+    """Render a stage date `days_ago` days before today, as the service wants it."""
+    return (date.today() - timedelta(days=days_ago)).isoformat()
+
+
+def resolve_target(wanted: str, growspaces: list[Growspace]) -> Growspace:
+    """Resolve a growspace by id or by name."""
+    for growspace in growspaces:
+        if growspace.growspace_id == wanted:
+            return growspace
+    matches = [g for g in growspaces if g.name.casefold() == wanted.casefold()]
+    if not matches:
+        die(
+            f"no growspace {wanted!r} — run with --list to see the choices.\n"
+            "       On a fresh clone the demo growspace is declared by"
+            " ./scripts/e2e provision."
+        )
+    if len(matches) > 1:
+        die(f"{wanted!r} names {len(matches)} growspaces; pass an id instead")
+    return matches[0]
+
+
+def list_targets(states: list[dict]) -> int:
+    """Print every growspace that can be seeded, and what is standing in it."""
+    rows, cols = roster_extent()
+    print(f"  instance: {HA_URL}")
+    print(f"  roster:   {len(slots())} plants over {rows}x{cols}")
+    for growspace in read_growspaces(states):
+        plants = read_plants(states, growspace.growspace_id)
+        grid = read_grid(growspace.growspace_id)
+        shape = f"{grid[0]}x{grid[1]}" if grid else "?"
+        seeded = sum(1 for plant in plants if is_seeded(plant))
+        note = f"{len(plants):>2} plants, {seeded:>2} from this roster"
+        print(f"  {growspace.name:<26} {growspace.growspace_id:<36} {shape:>5}  {note}")
+    return 0
+
+
+def is_seeded(plant: Plant) -> bool:
+    """Whether a plant is one this script placed.
+
+    A roster slot is a position and a strain, so a plant standing on a declared
+    position under that position's declared strain is this script's and nobody
+    else's. Anything else in the tent — a plant somebody added while demoing, a
+    strain swapped by hand — is left alone by --clear.
+    """
+    for slot, _ in slots():
+        if (plant.row, plant.col) == (slot.row, slot.col):
+            return plant.strain == slot.strain
+    return False
+
+
+# --------------------------------------------------------------------------
+# seeding
+# --------------------------------------------------------------------------
+def ensure_strains(hass: HomeAssistant) -> int:
+    """Put every strain and phenotype the roster names into the library."""
+    used = {slot.strain for slot, _ in slots()}
+    declared = {str(strain["strain"]) for strain in STRAINS}
+    missing = used - declared
+    if missing:
+        die(f"the roster names strains this script does not declare: {sorted(missing)}")
+
+    for strain in STRAINS:
+        if strain["strain"] not in used:
+            continue
+        hass.call("add_strain", dict(strain))
+    phenotypes = {
+        (slot.strain, slot.phenotype) for slot, _ in slots() if slot.phenotype
+    }
+    for strain_name, phenotype in sorted(phenotypes):
+        hass.call("add_strain", {"strain": strain_name, "phenotype": phenotype})
+    return len(used) + len(phenotypes)
+
+
+def ensure_grid(hass: HomeAssistant, target: Growspace) -> str:
+    """Grow the tent to at least the roster's extent, never shrinking it.
+
+    `update_growspace` reads every field off the call and writes it through, so a
+    field left out is written as None rather than left alone — omitting `name`
+    erases the growspace's name. It is a replace, not a patch, so everything this
+    is not changing is resent with it.
+    """
+    rows, cols = roster_extent()
+    stored = read_stored_growspace(target.growspace_id) or {}
+    grid = read_grid(target.growspace_id)
+    if grid and grid[0] >= rows and grid[1] >= cols:
+        return f"{grid[0]}x{grid[1]}  [already fits]"
+    wanted = (max(rows, grid[0]), max(cols, grid[1])) if grid else (rows, cols)
+    payload = {
+        "growspace_id": target.growspace_id,
+        "name": target.name,
+        "rows": wanted[0],
+        "plants_per_row": wanted[1],
+    }
+    if stored.get("notification_target"):
+        payload["notification_target"] = stored["notification_target"]
+    hass.call("update_growspace", payload)
+    was = f"{grid[0]}x{grid[1]}" if grid else "a fixture's grid"
+    return f"{wanted[0]}x{wanted[1]}  [grown from {was}]"
+
+
+def evict_fixture_anchor(hass: HomeAssistant, plants: list[Plant]) -> int:
+    """Remove the card fixture's anchor plant, which the roster replaces."""
+    removed = 0
+    for plant in plants:
+        if plant.strain != FIXTURE_ANCHOR_STRAIN:
+            continue
+        hass.call("remove_plant", {"plant_id": plant.plant_id})
+        removed += 1
+    return removed
+
+
+def seed_plants(hass: HomeAssistant, target: Growspace, plants: list[Plant]) -> dict:
+    """Place every roster slot that is not standing already.
+
+    `add_plant` silently relocates to the next free position when the one it was
+    given is taken, so occupancy is decided here rather than left to the service
+    — that is what keeps a second run from stacking a duplicate roster into the
+    empty half of the tent.
+    """
+    occupied = {(plant.row, plant.col): plant for plant in plants}
+    counts = {"placed": 0, "present": 0, "occupied": 0}
+    for slot, cohort in slots():
+        standing = occupied.get((slot.row, slot.col))
+        if standing is not None:
+            if standing.strain == slot.strain:
+                counts["present"] += 1
+            else:
+                counts["occupied"] += 1
+                print(
+                    f"    ({slot.row},{slot.col}) holds {standing.strain} rather than "
+                    f"{slot.strain} — left alone"
+                )
+            continue
+        hass.call(
+            "add_plant",
+            {
+                "growspace_id": target.growspace_id,
+                "strain": slot.strain,
+                "phenotype": slot.phenotype,
+                "row": slot.row,
+                "col": slot.col,
+                **{field: stage_date(days) for field, days in cohort.stages.items()},
+            },
+        )
+        counts["placed"] += 1
+    return counts
+
+
+def clear_plants(hass: HomeAssistant, plants: list[Plant]) -> int:
+    """Remove the plants this script seeded, leaving the growspace itself alone."""
+    removed = 0
+    for plant in plants:
+        if not is_seeded(plant):
+            continue
+        hass.call("remove_plant", {"plant_id": plant.plant_id})
+        removed += 1
+    return removed
+
+
+# --------------------------------------------------------------------------
+# the Vision evidence, which this script does not own
+# --------------------------------------------------------------------------
+def seed_vision_history(target: Growspace, extra: list[str]) -> int:
+    """Delegate to ./scripts/seed-vision-history for the Vision Checkup history."""
+    if not SEED_VISION_HISTORY.exists():
+        die(f"no {SEED_VISION_HISTORY}")
+    command = [
+        sys.executable,
+        str(SEED_VISION_HISTORY),
+        "--growspace",
+        target.growspace_id,
+        *extra,
+    ]
+    print(f"  $ {' '.join(command[1:])}")
+    # The child writes straight to the terminal; flush first so its output does
+    # not land above this script's when stdout is a pipe rather than a tty.
+    sys.stdout.flush()
+    return subprocess.run(command, check=False).returncode
+
+
+# --------------------------------------------------------------------------
+# entry point
+# --------------------------------------------------------------------------
+def parse_args(argv):
+    """Parse the command line."""
+    parser = argparse.ArgumentParser(
+        description="Seed the dev instance's Demo Tent with the demo's content.",
+    )
+    parser.add_argument(
+        "--growspace",
+        default=DEFAULT_GROWSPACE,
+        help="growspace id or name (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--no-vision",
+        action="store_true",
+        help="skip the delegated Vision Checkup history",
+    )
+    parser.add_argument(
+        "--vision-days",
+        type=int,
+        default=None,
+        help="days of Vision history (default: seed-vision-history's own)",
+    )
+    parser.add_argument(
+        "--clear",
+        action="store_true",
+        help="remove the plants this seeded, and the evidence, and exit",
+    )
+    parser.add_argument(
+        "--list", action="store_true", help="list the growspaces that can be seeded"
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv) -> int:
+    """Seed, clear or list."""
+    args = parse_args(argv)
+    print(f"  workspace: {WORKSPACE}")
+    print(f"  scripts:   {HERE}")
+
+    hass = HomeAssistant(HA_URL, read_token())
+    hass.connect()
+    states = hass.states()
+
+    if args.list:
+        return list_targets(states)
+
+    target = resolve_target(args.growspace, read_growspaces(states))
+    plants = read_plants(states, target.growspace_id)
+    print(f"  instance:  {HA_URL}")
+    print(f"  growspace: {target.name}  ({target.growspace_id})")
+
+    if args.clear:
+        removed = clear_plants(hass, plants)
+        print(
+            f"  removed {plural(removed, 'seeded plant')};"
+            " the growspace itself is untouched"
+        )
+        if args.no_vision:
+            return 0
+        print("  clearing the Vision evidence ...")
+        return seed_vision_history(target, ["--clear"])
+
+    print(f"  strains:   {ensure_strains(hass)} library entries")
+    print(f"  grid:      {ensure_grid(hass, target)}")
+    evicted = evict_fixture_anchor(hass, plants)
+    if evicted:
+        print(f"  evicted {plural(evicted, f'{FIXTURE_ANCHOR_STRAIN} fixture plant')}")
+        plants = [p for p in plants if p.strain != FIXTURE_ANCHOR_STRAIN]
+
+    counts = seed_plants(hass, target, plants)
+    print(
+        f"  planted {counts['placed']}, {counts['present']} already standing, "
+        f"{plural(counts['occupied'], 'position')} held by something else"
+    )
+    for cohort in ROSTER:
+        stages = "  ".join(
+            f"{field.removesuffix('_start')} day {days}"
+            for field, days in cohort.stages.items()
+        )
+        print(
+            f"    {cohort.label:<14} {plural(len(cohort.slots), 'plant'):>9}   {stages}"
+        )
+
+    if args.no_vision:
+        print()
+        print("  Vision history skipped. Seed it with:")
+        print(f"    ./scripts/seed-vision-history --growspace {target.name!r}")
+        return 0
+
+    print()
+    print("  seeding the Vision Checkup history ...")
+    extra = [] if args.vision_days is None else ["--days", str(args.vision_days)]
+    status = seed_vision_history(target, extra)
+    if status != 0:
+        print()
+        print(
+            "  NOTE: the roster is in place; only the Vision history failed. "
+            "Retry it on its own once the Vision App is up."
+        )
+    return status
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

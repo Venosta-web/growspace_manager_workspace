@@ -17,6 +17,7 @@ extend-include = [
     "scripts/check-e2e-coverage",
     "scripts/gen-e2e-camera-assets",
     "scripts/gen-e2e-sensors",
+    "scripts/seed-demo",
     "scripts/seed-vision-history",
 ]
 
