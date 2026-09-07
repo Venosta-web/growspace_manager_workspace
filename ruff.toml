@@ -18,6 +18,7 @@ extend-include = [
     "scripts/gen-e2e-camera-assets",
     "scripts/gen-e2e-sensors",
     "scripts/seed-demo",
+    "scripts/seed-tc-world",
     "scripts/seed-vision-history",
 ]
 

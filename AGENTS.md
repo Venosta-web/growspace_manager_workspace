@@ -53,8 +53,9 @@ the host path instead.
 ./scripts/ha test up       # http://localhost:8124 — virgin config, HACS test
 ./scripts/vision build     # build the locked native amd64 Vision App image
 ./scripts/vision smoke     # analyze both deterministic camera fixtures
-./scripts/seed-demo             # the demo's own content: plants, then Vision
+./scripts/seed-demo             # the demo's own content, all three halves of it
 ./scripts/seed-vision-history   # fake Vision Checkup history for the demo
+./scripts/seed-tc-world         # a worked tissue-culture bench for the demo
 ```
 
 `ha dev up|restart` starts the production Vision App image before Home
@@ -181,21 +182,72 @@ if its store failed to open when you seeded. Both the database and the images
 are gitignored, and the script writes to the **main** hub checkout's `ha-dev/`
 even when run from a worktree, because that is the only one the runtime mounts.
 
+### The tissue-culture bench, which is not seeded through the API
+
+A fresh install of Growspace Manager TC is functional and **empty**, so the
+Tissue Culture dialog opens onto "Nothing is due. Every vessel still has time on
+the medium it is on." — the same screen an install with a full bench shows on a
+quiet day, and therefore the one screen a demo must not land on.
+
+`./scripts/seed-tc-world` builds a worked bench: four Culture Media over five
+Medium Versions, seven Culture Lines, twenty Cultures across five Locations,
+twenty-five Maintenance Actions reaching back ninety days, and four Pairings.
+
+```bash
+./scripts/seed-tc-world           # the bench
+./scripts/seed-tc-world --report  # what the store holds of this script's
+./scripts/seed-tc-world --clear   # drop it
+```
+
+**It writes the store directly, and that is the point.**
+`MaintenanceAction.recorded()` takes an optional `now`, but no TC WebSocket
+schema exposes `recorded_at` and no handler passes one — so an API-driven seed
+stamps every act today, every Replate Due Date lands at today plus its interval,
+and the Worklist stays empty: the same empty screen with ninety days of history
+behind it. The calendar is therefore the one thing invented. Everything else
+comes from TC's own models and repository, imported out of the checkout the way
+`seed-vision-history` imports the Vision evidence schema — which Medium Version
+a Plating pins, what a division does to a Culture's identity, which acts an
+ended vessel refuses. They cannot drift from the shipped rules without this
+script failing loudly.
+
+Three consequences worth knowing. **Home Assistant holds this state in memory
+and saves over the file**, so seed with it down or restart it afterwards; the
+script says which of the two applies on the run you just did, and `seed-demo`
+runs it last so that notice is the last thing printed. Six of the seven lines
+reference phenotypes by Growspace Manager's own key (`"<strain>|<phenotype>"`,
+the string the card's client-side join indexes on) and the script **refuses**
+if the strain library does not hold them — run `./scripts/seed-demo` first. And
+the seventh references a phenotype nobody grows, on purpose: a **Missing
+Phenotype** is the one TC state that cannot appear without being constructed,
+and the script refuses just as loudly if the demo roster ever grows that strain
+and quietly resolves it.
+
+Records are recognised by declaration rather than by a marker of their own — a
+medium this script named, a line pointing at a phenotype it references, and
+everything hanging off such a line — so `--clear` leaves a medium you mixed by
+hand and a line you introduced from the card alone, and a rerun over a bench
+that is already there reports it and changes nothing. The removal is done to the
+persisted dictionary rather than through the repository, because Maintenance
+Actions are append-only by design and that is a rule about the product's history,
+not about a demo's scaffolding.
+
 ### One command for the whole demo
 
-Vision evidence is half of it. The other half is that a fresh clone's Demo Tent
-is an **empty tent**: the `demo` capability profile owns the growspace's entities
-and wiring, and the card fixture that applies it drops one anchor plant into a
-2x2 grid — right for a test fixture, wrong for a demo.
+Vision evidence is one part of it and the bench another. The third is that a
+fresh clone's Demo Tent is an **empty tent**: the `demo` capability profile owns
+the growspace's entities and wiring, and the card fixture that applies it drops
+one anchor plant into a 2x2 grid — right for a test fixture, wrong for a demo.
 
 `./scripts/seed-demo` owns the content:
 
 ```bash
-./scripts/seed-demo                     # plants, then the Vision history
+./scripts/seed-demo                     # plants, the Vision history, the bench
 ./scripts/seed-demo --growspace "E2E Vision"
-./scripts/seed-demo --no-vision         # plants only
+./scripts/seed-demo --no-vision         # skip the Vision history
+./scripts/seed-demo --no-tc             # skip the tissue-culture bench
 ./scripts/seed-demo --list              # what can be targeted
-./scripts/seed-demo --clear             # remove what it seeded, evidence included
+./scripts/seed-demo --clear             # remove what it seeded, all three parts
 ```
 
 It grows the tent to 4x5, puts the twelve strains it draws on into the strain
@@ -203,8 +255,10 @@ library, evicts the fixture's anchor plant, and places seventeen plants in
 cohorts a fortnight or so apart — late, mid and early flower, one plant four
 days past the flip, and the veg pair behind it — leaving three positions empty
 so there is somewhere to demonstrate adding one. Then it **calls
-`seed-vision-history`** rather than reimplementing evidence seeding, so one
-command leaves a fresh clone demo-ready.
+`seed-vision-history` and `seed-tc-world`** rather than reimplementing either,
+so none of the three can drift and one command leaves a fresh clone demo-ready.
+The bench goes last, because its Home Assistant restart requirement is the only
+thing in the run that is not already live.
 
 Two things keep it honest. Everything goes in through `add_strain`, `add_plant`
 and `update_growspace` on the **running instance**, so the entities, the timeline
