@@ -5,6 +5,7 @@ Seed the dev instance's Tissue Culture world, so the TC dialog opens onto work.
   ./scripts/seed-tc-world            # media, lines, cultures, history, pairings
   ./scripts/seed-tc-world --clear    # remove what this seeded
   ./scripts/seed-tc-world --report   # say what the store holds, change nothing
+  ./scripts/seed-tc-world --no-graduated-plant   # bench only, no Home Assistant
 
 A fresh install of Growspace Manager TC is functional and empty, so the dialog
 opens onto "Nothing is due. Every vessel still has time on the medium it is on."
@@ -24,15 +25,29 @@ out of the TC checkout. They cannot drift from the shipped rules without this
 script failing loudly, which is the same bargain `seed-vision-history` strikes
 with the Vision evidence schema.
 
+**Graduation is the one act this script cannot record alone.** It is the only
+one whose data crosses back into Growspace Manager: TC ends the Culture, then
+optionally calls GM's public `add_plant` service and links the plant it gets
+back onto the recorded act. Written in-process that bridge does not happen, so
+every seeded Graduation would end its Culture with no plant — the state TC's own
+error path records when the bridge fails, and never the one it records when it
+works. So this script calls that same service on the running instance, in that
+same order, and seeds one Graduation of each kind: one linked to a plant that
+really stands in the `clone` growspace, and one unlinked, because a failed
+bridge is a real state nobody would otherwise ever see.
+
 **Home Assistant holds this state in memory and saves over the file.** Seed with
 it down, or restart it afterwards; the script says which of the two applies on
 the run you just did.
 
 Prerequisites: the growspace_manager_tc checkout (`GROWSPACE_TC` to select
 another), and a strain library holding the phenotypes the Culture Lines
-reference — `./scripts/seed-demo` puts them there. Home Assistant need not be
-running, and the TC integration need not be set up: the store is a plain host
-file, and an entry added later loads it.
+reference — `./scripts/seed-demo` puts them there. The bench itself needs
+neither Home Assistant nor a TC config entry: the store is a plain host file,
+and an entry added later loads it. The linked Graduation is the exception, and
+the only one — it needs the running instance and a token in `.ha-token`, the
+same two things `seed-demo` needs. `--no-graduated-plant` gives up that half of
+the story and asks nothing of Home Assistant.
 """
 
 from __future__ import annotations
@@ -93,6 +108,13 @@ TC = pathlib.Path(
 ).resolve()
 
 HA_URL = os.environ.get("HA_BASE_URL", "http://127.0.0.1:8123")
+TOKEN_FILE = pathlib.Path(os.environ.get("E2E_TOKEN_FILE", WORKSPACE / ".ha-token"))
+
+# Where a graduated vessel lands. `clone` is one of Growspace Manager's canonical
+# growspaces rather than a name somebody chose, so it is there on every install
+# and it is the one whose stage is the plant's: a plantlet out of vitro is a
+# clone, and `clone_start` is the date the bridge sets on it.
+CLONE_GROWSPACE = "clone"
 
 
 def die(message: str) -> None:
@@ -377,6 +399,21 @@ LINES: tuple[Line, ...] = (
 # before the repository has minted an ID for it.
 # --------------------------------------------------------------------------
 @dataclass(frozen=True)
+class Planting:
+    """Where a Graduation's bridge puts the plant it creates in Growspace Manager.
+
+    Only the destination is declared. The genetics are the line's own, resolved
+    through Growspace Manager's strain library the way the card's graduation
+    form resolves them — TC never decodes its opaque phenotype reference, and
+    neither does this.
+    """
+
+    growspace: str
+    row: int
+    col: int
+
+
+@dataclass(frozen=True)
 class Act:
     """One Maintenance Action against one vessel of one line."""
 
@@ -390,6 +427,10 @@ class Act:
     # Replate only. Each entry is (plantlet count, location); a `None` location
     # means "wherever it already was", which is what the model reads it as.
     vessels: tuple[tuple[int | None, str | None], ...] = ()
+    # Graduation only: the plant the bridge creates in Growspace Manager and
+    # links back onto this act. `None` records the graduation TC's error path
+    # writes when that call fails — an ending with nothing on the other side.
+    plant: Planting | None = None
 
 
 HISTORY: tuple[Act, ...] = (
@@ -437,12 +478,24 @@ HISTORY: tuple[Act, ...] = (
         medium=MS_IBA,
         vessels=((4, ROOTING_CABINET), (3, ROOTING_CABINET)),
     ),
+    # Both rooted vessels come out of vitro a day apart, and only one of them
+    # reaches Growspace Manager. That is not a story about the grower: it is the
+    # two states the bridge can leave behind, and the failed one is worth seeing
+    # precisely because nothing but a failure ever produces it.
     Act(
         3,
         "gelato",
         2,
         "graduate",
-        note="Potted into the veg row — the first of this cut out of vitro.",
+        note="Potted and onto the clone bench — the first of this cut out of vitro.",
+        plant=Planting(CLONE_GROWSPACE, 1, 1),
+    ),
+    Act(
+        2,
+        "gelato",
+        1,
+        "graduate",
+        note="The sister vessel, out the next morning while the tray was open.",
     ),
     # Gorilla Glue #4 — the line that lost a vessel to contamination
     Act(40, "gg4", 0, "replate", medium=MS_BAP, vessels=((6, None), (5, None))),
@@ -547,6 +600,7 @@ PAIRINGS: tuple[Endorsement, ...] = (
 MEDIUM_NAMES = {medium.name for medium in MEDIA}
 LINES_BY_KEY = {line.key: line for line in LINES}
 PHENOTYPE_IDS = {line.phenotype_id for line in LINES}
+GRADUATIONS = tuple(act for act in HISTORY if act.kind == "graduate")
 
 
 def check_declarations() -> None:
@@ -560,6 +614,19 @@ def check_declarations() -> None:
             die(f"the history acts on an undeclared line {act.line!r}")
         if act.medium and act.medium not in MEDIUM_NAMES:
             die(f"the history plates onto an undeclared medium {act.medium!r}")
+        if act.plant is not None and act.kind != "graduate":
+            die(f"only a graduation creates a plant, and {act.kind!r} is not one")
+    # The two halves of the bridge, each of which has to be exactly one: a demo
+    # that shows two linked graduations shows the same thing twice, and one that
+    # shows none has lost the only act crossing back into Growspace Manager.
+    linked = [act for act in GRADUATIONS if act.plant is not None]
+    if len(linked) != 1:
+        die(f"the history declares {len(linked)} graduations with a plant, not one")
+    if len(GRADUATIONS) - len(linked) != 1:
+        die(
+            f"the history declares {len(GRADUATIONS) - len(linked)} graduations"
+            " without a plant, not one"
+        )
     for endorsement in PAIRINGS:
         if endorsement.line not in LINES_BY_KEY:
             die(f"a pairing endorses an undeclared line {endorsement.line!r}")
@@ -567,8 +634,8 @@ def check_declarations() -> None:
             die(f"a pairing endorses an undeclared medium {endorsement.medium!r}")
 
 
-def check_strain_library() -> None:
-    """Refuse a bench whose names would all read as missing.
+def check_strain_library() -> dict[str, tuple[str, str]]:
+    """Refuse a bench whose names would all read as missing, and return the join.
 
     Six of the seven lines exist so the audience recognises the names off the
     tent, and a run before `./scripts/seed-demo` has filled the library would
@@ -578,6 +645,11 @@ def check_strain_library() -> None:
     the strain this line references, the Missing Phenotype quietly resolves and
     the one TC state that has to be constructed on purpose is gone; better to
     fail here than to discover it on stage.
+
+    What comes back is the library keyed by Phenotype Reference, which is the
+    same lookup the card's graduation form does to fill in a graduating vessel's
+    genetics — the reference stays opaque, and Growspace Manager's own row says
+    what strain and phenotype it names.
     """
     if not STRAIN_LIBRARY.exists():
         die(
@@ -586,13 +658,20 @@ def check_strain_library() -> None:
         )
     connection = sqlite3.connect(f"file:{STRAIN_LIBRARY}?mode=ro", uri=True)
     try:
-        known = {
-            f"{strain}|{phenotype}"
+        library = {
+            f"{strain}|{phenotype}": (
+                strain,
+                # `default` is how the library spells "this strain has no
+                # phenotypes", and a plant carrying it as one would read as a
+                # phenotype called default. The card drops it here too.
+                "" if phenotype == "default" else phenotype,
+            )
             for strain, phenotype in connection.execute(
                 "SELECT s.strain_name, p.phenotype_name FROM phenotypes p"
                 " JOIN strains s ON s.strain_id = p.strain_id"
             )
         }
+        known = set(library)
     except sqlite3.DatabaseError as error:
         die(f"cannot read the strain library at {STRAIN_LIBRARY}: {error}")
     finally:
@@ -621,6 +700,7 @@ def check_strain_library() -> None:
             " Phenotype;\n       point that line at a phenotype nobody grows, or"
             " drop the strain from the roster"
         )
+    return library
 
 
 # --------------------------------------------------------------------------
@@ -636,6 +716,10 @@ class Built:
     vessels: dict[str, list[object]] = field(default_factory=dict)
     actions: int = 0
     pairings: int = 0
+    # Every Graduation as recorded, beside the act that asked for it, because
+    # the bridge that follows needs both: the plant the act declares, and the
+    # recorded instant the plant's clone-start has to match.
+    graduations: list[tuple[Act, object]] = field(default_factory=list)
 
 
 def version_in_force(medium, at: str) -> int:
@@ -727,8 +811,9 @@ def build(repository) -> Built:
             repository.discard_culture(culture_id, act.reason, note=act.note, now=at)
             vessels[act.vessel] = repository.culture(culture_id)
         elif act.kind == "graduate":
-            repository.graduate_culture(culture_id, note=act.note, now=at)
+            action = repository.graduate_culture(culture_id, note=act.note, now=at)
             vessels[act.vessel] = repository.culture(culture_id)
+            built.graduations.append((act, action))
         else:
             die(f"the history carries an act this script cannot record: {act.kind!r}")
         built.actions += 1
@@ -839,6 +924,27 @@ def seeded(data: dict) -> dict[str, set[str]]:
     }
 
 
+def graduations_in(data: dict, found: dict[str, set[str]]) -> tuple[int, list[str]]:
+    """Return this script's Graduations in the store, and the plants they name.
+
+    Read off the acts rather than derived from the declaration, because the
+    link is the fact: a plant this script created and then lost track of is
+    still named by the graduation that created it.
+    """
+    graduations = [
+        row
+        for action_id, row in records(
+            data, CONST.COLLECTION_MAINTENANCE_ACTIONS
+        ).items()
+        if action_id in found[CONST.COLLECTION_MAINTENANCE_ACTIONS]
+        and isinstance(row, dict)
+        and row.get("action") == "graduate"
+    ]
+    return len(graduations), [
+        str(row["plant_id"]) for row in graduations if row.get("plant_id")
+    ]
+
+
 def drop(data: dict, found: dict[str, set[str]]) -> int:
     """Remove the given IDs from the store's collections, in place.
 
@@ -859,7 +965,255 @@ def drop(data: dict, found: dict[str, set[str]]) -> int:
 
 
 # --------------------------------------------------------------------------
-# Home Assistant, which is not driven here but does hold this state
+# Growspace Manager, the other side of the bridge
+#
+# The only part of this script that goes through Home Assistant rather than
+# around it, and it has to: a plant is Growspace Manager's record, and writing
+# one behind its back would give it no entity, no timeline and no stage
+# arithmetic. So the plant is created by the same public service TC's own
+# bridge calls, with the same `clone_start`, and its returned ID is what the
+# Graduation is linked to.
+# --------------------------------------------------------------------------
+def read_token() -> str:
+    """Read the long-lived token the same way `seed-demo` does."""
+    token = os.environ.get("HA_ACCESS_TOKEN", "")
+    if token:
+        return token.strip()
+    if not TOKEN_FILE.exists():
+        die(
+            f"{TOKEN_FILE} not found — create one with ./scripts/ha dev token,\n"
+            "       or seed the bench alone with --no-graduated-plant"
+        )
+    token = TOKEN_FILE.read_text().strip()
+    if not token:
+        die(f"{TOKEN_FILE} is empty — create one with ./scripts/ha dev token")
+    return token
+
+
+@dataclass(frozen=True)
+class StandingPlant:
+    """One plant already in a growspace, as its own entity reports it."""
+
+    plant_id: str
+    row: int
+    col: int
+    strain: str
+    clone_start: str
+
+
+class GrowspaceManager:
+    """The running instance's Growspace Manager, over its REST API."""
+
+    def __init__(self, base_url: str, token: str) -> None:
+        """Hold the endpoint and the long-lived token."""
+        self._base_url = base_url.rstrip("/")
+        self._token = token
+
+    def _request(self, method: str, path: str, payload: dict | None = None) -> object:
+        request = urllib.request.Request(
+            f"{self._base_url}{path}",
+            method=method,
+            data=None if payload is None else json.dumps(payload).encode(),
+            headers={
+                "Authorization": f"Bearer {self._token}",
+                "Content-Type": "application/json",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=60) as response:
+            body = response.read()
+        return json.loads(body) if body else None
+
+    def connect(self) -> None:
+        """Fail early and legibly rather than half way through the bridge."""
+        try:
+            self._request("GET", "/api/")
+        except urllib.error.HTTPError as error:
+            die(
+                f"Home Assistant rejected the token from {TOKEN_FILE}: {error}\n"
+                "       mint a new one with ./scripts/ha dev token"
+            )
+        except (urllib.error.URLError, TimeoutError, OSError) as error:
+            die(
+                f"Home Assistant is not reachable at {self._base_url}: {error}\n"
+                "       start it with ./scripts/ha dev up, or seed the bench alone"
+                " with --no-graduated-plant"
+            )
+        services = self._request("GET", "/api/services")
+        if not any(row.get("domain") == "growspace_manager" for row in services):
+            die(
+                "the growspace_manager integration is not set up on this instance;"
+                " run ./scripts/e2e provision"
+            )
+
+    def states(self) -> list[dict]:
+        """Every entity state, with attributes.
+
+        `/api/states` rather than the plant store, for the reason `seed-demo`
+        reads it: Home Assistant flushes that file ten seconds late, and a plant
+        this script created moments ago would not be in it yet.
+        """
+        return self._request("GET", "/api/states")
+
+    def add_plant(self, payload: dict) -> str:
+        """Create one plant and return its ID, as the graduation bridge does."""
+        try:
+            response = self._request(
+                "POST",
+                "/api/services/growspace_manager/add_plant?return_response",
+                payload,
+            )
+        except urllib.error.HTTPError as error:
+            detail = error.read().decode(errors="replace").strip()
+            die(f"growspace_manager.add_plant failed: {error} {detail}")
+        plant_id = (response or {}).get("service_response", {}).get("plant_id")
+        if not plant_id:
+            die(f"growspace_manager.add_plant returned no plant: {response!r}")
+        return str(plant_id)
+
+    def update_plant(self, payload: dict) -> None:
+        """Change one plant, which the bridge does only to a date it owns."""
+        try:
+            self._request(
+                "POST", "/api/services/growspace_manager/update_plant", payload
+            )
+        except urllib.error.HTTPError as error:
+            detail = error.read().decode(errors="replace").strip()
+            die(f"growspace_manager.update_plant failed: {error} {detail}")
+
+    def remove_plant(self, plant_id: str) -> None:
+        """Remove one plant, tolerating one that is already gone."""
+        try:
+            self._request(
+                "POST",
+                "/api/services/growspace_manager/remove_plant",
+                {"plant_id": plant_id},
+            )
+        except urllib.error.HTTPError as error:
+            detail = error.read().decode(errors="replace").strip()
+            print(f"    plant {plant_id} could not be removed: {error} {detail}")
+
+
+def read_plants(states: list[dict], growspace_id: str) -> list[StandingPlant]:
+    """Every plant in one growspace. A plant state is one carrying a plant_id."""
+    standing = []
+    for state in states:
+        attributes = state["attributes"]
+        if not attributes.get("plant_id"):
+            continue
+        if attributes.get("growspace_id") != growspace_id:
+            continue
+        standing.append(
+            StandingPlant(
+                attributes["plant_id"],
+                int(attributes.get("row", 0)),
+                int(attributes.get("col", 0)),
+                str(attributes.get("strain", "")),
+                str(attributes.get("clone_start", "") or ""),
+            )
+        )
+    return standing
+
+
+def check_growspace(states: list[dict], growspace_id: str) -> None:
+    """Refuse a graduation into a growspace the instance does not have."""
+    for state in states:
+        identity = state["attributes"].get("identity")
+        if isinstance(identity, dict) and identity.get("growspace_id") == growspace_id:
+            return
+    die(
+        f"this instance has no {growspace_id!r} growspace for a graduate to land in;"
+        "\n       run ./scripts/e2e provision, or seed the bench alone with"
+        " --no-graduated-plant"
+    )
+
+
+def graduated_plant(
+    states: list[dict], planting: Planting, strain: str
+) -> StandingPlant | None:
+    """Return the plant already standing where a Graduation puts one, or None.
+
+    The same recognition `seed-demo` uses — a declared position under that
+    position's declared strain is this script's — and it is what makes a second
+    run place no duplicate. It matters beyond a plain rerun: Home Assistant
+    saves the TC store over this script's work if it is not restarted, and the
+    rerun that follows would otherwise graduate into a second plant.
+
+    A position held by something else is refused rather than worked around,
+    because `add_plant` silently relocates to the next free cell and a demo
+    whose graduate wanders is worse than one that says why it stopped.
+    """
+    for plant in read_plants(states, planting.growspace):
+        if (plant.row, plant.col) != (planting.row, planting.col):
+            continue
+        if plant.strain != strain:
+            die(
+                f"({planting.row},{planting.col}) in the {planting.growspace!r}"
+                f" growspace holds {plant.strain!r} rather than the {strain!r} this"
+                " graduation plants there;\n       move it, or point the graduation"
+                " at a free position"
+            )
+        return plant
+    return None
+
+
+@dataclass(frozen=True)
+class Bridged:
+    """The plant one Graduation ended up linked to, and how it got there."""
+
+    planting: Planting
+    plant_id: str
+    how: str
+
+
+def cross_the_bridge(
+    repository, gm: GrowspaceManager, built: Built, library: dict
+) -> Bridged | None:
+    """Create the graduated plant and link it, in the order TC does.
+
+    The ending is already recorded in `repository` when this runs, exactly as
+    `websocket_graduate` saves it before calling the service — so a failure here
+    is the failure TC survives, and the unlinked graduation beside this one is
+    what it leaves behind.
+    """
+    states = gm.states()
+    for act, action in built.graduations:
+        if act.plant is None:
+            continue
+        check_growspace(states, act.plant.growspace)
+        strain, phenotype = library[LINES_BY_KEY[act.line].phenotype_id]
+        standing = graduated_plant(states, act.plant, strain)
+        if standing is None:
+            plant_id = gm.add_plant(
+                {
+                    "growspace_id": act.plant.growspace,
+                    "strain": strain,
+                    "phenotype": phenotype,
+                    "row": act.plant.row,
+                    "col": act.plant.col,
+                    # The one field the bridge adds for itself: a graduate's
+                    # clone-start is the instant its Graduation was recorded.
+                    "clone_start": action.recorded_at,
+                }
+            )
+            how = "planted at"
+        else:
+            plant_id = standing.plant_id
+            how = "adopted the plant already standing at"
+            if standing.clone_start != action.recorded_at:
+                # The calendar moved under a plant that outlived its graduation
+                # — a store Home Assistant saved over, reseeded on a later day.
+                # The link is only honest if the date it implies is.
+                gm.update_plant(
+                    {"plant_id": plant_id, "clone_start": action.recorded_at}
+                )
+                how = "corrected the clone-start of the plant standing at"
+        repository.link_graduated_plant(action.id, plant_id)
+        return Bridged(act.plant, plant_id, how)
+    return None
+
+
+# --------------------------------------------------------------------------
+# Home Assistant, which holds this store in memory whatever is written here
 # --------------------------------------------------------------------------
 def home_assistant_is_up() -> bool:
     """Whether something is answering as Home Assistant on the dev port."""
@@ -905,6 +1259,49 @@ def describe(found: dict[str, set[str]]) -> str:
     )
 
 
+def describe_graduates(graduations: int, planted: list[str]) -> str:
+    """Render both halves of the bridge as the store has them."""
+    if not graduations:
+        return "none"
+    return (
+        f"{plural(graduations, 'graduation')}, {len(planted)} linked to a plant"
+        f"{''.join(f' ({plant})' for plant in planted)}"
+    )
+
+
+def report_bridge(bridged: Bridged | None) -> str:
+    """Render what this run's bridge did, for the seeding summary."""
+    if bridged is None:
+        return "no plant created (--no-graduated-plant); both graduations are unlinked"
+    return (
+        f"1 linked, {bridged.how} ({bridged.planting.row},{bridged.planting.col})"
+        f" in {bridged.planting.growspace!r} — {bridged.plant_id};  1 unlinked"
+    )
+
+
+def clear_graduated_plants(planted: list[str], skipped: bool) -> None:
+    """Take the graduated plants back out of Growspace Manager.
+
+    Unlike seeding, this degrades rather than refusing: the bench is already
+    gone from the store by the time it runs, and an instance that happens to be
+    down is no reason to leave the rest in place. What it will not do is stay
+    quiet about a plant it could not reach.
+    """
+    if not planted:
+        return
+    if skipped or not home_assistant_is_up():
+        print(f"  {plural(len(planted), 'graduated plant')} left in Growspace Manager:")
+        for plant_id in planted:
+            print(f"    {plant_id}")
+        print("    remove them with the running instance, or by hand in the card")
+        return
+    gm = GrowspaceManager(HA_URL, read_token())
+    gm.connect()
+    for plant_id in planted:
+        gm.remove_plant(plant_id)
+    print(f"  removed {plural(len(planted), 'graduated plant')}")
+
+
 def parse_args(argv):
     """Parse the command line."""
     parser = argparse.ArgumentParser(
@@ -917,6 +1314,14 @@ def parse_args(argv):
         "--report",
         action="store_true",
         help="say what the store holds of this script's, and exit",
+    )
+    parser.add_argument(
+        "--no-graduated-plant",
+        action="store_true",
+        help=(
+            "do not cross into Growspace Manager: seed both graduations unlinked,"
+            " and ask nothing of Home Assistant"
+        ),
     )
     return parser.parse_args(argv)
 
@@ -933,8 +1338,11 @@ def main(argv) -> int:
     envelope, data = read_store()
     found = seeded(data)
 
+    graduations, planted = graduations_in(data, found)
+
     if args.report:
         print(f"  seeded:    {describe(found)}")
+        print(f"  graduates: {describe_graduates(graduations, planted)}")
         return 0
 
     if args.clear:
@@ -944,6 +1352,7 @@ def main(argv) -> int:
             return 0
         write_store(envelope, data)
         print(f"  removed {describe(found)}")
+        clear_graduated_plants(planted, args.no_graduated_plant)
         report_liveness()
         return 0
 
@@ -954,12 +1363,22 @@ def main(argv) -> int:
         )
         return 0
 
-    check_strain_library()
+    library = check_strain_library()
+
+    # Connected before anything is built, so an instance that cannot take the
+    # graduate is refused while the store is still untouched.
+    gm = None
+    if not args.no_graduated_plant:
+        gm = GrowspaceManager(HA_URL, read_token())
+        gm.connect()
 
     repository = REPOSITORY.CultureRepository()
     repository.load(data)
     try:
         built = build(repository)
+        graduate = (
+            None if gm is None else cross_the_bridge(repository, gm, built, library)
+        )
     except (COMMON.TcValidationError, COMMON.TcNotFoundError) as error:
         # The models' rejections carry a sentence written for the grower, and it
         # is the right thing to show: a refusal here means this script declared
@@ -999,6 +1418,7 @@ def main(argv) -> int:
         f" the oldest {oldest} days back"
     )
     print(f"  pairings:  {plural(built.pairings, 'pairing')}")
+    print(f"  graduates: {report_bridge(graduate)}")
     print(
         f"  worklist:  {plural(len(overdue), 'vessel')} overdue,"
         f" {plural(len(due) - len(overdue), 'vessel')} still on time"

@@ -191,12 +191,13 @@ quiet day, and therefore the one screen a demo must not land on.
 
 `./scripts/seed-tc-world` builds a worked bench: four Culture Media over five
 Medium Versions, seven Culture Lines, twenty Cultures across five Locations,
-twenty-five Maintenance Actions reaching back ninety days, and four Pairings.
+twenty-six Maintenance Actions reaching back ninety days, and four Pairings.
 
 ```bash
 ./scripts/seed-tc-world           # the bench
 ./scripts/seed-tc-world --report  # what the store holds of this script's
-./scripts/seed-tc-world --clear   # drop it
+./scripts/seed-tc-world --clear   # drop it, the graduated plant included
+./scripts/seed-tc-world --no-graduated-plant   # the bench alone, no Home Assistant
 ```
 
 **It writes the store directly, and that is the point.**
@@ -210,6 +211,31 @@ comes from TC's own models and repository, imported out of the checkout the way
 a Plating pins, what a division does to a Culture's identity, which acts an
 ended vessel refuses. They cannot drift from the shipped rules without this
 script failing loudly.
+
+**The one act it cannot write alone is a Graduation**, because it is the only
+one whose data crosses back into Growspace Manager: TC ends the Culture, then
+optionally calls GM's public `add_plant` and links the returned plant onto the
+recorded act. Seeded in process that second half does not happen, so every
+seeded Graduation would carry no plant — which is precisely the state TC's error
+path writes when the bridge *fails* (`Culture %s graduated without a linked
+plant`, logged and deliberately not retried). The script therefore calls that
+same service on the running instance, in the same order, and seeds **one
+Graduation of each kind**: one linked to a plant that really stands in the
+canonical `clone` growspace with the Graduation's own instant as its
+`clone_start`, and one unlinked, because a failed bridge is a real state nobody
+would otherwise ever see. Both are honest rows; neither invents a state the
+product cannot produce.
+
+That half — and only that half — needs Home Assistant up and a token in
+`.ha-token`, the same two things `seed-demo` needs; it is refused before
+anything is written when either is missing, and `--no-graduated-plant` gives it
+up and asks nothing of Home Assistant. The plant is recognised the way
+`seed-demo` recognises its own — the declared position under that position's
+declared strain — so a rerun adopts the plant already standing there instead of
+adding a second, and corrects its `clone_start` if the calendar has moved since.
+A position held by something else is refused rather than worked around, because
+`add_plant` silently relocates to the next free cell and a demo whose graduate
+wanders is worse than one that says why it stopped.
 
 Three consequences worth knowing. **Home Assistant holds this state in memory
 and saves over the file**, so seed with it down or restart it afterwards; the
@@ -230,7 +256,11 @@ hand and a line you introduced from the card alone, and a rerun over a bench
 that is already there reports it and changes nothing. The removal is done to the
 persisted dictionary rather than through the repository, because Maintenance
 Actions are append-only by design and that is a rule about the product's history,
-not about a demo's scaffolding.
+not about a demo's scaffolding. The graduated plant is the exception in both
+directions: it is named by the seeded Graduation that created it rather than by
+declaration, and it goes back out through `remove_plant`. Unlike seeding, that
+degrades rather than refusing — the bench is already out of the store by then —
+and an instance that is down leaves the plant behind with its ID printed.
 
 ### One command for the whole demo
 
@@ -258,7 +288,9 @@ so there is somewhere to demonstrate adding one. Then it **calls
 `seed-vision-history` and `seed-tc-world`** rather than reimplementing either,
 so none of the three can drift and one command leaves a fresh clone demo-ready.
 The bench goes last, because its Home Assistant restart requirement is the only
-thing in the run that is not already live.
+thing in the run that is not already live. One plant lands outside the tent as
+part of that: the bench's linked Graduation puts its graduate in the canonical
+`clone` growspace, which is where a vessel out of vitro belongs.
 
 Two things keep it honest. Everything goes in through `add_strain`, `add_plant`
 and `update_growspace` on the **running instance**, so the entities, the timeline
