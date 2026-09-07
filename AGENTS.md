@@ -56,6 +56,7 @@ the host path instead.
 ./scripts/seed-demo             # the demo's own content, all three halves of it
 ./scripts/seed-vision-history   # fake Vision Checkup history for the demo
 ./scripts/seed-tc-world         # a worked tissue-culture bench for the demo
+./scripts/demo-dashboard        # the panel dashboard README captures come from
 ```
 
 `ha dev up|restart` starts the production Vision App image before Home
@@ -312,6 +313,32 @@ and leaves the growspace itself. Home Assistant must be up, with a token in
 and writes the **main** hub checkout's runtime even when run from a worktree,
 while the roster and the declarations come from the checkout it was invoked
 from, so a worktree exercises its own branch.
+
+### Photographing it
+
+All four repositories carry a README screenshot set, and all four photograph
+this instance showing Demo Tent — the same tent with a different emphasis per
+repository, never the same five pictures four times. The published Pages demo
+is not a source for any of them: its recording holds one response per read-only
+WebSocket command of the integration's, so TC is not in it at all.
+
+```bash
+./scripts/demo-dashboard                          # /demo-tent/0
+./scripts/demo-dashboard --growspace "E2E Vision" # repoint it
+./scripts/demo-dashboard --remove
+```
+
+The dashboards `./scripts/e2e provision` generates are *sections* views, which
+render the card into one narrow column with its header chips clipped — right
+for a spec, useless for a photograph. `demo-dashboard` writes a **panel** view
+through Home Assistant's own Lovelace commands, so the card is the whole page
+and its own layout decides the width. It is one dashboard whatever it is
+pointed at, and `--remove` refuses once it holds anything other than a single
+Growspace Manager card.
+
+The subject, the viewport sizes, the theme, where the files land per repository
+and the README shape they go into are all in
+[`docs/SCREENSHOTS.md`](docs/SCREENSHOTS.md).
 
 The card is **code-split**: a thin `growspace-manager-card.js` entry plus ~16
 lazy `growspace-[name]-[hash].js` chunks. The whole `dist/` directory is
