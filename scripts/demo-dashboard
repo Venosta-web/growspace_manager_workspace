@@ -4,7 +4,9 @@
  *
  *   ./scripts/demo-dashboard                          # Demo Tent
  *   ./scripts/demo-dashboard --growspace "E2E Vision"
+ *   ./scripts/demo-dashboard --tc                     # the tissue-culture bench
  *   ./scripts/demo-dashboard --remove
+ *   ./scripts/demo-dashboard --tc --remove
  *
  * `scripts/e2e provision` gives every capability profile a dashboard, and each
  * one is a **sections** view holding the card in a four-row grid tile. That is
@@ -65,6 +67,21 @@ const WORKSPACE = mainHubCheckout();
 // only ever one capture session in progress.
 const DASHBOARD_PATH = 'demo-tent';
 
+/*
+ * The tissue-culture bench is a second dashboard rather than a second view,
+ * because `custom:growspace-tc-card` is not a Growspace Manager card pointed at
+ * a growspace — it takes no options, reads another integration's domain, and
+ * renders nothing at all on an instance without TC. Keeping it separate leaves
+ * `--remove` able to say, of either dashboard, exactly what it expects to find.
+ */
+const TC_DASHBOARD_PATH = 'demo-tc';
+
+const TC_DASHBOARD_TITLE = 'Tissue Culture';
+
+const GROWSPACE_CARD = 'custom:growspace-manager-card';
+
+const TC_CARD = 'custom:growspace-tc-card';
+
 const DEFAULT_GROWSPACE = 'Demo Tent';
 
 function buildCaptureConfig(title, growspaceId) {
@@ -74,25 +91,52 @@ function buildCaptureConfig(title, growspaceId) {
       path: '0',
       type: 'panel',
       cards: [{
-        type: 'custom:growspace-manager-card',
+        type: GROWSPACE_CARD,
         default_growspace: growspaceId,
       }],
     }],
   };
 }
 
+function buildTcCaptureConfig() {
+  return {
+    views: [{
+      title: TC_DASHBOARD_TITLE,
+      path: '0',
+      type: 'panel',
+      // The TC card takes no options at all: it reads the whole bench from the
+      // TC integration, so there is nothing here to point it at.
+      cards: [{ type: TC_CARD }],
+    }],
+  };
+}
+
 /*
- * A dashboard this tool would have written: one panel view holding one
- * Growspace Manager card and nothing else. `--remove` refuses anything else,
- * so a dashboard someone built on top of this path is never deleted for them.
+ * A dashboard this tool would have written: one panel view holding one card of
+ * the expected type and nothing else. `--remove` refuses anything else, so a
+ * dashboard someone built on top of either path is never deleted for them.
  */
-function isCaptureConfig(config) {
+function isCaptureConfig(config, cardType = GROWSPACE_CARD) {
   const views = config && Array.isArray(config.views) ? config.views : [];
   if (views.length !== 1) return false;
   const [view] = views;
   if (view.type !== 'panel') return false;
   const cards = Array.isArray(view.cards) ? view.cards : [];
-  return cards.length === 1 && cards[0].type === 'custom:growspace-manager-card';
+  return cards.length === 1 && cards[0].type === cardType;
+}
+
+/*
+ * TC is optional, and an instance without it renders the TC card as an empty
+ * page rather than as an error. Refusing here is the difference between a
+ * capture session that stops with a reason and one that produces a blank
+ * photograph. The integration's single entity is the whole tell — it serves one
+ * calendar and nothing else.
+ */
+function tcIsLoaded(states) {
+  return states.some(
+    (state) => typeof state.entity_id === 'string'
+      && state.entity_id.startsWith('calendar.growspace_manager_tc'),
+  );
 }
 
 /* Every growspace, read off the overview sensors' identity block. */
@@ -134,7 +178,14 @@ async function listDashboards(send) {
   return listed.result || [];
 }
 
-async function syncCaptureDashboard({ send, urlPath, title, growspaceId, log = console.log }) {
+async function syncCaptureDashboard({
+  send,
+  urlPath,
+  title,
+  growspaceId,
+  config = buildCaptureConfig(title, growspaceId),
+  log = console.log,
+}) {
   const existing = await listDashboards(send);
   if (!existing.some((dashboard) => dashboard.url_path === urlPath)) {
     const created = await send({
@@ -155,14 +206,19 @@ async function syncCaptureDashboard({ send, urlPath, title, growspaceId, log = c
   const saved = await send({
     type: 'lovelace/config/save',
     url_path: urlPath,
-    config: buildCaptureConfig(title, growspaceId),
+    config,
   });
   if (!saved.success) throw new Error(`Could not save /${urlPath}: ${messageError(saved)}`);
-  log(`  panel view saved -> ${title} (${growspaceId})`);
+  log(`  panel view saved -> ${title}${growspaceId ? ` (${growspaceId})` : ''}`);
   log(`  capture from http://localhost:8123/${urlPath}/0`);
 }
 
-async function removeCaptureDashboard({ send, urlPath, log = console.log }) {
+async function removeCaptureDashboard({
+  send,
+  urlPath,
+  cardType = GROWSPACE_CARD,
+  log = console.log,
+}) {
   const existing = await listDashboards(send);
   const dashboard = existing.find((item) => item.url_path === urlPath);
   if (!dashboard) {
@@ -170,7 +226,7 @@ async function removeCaptureDashboard({ send, urlPath, log = console.log }) {
     return;
   }
   const config = await send({ type: 'lovelace/config', url_path: urlPath });
-  if (config.success && !isCaptureConfig(config.result)) {
+  if (config.success && !isCaptureConfig(config.result, cardType)) {
     throw new Error(
       `/${urlPath} is not the capture dashboard any more — it holds something else.\n`
       + '       Remove it from Settings > Dashboards if that is really what you want.',
@@ -212,16 +268,42 @@ async function main(argv = process.argv.slice(2)) {
   const baseUrl = readOption(argv, '--base-url', env.HA_BASE_URL || 'http://localhost:8123');
   const wanted = readOption(argv, '--growspace', DEFAULT_GROWSPACE);
   const remove = argv.includes('--remove');
+  const tc = argv.includes('--tc');
+  if (tc && argv.includes('--growspace')) {
+    throw new Error('--tc takes no --growspace: the TC card reads the whole bench, not one tent');
+  }
   if (!token) throw new Error(`HA_ACCESS_TOKEN is empty and no token exists at ${tokenFile}`);
 
   const WebSocket = require(require.resolve('ws', { paths: [cardRoot] }));
   const connection = await connectHaWebSocket({ WebSocket, baseUrl, token });
   try {
     if (remove) {
-      await removeCaptureDashboard({ send: connection.send, urlPath: DASHBOARD_PATH });
+      await removeCaptureDashboard({
+        send: connection.send,
+        urlPath: tc ? TC_DASHBOARD_PATH : DASHBOARD_PATH,
+        cardType: tc ? TC_CARD : GROWSPACE_CARD,
+      });
       return;
     }
-    const growspace = resolveGrowspace(wanted, readGrowspaces(await readStates(baseUrl, token)));
+    const states = await readStates(baseUrl, token);
+    if (tc) {
+      if (!tcIsLoaded(states)) {
+        throw new Error(
+          'Growspace Manager TC is not loaded, so its card would photograph as a blank page.\n'
+          + '       Add the integration under Settings > Devices & services, and seed a bench\n'
+          + '       with ./scripts/seed-tc-world before capturing.',
+        );
+      }
+      await ensureCardResource({ send: connection.send });
+      await syncCaptureDashboard({
+        send: connection.send,
+        urlPath: TC_DASHBOARD_PATH,
+        title: TC_DASHBOARD_TITLE,
+        config: buildTcCaptureConfig(),
+      });
+      return;
+    }
+    const growspace = resolveGrowspace(wanted, readGrowspaces(states));
     await ensureCardResource({ send: connection.send });
     await syncCaptureDashboard({
       send: connection.send,
@@ -237,8 +319,14 @@ async function main(argv = process.argv.slice(2)) {
 module.exports = {
   DASHBOARD_PATH,
   DEFAULT_GROWSPACE,
+  GROWSPACE_CARD,
+  TC_CARD,
+  TC_DASHBOARD_PATH,
+  TC_DASHBOARD_TITLE,
   buildCaptureConfig,
+  buildTcCaptureConfig,
   isCaptureConfig,
+  tcIsLoaded,
   readGrowspaces,
   removeCaptureDashboard,
   resolveGrowspace,
