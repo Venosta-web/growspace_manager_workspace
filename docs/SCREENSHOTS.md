@@ -104,11 +104,22 @@ width.
 ```bash
 ./scripts/demo-dashboard                          # Demo Tent
 ./scripts/demo-dashboard --growspace "E2E Vision" # repoint it
+./scripts/demo-dashboard --tc                     # the tissue-culture bench
 ./scripts/demo-dashboard --remove
+./scripts/demo-dashboard --tc --remove
 ```
 
 It is one dashboard whatever it is pointed at, and `--remove` refuses to delete
-it once it holds anything other than a single Growspace Manager card.
+it once it holds anything other than the single card this wrote.
+
+`--tc` is a **second** dashboard, `/demo-tc/0`, holding one
+`custom:growspace-tc-card`. It is separate rather than a second view because
+that card is not a Growspace Manager card pointed at a growspace: it takes no
+options, reads another integration's domain, and renders nothing at all where
+TC is absent. For the same reason `--tc` refuses when TC is not loaded, rather
+than leaving you to photograph a blank page — the tell is
+`calendar.growspace_manager_tc_replates`, the one entity that integration
+serves.
 
 ## The browser
 
@@ -167,6 +178,37 @@ Snapshots, Ask AI).
 | Vision evidence | ⋮ → Camera Snapshots → **Vision evidence** tab |
 | mobile | the same URL at 390x844 |
 
+The tissue-culture surfaces have a second, better frame of their own. The whole
+TC view lives in one element that two hosts mount — the ⋮ dialog above, and the
+standalone `growspace-tc-card` that `./scripts/demo-dashboard --tc` puts on
+`/demo-tc/0`. Photograph TC from the standalone card: it is what TC's README
+tells a reader to add, and it is the card's own sections rather than a dialog
+belonging to the other card.
+
+| TC surface | element to capture |
+|---|---|
+| replate worklist | `growspace-tc-worklist` |
+| Culture Lines, and a line's vessels | `growspace-tc-culture-board`, after **Show vessels** |
+| a Maintenance Action | `growspace-tc-action-dialog`, after **Replate** / **Graduate** / … |
+| a vessel's history | `growspace-tc-action-dialog`, after **Show this vessel's history** |
+| Culture Media and their versions | `growspace-tc-medium-library`, after **Show version history** |
+| Curated Pairings | `growspace-tc-pairings` |
+| the replate calendar | `/calendar` — Home Assistant's own panel, clipped past the calendar list |
+
+**Graduation is the one act to photograph as a record rather than as a form.**
+The Graduate dialog's bridge into Growspace Manager offers a destination only
+where the growspace list has been hydrated, which the manager card's bootstrap
+does and the standalone TC card does not — so on `/demo-tc/0` it reads "No
+growspace is available for a new plant". The seeded bench carries one linked
+graduation and one unlinked one, and the linked vessel's history shows the
+crossing as it is actually kept: the act, and a link to the plant it made.
+
+Home Assistant's calendar panel is the exception to framing on the card, because
+the calendar entity is the one part of TC that is not in a card at all. Clip
+past the calendar list on the left — `div.content` there is 1030x664 at
+(250, 56) on a 1280x720 viewport — rather than photographing the sixteen
+generated task calendars beside it.
+
 The Camera Snapshots dialog opens on two tabs. **Captures** is empty on Demo
 Tent and stays empty — the growspace is configured with climate and lighting
 hardware, not cameras, so Home Assistant has no camera to snapshot. **Vision
@@ -221,6 +263,13 @@ The hero goes directly under the intro paragraph, above the badges' fold and
 above any table of contents. The `## Screenshots` section goes after the feature
 prose and before installation — a reader who has decided to install does not
 need convincing any more.
+
+A README that puts installation first has no such position, and TC's does. There
+the section goes after the prose that names the concepts its captions use and
+before the reference material at the end — for TC, after "The calendar, missing
+phenotypes, and your data" and before "V1 boundaries". The rule being kept is
+the one the ordering exists for: the hero convinces, and the captions land where
+the reader has just met the words they are written in.
 
 Mobile is the one exception to the plain image link: a full-height phone capture
 is 800px wide and 1700px tall, and GitHub renders it as a tower. Constrain it:

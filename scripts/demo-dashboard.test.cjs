@@ -3,12 +3,17 @@ const test = require('node:test');
 
 const {
   DASHBOARD_PATH,
+  TC_CARD,
+  TC_DASHBOARD_PATH,
+  TC_DASHBOARD_TITLE,
   buildCaptureConfig,
+  buildTcCaptureConfig,
   isCaptureConfig,
   readGrowspaces,
   removeCaptureDashboard,
   resolveGrowspace,
   syncCaptureDashboard,
+  tcIsLoaded,
 } = require('./demo-dashboard');
 const { buildDashboardConfig } = require('./gen-e2e-dashboards.cjs');
 
@@ -165,4 +170,69 @@ test('--remove is a no-op when there is no such dashboard', async () => {
   });
   await removeCaptureDashboard({ send, urlPath: DASHBOARD_PATH, log });
   assert.deepEqual(sent.map((command) => command.type), ['lovelace/dashboards/list']);
+});
+
+test('the tissue-culture view is the same panel frame around the other card', () => {
+  assert.deepEqual(buildTcCaptureConfig(), {
+    views: [{
+      title: TC_DASHBOARD_TITLE,
+      path: '0',
+      type: 'panel',
+      cards: [{ type: TC_CARD }],
+    }],
+  });
+  // The TC card takes no options, so nothing points it at a growspace.
+  assert.deepEqual(Object.keys(buildTcCaptureConfig().views[0].cards[0]), ['type']);
+});
+
+test('each capture dashboard only recognises its own card', () => {
+  assert.equal(isCaptureConfig(buildTcCaptureConfig(), TC_CARD), true);
+  assert.equal(isCaptureConfig(buildTcCaptureConfig()), false);
+  assert.equal(isCaptureConfig(buildCaptureConfig('Demo Tent', GROWSPACE_ID), TC_CARD), false);
+});
+
+test('--tc writes its own dashboard, and never the growspace one', async () => {
+  const { send, sent, log } = recorder({
+    'lovelace/dashboards/list': { success: true, result: [] },
+  });
+  await syncCaptureDashboard({
+    send,
+    urlPath: TC_DASHBOARD_PATH,
+    title: TC_DASHBOARD_TITLE,
+    config: buildTcCaptureConfig(),
+    log,
+  });
+  assert.equal(sent[1].url_path, TC_DASHBOARD_PATH);
+  assert.notEqual(TC_DASHBOARD_PATH, DASHBOARD_PATH);
+  assert.deepEqual(sent[2].config, buildTcCaptureConfig());
+});
+
+test('--tc --remove refuses the growspace dashboard it was pointed at by mistake', async () => {
+  const { send, log } = recorder({
+    'lovelace/dashboards/list': {
+      success: true,
+      result: [{ id: 'demo_tc', url_path: TC_DASHBOARD_PATH }],
+    },
+    'lovelace/config': {
+      success: true,
+      result: buildCaptureConfig('Demo Tent', GROWSPACE_ID),
+    },
+  });
+  await assert.rejects(
+    removeCaptureDashboard({ send, urlPath: TC_DASHBOARD_PATH, cardType: TC_CARD, log }),
+    /not the capture dashboard any more/,
+  );
+});
+
+test('TC is recognised by the one entity it serves', () => {
+  assert.equal(tcIsLoaded([{ entity_id: 'calendar.growspace_manager_tc_replates' }]), true);
+  // Growspace Manager alone is not TC, however many entities it has.
+  assert.equal(
+    tcIsLoaded([
+      { entity_id: 'sensor.growspace_manager_demo_tent_overview' },
+      { entity_id: 'calendar.growspace_manager_harvests' },
+    ]),
+    false,
+  );
+  assert.equal(tcIsLoaded([]), false);
 });

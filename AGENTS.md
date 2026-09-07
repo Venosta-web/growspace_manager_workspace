@@ -325,6 +325,7 @@ WebSocket command of the integration's, so TC is not in it at all.
 ```bash
 ./scripts/demo-dashboard                          # /demo-tent/0
 ./scripts/demo-dashboard --growspace "E2E Vision" # repoint it
+./scripts/demo-dashboard --tc                     # /demo-tc/0, the TC card
 ./scripts/demo-dashboard --remove
 ```
 
@@ -333,8 +334,14 @@ render the card into one narrow column with its header chips clipped — right
 for a spec, useless for a photograph. `demo-dashboard` writes a **panel** view
 through Home Assistant's own Lovelace commands, so the card is the whole page
 and its own layout decides the width. It is one dashboard whatever it is
-pointed at, and `--remove` refuses once it holds anything other than a single
-Growspace Manager card.
+pointed at, and `--remove` refuses once it holds anything other than the single
+card it wrote.
+
+`--tc` is a second dashboard rather than a second view, because
+`custom:growspace-tc-card` is not a Growspace Manager card pointed at a
+growspace — it takes no options, reads TC's domain, and renders nothing at all
+without TC. It refuses when TC is not loaded rather than let you photograph a
+blank page.
 
 The subject, the viewport sizes, the theme, where the files land per repository
 and the README shape they go into are all in
