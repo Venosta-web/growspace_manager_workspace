@@ -7,6 +7,7 @@ const path = require('node:path');
 const {
   CARD_URL,
   buildDashboardStages,
+  buildIntegrationDashboardStages,
   connectHaWebSocket,
   parseEnvFile,
   resourcePath,
@@ -192,6 +193,14 @@ function validateGlobalSettings(manifest, entries) {
   return errors;
 }
 
+/* Every card on a dashboard, whether its views are `sections` or `panel`. */
+function dashboardCards(config) {
+  return (config?.views || []).flatMap((view) => [
+    ...(view.cards || []),
+    ...(view.sections || []).flatMap((section) => section.cards || []),
+  ]);
+}
+
 function validateLovelace(manifest, dashboards, resources, dashboardConfigs) {
   const stages = buildDashboardStages(manifest);
   const errors = [];
@@ -202,8 +211,7 @@ function validateLovelace(manifest, dashboards, resources, dashboardConfigs) {
       continue;
     }
     const config = dashboardConfigs.get(stage.urlPath);
-    const cards = config?.views?.flatMap((view) => view.sections || [])
-      .flatMap((section) => section.cards || []) || [];
+    const cards = dashboardCards(config);
     const matching = cards.filter((card) => card.type === 'custom:growspace-manager-card');
     if (matching.length !== 1) {
       errors.push(`${stage.profile}/${stage.slug}: dashboard ${stage.urlPath} has ${matching.length} Growspace Manager cards`);
@@ -212,6 +220,22 @@ function validateLovelace(manifest, dashboards, resources, dashboardConfigs) {
     const expectedId = manifest.profiles.find((profile) => profile.slug === stage.slug)?.growspace_id;
     if (expectedId && matching[0].default_growspace !== expectedId) {
       errors.push(`${stage.profile}/${stage.slug}: dashboard selects ${matching[0].default_growspace}, expected ${expectedId}`);
+    }
+  }
+  // An integration dashboard names no growspace, so "one card of the declared
+  // type and nothing else" is the whole contract it can be held to.
+  for (const stage of buildIntegrationDashboardStages(manifest)) {
+    const label = `${stage.integration}/${stage.slug}`;
+    if (!dashboardPaths.has(stage.urlPath)) {
+      errors.push(`${label}: missing dashboard ${stage.urlPath}`);
+      continue;
+    }
+    const cards = dashboardCards(dashboardConfigs.get(stage.urlPath));
+    if (cards.length !== 1 || cards[0].type !== stage.card) {
+      errors.push(
+        `${label}: dashboard ${stage.urlPath} should hold one ${stage.card} and nothing else, `
+        + `found ${JSON.stringify(cards.map((card) => card.type))}`,
+      );
     }
   }
   const cardResources = resources.filter((resource) => resourcePath(resource.url) === resourcePath(CARD_URL));
@@ -383,11 +407,12 @@ async function main(argv = process.argv.slice(2)) {
   if (!fs.existsSync(manifestFile)) throw new Error(`Missing generated manifest: ${manifestFile}`);
   const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
   const stages = buildDashboardStages(manifest);
+  const integrationStages = buildIntegrationDashboardStages(manifest);
   for (const profile of manifest.profiles) {
     profile.growspace_id = env[`TEST_${profile.slug.toUpperCase()}_GROWSPACE_ID`];
   }
 
-  console.log(`E2E preflight: ${manifest.entities.length} entities, ${manifest.profiles.length} profiles, ${stages.length} dashboards`);
+  console.log(`E2E preflight: ${manifest.entities.length} entities, ${manifest.profiles.length} profiles, ${stages.length} dashboards, ${integrationStages.length} integration dashboards`);
   const states = await restJson(baseUrl, token, '/api/states');
   const errors = [
     ...validateEntityStates(manifest, states),
@@ -415,10 +440,10 @@ async function main(argv = process.argv.slice(2)) {
     entityRegistry = entityMessage.result || [];
     dashboards = dashboardMessage.result || [];
     resources = resourceMessage.result || [];
-    await Promise.all(stages.map(async (stage) => {
+    await Promise.all([...stages, ...integrationStages].map(async (stage) => {
       const message = await connection.send({ type: 'lovelace/config', url_path: stage.urlPath, force: true });
       if (message.success) configs.set(stage.urlPath, message.result);
-      else errors.push(`${stage.profile}/${stage.slug}: cannot read dashboard ${stage.urlPath}: ${JSON.stringify(message.error)}`);
+      else errors.push(`${stage.profile || stage.integration}/${stage.slug}: cannot read dashboard ${stage.urlPath}: ${JSON.stringify(message.error)}`);
     }));
   } finally {
     connection.close();
@@ -451,7 +476,7 @@ async function main(argv = process.argv.slice(2)) {
   console.log(`  PASS simulation: ${released.released} growspaces released back to free-running devices`);
   console.log(`  PASS backend: ${manifest.profiles.length} profile payloads retained every configured entity role`);
   console.log(`  PASS registries: ${entityRegistry.length} entities checked; AC Infinity bundles have stable devices`);
-  console.log(`  PASS Lovelace: ${stages.length} dashboards and one card resource are unique and current`);
+  console.log(`  PASS Lovelace: ${stages.length + integrationStages.length} dashboards and one card resource are unique and current`);
   if (!argv.includes('--skip-browser')) console.log(`  PASS card: ${browser.bootstrapped}/${stages.length} dashboards bootstrapped without schema/entity errors`);
   console.log('E2E preflight healthy.');
 }
@@ -460,6 +485,7 @@ module.exports = {
   EQUIPMENT_GATE_ROLE,
   browserBaseUrl,
   collectEntityIds,
+  dashboardCards,
   readConfigEntryStorage,
   serviceCallForState,
   validateBackendPayloads,
