@@ -1,5 +1,9 @@
 #!/usr/bin/env node
-/* Create or update one Lovelace dashboard for every generated E2E profile. */
+/*
+ * Create or update one Lovelace dashboard for every generated E2E profile, plus
+ * the dashboards declared for a card that hosts an integration rather than a
+ * growspace.
+ */
 'use strict';
 
 const fs = require('node:fs');
@@ -40,6 +44,25 @@ function buildDashboardStages(manifest) {
   }));
 }
 
+/*
+ * The dashboards that exist because an integration is installed rather than
+ * because a growspace has capabilities. `e2e/entity_coverage.py` declares them;
+ * nothing here decides which cards get one.
+ */
+function buildIntegrationDashboardStages(manifest) {
+  return (manifest.integration_dashboards || []).map(({
+    slug, title, card, integration, purpose,
+  }) => ({
+    slug,
+    title,
+    card,
+    integration,
+    purpose,
+    urlPath: dashboardPathForSlug(slug),
+    dashboardEnvKey: envKeyForSlug(slug, 'DASHBOARD_PATH'),
+  }));
+}
+
 function buildDashboardConfig(title, growspaceId) {
   return {
     views: [{
@@ -54,6 +77,23 @@ function buildDashboardConfig(title, growspaceId) {
           grid_options: { rows: 4 },
         }],
       }],
+    }],
+  };
+}
+
+/*
+ * A panel view rather than the profile dashboards' sections grid. Those pin the
+ * Growspace Manager card into a four-row tile because that is how a grower
+ * places it beside their other cards; this card takes no options, is bound to
+ * nothing, and is the entire subject of its dashboard — so "one card and
+ * nothing else" is the view type, not a tile size.
+ */
+function buildIntegrationDashboardConfig(title, card) {
+  return {
+    views: [{
+      title,
+      type: 'panel',
+      cards: [{ type: card }],
     }],
   };
 }
@@ -100,6 +140,43 @@ async function syncDashboards({ send, env, stages, log = console.log }) {
       throw new Error(`${stage.profile}/${stage.slug}: could not save ${stage.urlPath}: ${messageError(saved)}`);
     }
     log(`    config saved: ok -> growspace ${growspaceId.slice(0, 8)}`);
+  }
+}
+
+async function syncIntegrationDashboards({ send, stages, log = console.log }) {
+  if (stages.length === 0) return;
+  const existing = await send({ type: 'lovelace/dashboards/list' });
+  if (!existing.success) throw new Error(`Could not list dashboards: ${messageError(existing)}`);
+  const have = new Set((existing.result || []).map((dashboard) => dashboard.url_path));
+
+  for (const stage of stages) {
+    const owner = `${stage.integration}/${stage.slug}`;
+    if (!have.has(stage.urlPath)) {
+      const created = await send({
+        type: 'lovelace/dashboards/create',
+        url_path: stage.urlPath,
+        title: stage.title,
+        show_in_sidebar: false,
+        require_admin: false,
+      });
+      if (!created.success) {
+        throw new Error(`${owner}: could not create ${stage.urlPath}: ${messageError(created)}`);
+      }
+      have.add(stage.urlPath);
+      log(`  created dashboard ${stage.urlPath}`);
+    } else {
+      log(`  dashboard ${stage.urlPath} already exists`);
+    }
+
+    const saved = await send({
+      type: 'lovelace/config/save',
+      url_path: stage.urlPath,
+      config: buildIntegrationDashboardConfig(stage.title, stage.card),
+    });
+    if (!saved.success) {
+      throw new Error(`${owner}: could not save ${stage.urlPath}: ${messageError(saved)}`);
+    }
+    log(`    config saved: ok -> ${stage.card}`);
   }
 }
 
@@ -155,9 +232,13 @@ function writeEnvValues(filename, values) {
   fs.writeFileSync(filename, content, 'utf8');
 }
 
-function dashboardEnvValues(stages, env) {
+function dashboardEnvValues(stages, env, integrationStages = []) {
   const values = {};
-  for (const stage of stages) values[stage.dashboardEnvKey] = `/${stage.urlPath}/0`;
+  // An integration dashboard has no growspace ID to write beside it, but its
+  // path is discovered exactly the way every profile dashboard's is.
+  for (const stage of [...stages, ...integrationStages]) {
+    values[stage.dashboardEnvKey] = `/${stage.urlPath}/0`;
+  }
   const veg = stages.find((stage) => stage.slug === 'veg');
   if (veg) {
     values.TEST_DASHBOARD_PATH = `/${veg.urlPath}/0`;
@@ -221,15 +302,17 @@ async function main(argv = process.argv.slice(2)) {
 
   const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
   const stages = buildDashboardStages(manifest);
+  const integrationStages = buildIntegrationDashboardStages(manifest);
   const WebSocket = require(require.resolve('ws', { paths: [cardRoot] }));
   const connection = await connectHaWebSocket({ WebSocket, baseUrl, token });
   try {
     await ensureCardResource({ send: connection.send });
     await syncDashboards({ send: connection.send, env, stages });
+    await syncIntegrationDashboards({ send: connection.send, stages: integrationStages });
   } finally {
     connection.close();
   }
-  writeEnvValues(envFile, dashboardEnvValues(stages, env));
+  writeEnvValues(envFile, dashboardEnvValues(stages, env, integrationStages));
   console.log(`  updated dashboard paths in ${envFile}`);
 }
 
@@ -237,6 +320,8 @@ module.exports = {
   CARD_URL,
   buildDashboardConfig,
   buildDashboardStages,
+  buildIntegrationDashboardConfig,
+  buildIntegrationDashboardStages,
   connectHaWebSocket,
   dashboardEnvValues,
   dashboardPathForSlug,
@@ -244,6 +329,7 @@ module.exports = {
   parseEnvFile,
   resourcePath,
   syncDashboards,
+  syncIntegrationDashboards,
   writeEnvValues,
 };
 

@@ -572,6 +572,33 @@ dashboard to the same layout and creates only the missing dashboards. It uses
 the WebSocket API because HA has no REST endpoint for
 `lovelace/dashboards/create`.
 
+### A dashboard about an integration, not about a growspace
+
+`custom:growspace-tc-card` is the other host of the tissue-culture view — the
+first is the Growspace Manager card's overflow dialog — and it is not a
+Growspace Manager card pointed at a growspace. It takes no options, is bound to
+nothing, and renders an empty page rather than an error where Growspace Manager
+TC is not installed. Nothing about a capability profile describes that, so it
+cannot be derived from one: `INTEGRATION_DASHBOARDS` in `e2e/entity_coverage.py`
+declares it outright, saying which card it hosts, which integration has to be
+present for the card to show anything, and what the dashboard is for. The
+declaration travels to the card in the generated manifest as
+`integration_dashboards`.
+
+Provision creates one dashboard per declaration at `/e2e-<slug>/0` — today
+`/e2e-tc/0` — and writes it into `.env.test` as `TEST_TC_DASHBOARD_PATH`, the
+same key shape every profile dashboard's path uses. The view is a **panel**
+rather than a sections grid: the card is the whole subject of its dashboard, so
+"one card and nothing else" is the view type rather than a tile size. Preflight
+holds it to exactly that — the dashboard exists, and carries one card of the
+declared type and no other.
+
+Provisioning is unconditional. Whether TC is installed is the spec's business,
+not the frame's, and a dashboard that only appeared on instances that happened
+to have TC would hide precisely the gap this dashboard exists to expose. It is
+therefore not part of the browser bootstrap either, which waits on
+`growspace-manager-card`.
+
 ## Vision V1 aggregate acceptance
 
 After provisioning, one command proves the simulated Vision V1 aggregate

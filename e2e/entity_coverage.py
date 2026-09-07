@@ -75,6 +75,26 @@ class CapabilityProfile:
 
 
 @dataclass(frozen=True)
+class IntegrationDashboard:
+    """A dashboard about an integration being installed, not about a growspace.
+
+    Every capability profile owns a growspace, and its dashboard is that
+    growspace: the Growspace Manager card pinned to one ``default_growspace``,
+    named after the capabilities the profile carries. A card that takes no
+    options at all has none of that to be derived from — nothing points it at a
+    growspace, and it renders an empty page rather than an error where its
+    integration is absent. So what such a dashboard is *for* has to be stated
+    here rather than read back out of a profile.
+    """
+
+    slug: str
+    title: str
+    card: str
+    integration: str
+    purpose: str
+
+
+@dataclass(frozen=True)
 class Cardinality:
     """Allowed number of entities for a role in one profile instance."""
 
@@ -385,6 +405,26 @@ PROFILES: tuple[CapabilityProfile, ...] = (
         169,
     ),
 )
+
+# Dashboards that exist because an integration is installed, not because a
+# growspace has capabilities. The tissue-culture view has two hosts — the
+# Growspace Manager card's overflow dialog and the standalone TC card — and only
+# the first was ever provisioned, so every spec exercised the host that happened
+# to work and a gap in the other one went unseen. This is the frame the second
+# host was missing.
+INTEGRATION_DASHBOARDS: tuple[IntegrationDashboard, ...] = (
+    IntegrationDashboard(
+        "tc",
+        "E2E Tissue Culture",
+        "custom:growspace-tc-card",
+        "growspace_manager_tc",
+        "The standalone host of the tissue-culture view. The card takes no "
+        "options, is pinned to no growspace, and reads the whole bench from "
+        "Growspace Manager TC — so this dashboard exists to prove that host "
+        "renders, and renders nothing at all when TC is not installed.",
+    ),
+)
+
 
 # The install-wide fixture profile owns no growspace and therefore no dashboard.
 GLOBAL_FIXTURE_PROFILE = "source_air"
@@ -1955,13 +1995,64 @@ def expand_entities(
     return records
 
 
+def _validate_integration_dashboards(
+    profiles: Sequence[CapabilityProfile],
+    dashboards: Sequence[IntegrationDashboard],
+) -> list[str]:
+    """Validate the dashboards that name an integration instead of a growspace.
+
+    A dashboard's URL path and its ``TEST_<SLUG>_DASHBOARD_PATH`` key are both
+    derived from the slug, so a slug shared with a profile instance would give
+    two dashboards one address and let whichever generator ran last win.
+    """
+
+    errors: list[str] = []
+    slugs = [dashboard.slug for dashboard in dashboards]
+    for slug in sorted({slug for slug in slugs if slugs.count(slug) > 1}):
+        errors.append(f"duplicate integration dashboard slug: {slug}")
+    instance_slugs = {
+        instance.slug for profile in profiles for instance in profile.instances
+    }
+    for dashboard in dashboards:
+        if dashboard.slug in instance_slugs:
+            errors.append(
+                f"integration dashboard {dashboard.slug} collides with the "
+                f"capability-profile instance of the same slug"
+            )
+        if not re.fullmatch(r"[a-z][a-z0-9_]*", dashboard.slug):
+            errors.append(
+                f"integration dashboard slug {dashboard.slug!r} is not a "
+                "lowercase identifier"
+            )
+        if not dashboard.card.startswith("custom:"):
+            errors.append(
+                f"integration dashboard {dashboard.slug} declares "
+                f"{dashboard.card!r}, which is not a custom card"
+            )
+        if not re.fullmatch(r"[a-z][a-z0-9_]*", dashboard.integration):
+            errors.append(
+                f"integration dashboard {dashboard.slug} declares "
+                f"{dashboard.integration!r}, which is not a Home Assistant domain"
+            )
+        # The whole reason this shape is declared rather than derived: nothing
+        # else says what a dashboard with no growspace is for.
+        if not dashboard.title.strip() or not dashboard.purpose.strip():
+            errors.append(
+                f"integration dashboard {dashboard.slug} has no title or no "
+                "stated purpose"
+            )
+    return errors
+
+
 def validate_contract(
     profiles: Sequence[CapabilityProfile] = PROFILES,
     roles: Sequence[CoverageRole] = ROLES,
+    integration_dashboards: Sequence[IntegrationDashboard] = INTEGRATION_DASHBOARDS,
 ) -> list[str]:
     """Return every declarative contract error without touching generated files."""
 
     errors: list[str] = []
+    errors.extend(_validate_integration_dashboards(profiles, integration_dashboards))
     profile_ids = [profile.id for profile in profiles]
     duplicate_profiles = sorted({x for x in profile_ids if profile_ids.count(x) > 1})
     for profile_id in duplicate_profiles:
@@ -2168,6 +2259,19 @@ def build_card_manifest(
         "version": 2,
         "global_settings": global_settings,
         "profiles": profiles,
+        # Not a profile row: these carry no growspace, no services and no
+        # entities, so they are declared beside the profiles rather than
+        # squeezed into one as a profile with everything blanked out.
+        "integration_dashboards": [
+            {
+                "slug": dashboard.slug,
+                "title": dashboard.title,
+                "card": dashboard.card,
+                "integration": dashboard.integration,
+                "purpose": dashboard.purpose,
+            }
+            for dashboard in INTEGRATION_DASHBOARDS
+        ],
         "entities": [_manifest_entity(record) for record in active],
     }
 

@@ -11,9 +11,11 @@ from unittest import mock
 from e2e import entity_coverage
 from e2e.entity_coverage import (
     EXACTLY_ONE,
+    INTEGRATION_DASHBOARDS,
     PROFILES,
     ROLES,
     CoverageRole,
+    IntegrationDashboard,
     Status,
     build_card_manifest,
     expand_entities,
@@ -1041,6 +1043,84 @@ class EntityCoverageContractTest(unittest.TestCase):
                 and "expects input_number" in error
                 for error in errors
             )
+        )
+
+    def test_integration_dashboard_states_what_it_hosts_and_why(self) -> None:
+        declared = {dashboard.slug: dashboard for dashboard in INTEGRATION_DASHBOARDS}
+        self.assertIn("tc", declared)
+        tc = declared["tc"]
+        self.assertEqual(tc.card, "custom:growspace-tc-card")
+        self.assertEqual(tc.integration, "growspace_manager_tc")
+        # The whole point of declaring this shape: a dashboard with no
+        # growspace to name has to say what it is for in words.
+        self.assertTrue(tc.purpose.strip())
+
+        manifest = build_card_manifest()
+        self.assertEqual(
+            manifest["integration_dashboards"],
+            [
+                {
+                    "slug": dashboard.slug,
+                    "title": dashboard.title,
+                    "card": dashboard.card,
+                    "integration": dashboard.integration,
+                    "purpose": dashboard.purpose,
+                }
+                for dashboard in INTEGRATION_DASHBOARDS
+            ],
+        )
+        # It is not a capability profile wearing a disguise: no growspace, no
+        # services, no entities point at it.
+        self.assertNotIn("tc", {profile["slug"] for profile in manifest["profiles"]})
+
+    def test_integration_dashboard_slug_may_not_collide_with_a_profile(self) -> None:
+        errors = validate_contract(
+            PROFILES,
+            ROLES,
+            (
+                IntegrationDashboard(
+                    "veg",
+                    "E2E Veg Again",
+                    "custom:growspace-tc-card",
+                    "growspace_manager_tc",
+                    "A slug already spoken for by a capability profile.",
+                ),
+            ),
+        )
+
+        self.assertIn(
+            "integration dashboard veg collides with the capability-profile "
+            "instance of the same slug",
+            errors,
+        )
+
+    def test_integration_dashboard_without_a_purpose_fails_validation(self) -> None:
+        errors = validate_contract(
+            PROFILES,
+            ROLES,
+            (
+                IntegrationDashboard(
+                    "tc",
+                    "E2E Tissue Culture",
+                    "growspace-tc-card",
+                    "Growspace Manager TC",
+                    "   ",
+                ),
+            ),
+        )
+
+        self.assertIn(
+            "integration dashboard tc has no title or no stated purpose", errors
+        )
+        self.assertIn(
+            "integration dashboard tc declares 'growspace-tc-card', which is not "
+            "a custom card",
+            errors,
+        )
+        self.assertIn(
+            "integration dashboard tc declares 'Growspace Manager TC', which is "
+            "not a Home Assistant domain",
+            errors,
         )
 
     def test_stale_adapter_failure_names_the_generator_and_the_card_root(

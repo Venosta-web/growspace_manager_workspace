@@ -148,6 +148,46 @@ test('requires one correctly bound dashboard and one resource per manifest profi
   assert.match(validateLovelace(MANIFEST, [], resources, new Map())[0], /missing dashboard/);
 });
 
+test('holds a declared integration dashboard to one card of that type and nothing else', () => {
+  const manifest = {
+    ...MANIFEST,
+    integration_dashboards: [{
+      slug: 'tc',
+      title: 'E2E Tissue Culture',
+      card: 'custom:growspace-tc-card',
+      integration: 'growspace_manager_tc',
+      purpose: 'The standalone host of the tissue-culture view.',
+    }],
+  };
+  const resources = [{ url: '/local/community/lovelace-growspace-manager-card/growspace-manager-card.js?v=123' }];
+  const dashboards = [{ url_path: 'e2e-profile' }, { url_path: 'e2e-tc' }];
+  const profileConfig = ['e2e-profile', {
+    views: [{ sections: [{ cards: [{
+      type: 'custom:growspace-manager-card',
+      default_growspace: 'growspace-1',
+    }] }] }],
+  }];
+  // A panel view keeps its cards on the view itself rather than in sections.
+  const panel = { views: [{ type: 'panel', cards: [{ type: 'custom:growspace-tc-card' }] }] };
+  assert.deepEqual(
+    validateLovelace(manifest, dashboards, resources, new Map([profileConfig, ['e2e-tc', panel]])),
+    [],
+  );
+
+  assert.deepEqual(
+    validateLovelace(manifest, [dashboards[0]], resources, new Map([profileConfig])),
+    ['growspace_manager_tc/tc: missing dashboard e2e-tc'],
+  );
+
+  const withExtra = {
+    views: [{ type: 'panel', cards: [{ type: 'custom:growspace-tc-card' }, { type: 'markdown' }] }],
+  };
+  assert.match(
+    validateLovelace(manifest, dashboards, resources, new Map([profileConfig, ['e2e-tc', withExtra]]))[0],
+    /should hold one custom:growspace-tc-card and nothing else/,
+  );
+});
+
 test('checks registry platform and stable device bundles', () => {
   const manifest = {
     entities: [
