@@ -1132,6 +1132,8 @@ class EntityCoverageContractTest(unittest.TestCase):
             message = remedy(card_root)
 
         self.assertIn(f"./scripts/gen-e2e-sensors --card-root {card_root}", message)
+        self.assertIn("confirm this hub checkout", message)
+        self.assertIn("regenerating from a stale hub", message)
 
     def test_contract_failure_does_not_advise_regenerating(self) -> None:
         with mock.patch.object(
