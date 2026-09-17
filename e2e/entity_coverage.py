@@ -3224,7 +3224,7 @@ def generate_outputs(workspace: Path, card_root: Path) -> None:
 
 
 def remedy(card_root: Path) -> str:
-    """Name the one command that resolves a `check` failure.
+    """Explain how to resolve a `check` failure without losing newer behavior.
 
     A contract failure is a declaration the generator cannot express, so
     regenerating would only rewrite the adapters around it. Every other failure
@@ -3242,8 +3242,10 @@ def remedy(card_root: Path) -> str:
         )
     return (
         "\nThe declarations are consistent — every error above is a generated "
-        "adapter\nthat no longer matches them. Regenerate all of them from the "
-        "hub:\n"
+        "adapter\nthat no longer matches them. First confirm this hub checkout "
+        "and the selected\ncard checkout are the intended revision pair; "
+        "regenerating from a stale hub can\nremove newer profile behavior. Then "
+        "regenerate all adapters from the hub:\n"
         f"\n  ./scripts/gen-e2e-sensors --card-root {card_root}\n"
     )
 

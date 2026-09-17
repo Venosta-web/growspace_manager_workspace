@@ -31,6 +31,35 @@ entire validation until someone regenerates
 ([card#884](https://github.com/Venosta-web/lovelace-growspace-manager-card/issues/884)).
 The failure names this command with the card checkout already filled in.
 
+### Cross-repository revision pairing and recovery
+
+Treat `e2e/entity_coverage.py`, the two generated hub files, and the card's
+generated manifest as one revision set. A card branch can contain a manifest
+generated from a hub change that has not reached the hub checkout in front of
+you yet. In that state the declarations can be internally valid while every
+adapter is stale, and regenerating from the older hub would remove the newer
+profile instead of repairing it.
+
+Before regenerating, fetch both repositories and select compatible revisions.
+For ordinary validation that means fresh `origin/main` in the hub and fresh
+`origin/dev` in the card; for an unmerged contract change it means the paired
+hub and card branches from that change. Then regenerate from the selected hub
+worktree into the selected card worktree and review both repositories:
+
+```bash
+./scripts/gen-e2e-sensors --card-root <path-to-card-worktree>
+./scripts/check-e2e-coverage --card-root <path-to-card-worktree>
+git diff -- ha-dev/packages/e2e_simulated_sensors.yaml docs/E2E.md
+git -C <path-to-card-worktree> diff -- \
+  tests/e2e/fixtures/e2e-entity-coverage.generated.json
+```
+
+If only a shared checkout is dirty, do not overwrite it to make the refusal go
+away. Reproduce the check in clean worktrees at the intended upstream refs
+first. A clean pair that passes identifies the dirty checkout or revision skew
+as the problem; preserve unrelated edits, update the stale checkout, and rerun
+the same generator command. A second generation must produce no diff.
+
 <!-- BEGIN GENERATED E2E ENTITY COVERAGE -->
 <!-- Regenerate with ./scripts/gen-e2e-sensors; do not edit this table. -->
 
