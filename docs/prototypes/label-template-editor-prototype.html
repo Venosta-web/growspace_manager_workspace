@@ -1,0 +1,2156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Label template editor workflow prototype</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --surface: #1e1e1e;
+        --surface-dim: #101010;
+        --surface-raised: #2a2a2a;
+        --surface-high: #353535;
+        --text: #ffffff;
+        --muted: rgba(255, 255, 255, 0.7);
+        --faint: rgba(255, 255, 255, 0.5);
+        --outline: rgba(255, 255, 255, 0.14);
+        --primary: #69f0ae;
+        --primary-fill: #4caf50;
+        --primary-ink: #102415;
+        --info: #64b5f6;
+        --warning: #ffb74d;
+        --danger: #ff6b6b;
+        --focus: #b9f6ca;
+        --radius: 14px;
+        --font: Roboto, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        background: var(--surface-dim);
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        min-height: 100vh;
+        overflow-x: hidden;
+        background: var(--surface);
+        color: var(--text);
+        font-family: var(--font);
+        line-height: 1.45;
+      }
+
+      ::selection {
+        background: var(--primary-fill);
+        color: var(--primary-ink);
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      button,
+      select,
+      input {
+        color: inherit;
+      }
+
+      button:focus-visible,
+      select:focus-visible,
+      input:focus-visible,
+      [tabindex]:focus-visible {
+        outline: 3px solid var(--focus);
+        outline-offset: 2px;
+      }
+
+      button {
+        border: 0;
+      }
+
+      .prototype-note {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 18px;
+        align-items: start;
+        padding: 14px 20px;
+        background: #16251a;
+        border-bottom: 1px solid rgba(105, 240, 174, 0.24);
+      }
+
+      .prototype-note h2 {
+        margin: 0 0 4px;
+        color: var(--primary);
+        font-size: 1rem;
+      }
+
+      .prototype-note h2 span {
+        color: var(--muted);
+        font-size: 0.75rem;
+        font-weight: 500;
+      }
+
+      .prototype-note p {
+        max-width: 75ch;
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.875rem;
+      }
+
+      .prototype-note .question {
+        color: var(--text);
+        font-weight: 600;
+      }
+
+      .prototype-tag {
+        white-space: nowrap;
+        padding: 5px 9px;
+        border: 1px solid rgba(105, 240, 174, 0.28);
+        border-radius: 999px;
+        color: var(--primary);
+        font-size: 0.75rem;
+      }
+
+      .app-bar {
+        display: grid;
+        grid-template-columns: minmax(180px, 1fr) minmax(220px, auto) minmax(180px, 1fr);
+        gap: 12px;
+        align-items: center;
+        min-height: 64px;
+        padding: 10px 16px;
+        background: var(--surface-raised);
+        border-bottom: 1px solid var(--outline);
+      }
+
+      .app-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+
+      .app-title-copy {
+        min-width: 0;
+      }
+
+      .app-title h1 {
+        overflow: hidden;
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 650;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .app-title p {
+        overflow: hidden;
+        margin: 1px 0 0;
+        color: var(--muted);
+        font-size: 0.75rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .icon-button,
+      .toolbar-button,
+      .zoom-button {
+        display: inline-grid;
+        place-items: center;
+        min-width: 44px;
+        min-height: 44px;
+        padding: 8px;
+        border-radius: 10px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+      }
+
+      .icon-button:hover,
+      .toolbar-button:hover,
+      .zoom-button:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--text);
+      }
+
+      .icon-button svg,
+      .toolbar-button svg,
+      .zoom-button svg,
+      .element-icon svg,
+      .diagnostic-icon svg {
+        width: 20px;
+        height: 20px;
+        fill: currentColor;
+      }
+
+      .template-switcher {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .template-switcher label {
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+
+      .select-shell {
+        position: relative;
+      }
+
+      select,
+      .field-input {
+        width: 100%;
+        min-height: 44px;
+        padding: 8px 34px 8px 11px;
+        border: 1px solid var(--outline);
+        border-radius: 9px;
+        background: var(--surface-high);
+      }
+
+      .app-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px;
+      }
+
+      .primary-button,
+      .secondary-button,
+      .danger-button {
+        min-height: 44px;
+        padding: 8px 15px;
+        border-radius: 10px;
+        cursor: pointer;
+        font-weight: 650;
+      }
+
+      .primary-button {
+        background: var(--primary-fill);
+        color: var(--primary-ink);
+      }
+
+      .primary-button:disabled {
+        cursor: not-allowed;
+        opacity: 0.42;
+      }
+
+      .secondary-button {
+        background: rgba(255, 255, 255, 0.09);
+        color: var(--text);
+      }
+
+      .danger-button {
+        background: rgba(255, 107, 107, 0.14);
+        color: #ffb0b0;
+      }
+
+      .editor-layout {
+        display: grid;
+        grid-template-columns: 228px minmax(340px, 1fr) 286px;
+        height: min(760px, calc(100vh - 161px));
+        min-height: 560px;
+      }
+
+      .side-panel {
+        overflow-y: auto;
+        background: var(--surface-raised);
+        scrollbar-color: var(--surface-high) transparent;
+        scrollbar-width: thin;
+      }
+
+      .elements-panel {
+        border-right: 1px solid var(--outline);
+      }
+
+      .inspector-panel {
+        border-left: 1px solid var(--outline);
+      }
+
+      .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 50px;
+        padding: 10px 13px;
+        border-bottom: 1px solid var(--outline);
+      }
+
+      .panel-header h2,
+      .section-title {
+        margin: 0;
+        font-size: 0.875rem;
+        font-weight: 650;
+      }
+
+      .panel-header span {
+        color: var(--faint);
+        font-size: 0.75rem;
+      }
+
+      .element-list {
+        padding: 8px;
+      }
+
+      .element-row {
+        display: grid;
+        grid-template-columns: 34px minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+        width: 100%;
+        min-height: 48px;
+        padding: 6px 8px;
+        border-radius: 10px;
+        background: transparent;
+        color: var(--text);
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .element-row:hover {
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      .element-row.selected {
+        background: rgba(105, 240, 174, 0.11);
+        box-shadow: inset 0 0 0 1px rgba(105, 240, 174, 0.32);
+      }
+
+      .element-icon {
+        display: grid;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.07);
+        color: var(--muted);
+      }
+
+      .element-name {
+        overflow: hidden;
+        font-size: 0.875rem;
+        font-weight: 550;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .element-kind {
+        display: block;
+        color: var(--faint);
+        font-size: 0.75rem;
+        font-weight: 400;
+      }
+
+      .required-mark {
+        color: var(--warning);
+        font-size: 0.75rem;
+      }
+
+      .add-element-button {
+        width: calc(100% - 16px);
+        margin: 6px 8px;
+      }
+
+      .workspace {
+        position: relative;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        min-width: 0;
+        overflow: hidden;
+        background: #151515;
+      }
+
+      .canvas-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-height: 50px;
+        padding: 7px 12px;
+        background: #191919;
+        border-bottom: 1px solid var(--outline);
+      }
+
+      .toolbar-group {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .toolbar-divider {
+        width: 1px;
+        height: 24px;
+        margin: 0 5px;
+        background: var(--outline);
+      }
+
+      .toolbar-button {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 7px;
+      }
+
+      .toolbar-button:disabled,
+      .zoom-button:disabled {
+        cursor: not-allowed;
+        opacity: 0.3;
+      }
+
+      .zoom-readout {
+        min-width: 48px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+        text-align: center;
+        font-size: 0.75rem;
+      }
+
+      .canvas-scroller {
+        display: grid;
+        place-items: center;
+        min-width: 0;
+        min-height: 0;
+        overflow: auto;
+        padding: 46px;
+        background-color: #141414;
+        background-image: radial-gradient(rgba(255, 255, 255, 0.095) 0.8px, transparent 0.8px);
+        background-size: 16px 16px;
+        scrollbar-color: var(--surface-high) transparent;
+        scrollbar-width: thin;
+        touch-action: pan-x pan-y;
+      }
+
+      .label-stage {
+        position: relative;
+        flex: none;
+        overflow: visible;
+        background: #ffffff;
+        box-shadow: 0 18px 44px rgba(0, 0, 0, 0.48);
+        color: #000000;
+        cursor: default;
+        user-select: none;
+      }
+
+      .label-stage::before {
+        position: absolute;
+        inset: 3.2%;
+        z-index: 1;
+        border: 1px dashed rgba(0, 0, 0, 0.18);
+        content: "";
+        pointer-events: none;
+      }
+
+      .label-element {
+        position: absolute;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        overflow: hidden;
+        border: 1px solid transparent;
+        color: #000;
+        cursor: grab;
+        touch-action: none;
+      }
+
+      .label-element:active {
+        cursor: grabbing;
+      }
+
+      .label-element.selected {
+        overflow: visible;
+        border-color: #1976d2;
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85);
+      }
+
+      .label-element.warning {
+        border-color: #ed6c02;
+      }
+
+      .label-element.error {
+        border-color: #d32f2f;
+      }
+
+      .label-text {
+        display: -webkit-box;
+        width: 100%;
+        overflow: hidden;
+        line-height: 1.02;
+        text-overflow: ellipsis;
+        overflow-wrap: anywhere;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+      }
+
+      .label-divider {
+        width: 100%;
+        height: 2px;
+        background: #000;
+      }
+
+      .label-logo {
+        display: grid;
+        width: 100%;
+        height: 100%;
+        place-items: center;
+        border: 2px solid #000;
+        font-size: 0.75rem;
+        font-weight: 800;
+        letter-spacing: -0.04em;
+      }
+
+      .qr-grid {
+        display: grid;
+        width: 100%;
+        height: 100%;
+        padding: 5%;
+        grid-template-columns: repeat(9, 1fr);
+        grid-template-rows: repeat(9, 1fr);
+        background: white;
+        gap: 0;
+      }
+
+      .qr-cell.dark {
+        background: #000;
+      }
+
+      .resize-handle {
+        position: absolute;
+        right: -22px;
+        bottom: -22px;
+        z-index: 5;
+        width: 44px;
+        height: 44px;
+        background: transparent;
+        cursor: nwse-resize;
+        touch-action: none;
+      }
+
+      .resize-handle::after {
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        width: 14px;
+        height: 14px;
+        border: 2px solid white;
+        border-radius: 3px;
+        background: #1976d2;
+        content: "";
+      }
+
+      .selection-size {
+        position: absolute;
+        right: -1px;
+        bottom: calc(100% + 5px);
+        padding: 2px 5px;
+        border-radius: 4px;
+        background: #125d9b;
+        color: white;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 9px;
+        white-space: nowrap;
+      }
+
+      .status-strip {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 9px;
+        align-items: center;
+        min-height: 48px;
+        padding: 8px 12px;
+        border-top: 1px solid var(--outline);
+        background: #191919;
+        cursor: pointer;
+      }
+
+      .status-strip.ok {
+        color: var(--primary);
+      }
+
+      .status-strip.warning {
+        color: var(--warning);
+      }
+
+      .status-strip.error {
+        color: var(--danger);
+      }
+
+      .status-copy strong {
+        display: block;
+        font-size: 0.875rem;
+      }
+
+      .status-copy span {
+        display: block;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 0.75rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .status-count {
+        min-width: 25px;
+        padding: 2px 7px;
+        border: 1px solid currentColor;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        text-align: center;
+      }
+
+      .inspector-content {
+        padding: 14px;
+      }
+
+      .empty-inspector {
+        margin: 14px;
+        padding: 20px 12px;
+        color: var(--muted);
+        text-align: center;
+        font-size: 0.875rem;
+      }
+
+      .inspector-section {
+        padding: 14px 0;
+        border-bottom: 1px solid var(--outline);
+      }
+
+      .inspector-section:first-child {
+        padding-top: 0;
+      }
+
+      .inspector-section:last-child {
+        border-bottom: 0;
+      }
+
+      .section-title {
+        margin-bottom: 10px;
+        color: var(--muted);
+      }
+
+      .field-label {
+        display: block;
+        margin: 9px 0 4px;
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+
+      .number-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .number-field {
+        position: relative;
+      }
+
+      .number-field input {
+        width: 100%;
+        min-height: 44px;
+        padding: 7px 29px 7px 8px;
+        border: 1px solid var(--outline);
+        border-radius: 8px;
+        background: var(--surface-high);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .number-field > .field-label {
+        position: static;
+        display: block;
+        margin: 0 0 4px;
+      }
+
+      .number-field > span:last-child {
+        position: absolute;
+        right: 8px;
+        bottom: 9px;
+        color: var(--faint);
+        font-size: 0.75rem;
+        pointer-events: none;
+      }
+
+      .segmented,
+      .align-actions {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 5px;
+      }
+
+      .segmented button,
+      .align-actions button,
+      .nudge-grid button {
+        min-height: 44px;
+        padding: 7px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 0.75rem;
+      }
+
+      .segmented button.active {
+        background: rgba(105, 240, 174, 0.16);
+        color: var(--primary);
+        box-shadow: inset 0 0 0 1px rgba(105, 240, 174, 0.32);
+      }
+
+      .nudge-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 44px);
+        justify-content: center;
+        gap: 4px;
+      }
+
+      .nudge-grid button:nth-child(1) {
+        grid-column: 2;
+      }
+
+      .nudge-grid button:nth-child(2) {
+        grid-column: 1;
+      }
+
+      .nudge-grid button:nth-child(3) {
+        grid-column: 2;
+      }
+
+      .nudge-grid button:nth-child(4) {
+        grid-column: 3;
+      }
+
+      .nudge-grid svg {
+        width: 18px;
+        height: 18px;
+        fill: currentColor;
+      }
+
+      .diagnostics-panel {
+        position: absolute;
+        right: 10px;
+        bottom: 58px;
+        left: 10px;
+        z-index: 10;
+        display: none;
+        max-height: min(310px, 55vh);
+        overflow-y: auto;
+        padding: 8px;
+        border: 1px solid var(--outline);
+        border-radius: 12px;
+        background: #242424;
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.52);
+      }
+
+      .diagnostics-panel.open {
+        display: block;
+      }
+
+      .diagnostic-row {
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr) auto;
+        gap: 9px;
+        align-items: center;
+        min-height: 55px;
+        padding: 8px;
+        border-radius: 8px;
+      }
+
+      .diagnostic-row + .diagnostic-row {
+        border-top: 1px solid var(--outline);
+      }
+
+      .diagnostic-row.error .diagnostic-icon {
+        color: var(--danger);
+      }
+
+      .diagnostic-row.warning .diagnostic-icon {
+        color: var(--warning);
+      }
+
+      .diagnostic-copy strong {
+        display: block;
+        font-size: 0.875rem;
+      }
+
+      .diagnostic-copy span {
+        display: block;
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+
+      .diagnostic-row button {
+        min-height: 34px;
+        padding: 6px 9px;
+        border-radius: 7px;
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--text);
+        cursor: pointer;
+        font-size: 0.75rem;
+      }
+
+      .mobile-tabs {
+        display: none;
+      }
+
+      .mobile-reset-button {
+        display: none;
+      }
+
+      .walkthroughs {
+        padding: 20px;
+        border-top: 1px solid var(--outline);
+        background: var(--surface-dim);
+      }
+
+      .walkthrough-heading {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+
+      .walkthrough-heading h2 {
+        margin: 0 0 3px;
+        font-size: 1rem;
+      }
+
+      .walkthrough-heading p {
+        max-width: 70ch;
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.875rem;
+      }
+
+      .scenario-tabs {
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        padding-bottom: 5px;
+        scrollbar-color: var(--surface-high) transparent;
+      }
+
+      .scenario-tab {
+        flex: none;
+        min-height: 38px;
+        padding: 7px 12px;
+        border-radius: 9px;
+        background: rgba(255, 255, 255, 0.07);
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 0.75rem;
+      }
+
+      .scenario-tab.active {
+        background: var(--primary-fill);
+        color: var(--primary-ink);
+      }
+
+      .scenario-body {
+        display: grid;
+        grid-template-columns: minmax(210px, 0.8fr) minmax(0, 1.8fr);
+        gap: 18px;
+        padding-top: 14px;
+      }
+
+      .scenario-copy h3 {
+        margin: 0 0 5px;
+        font-size: 1rem;
+      }
+
+      .scenario-copy p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.875rem;
+      }
+
+      .scenario-steps {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        align-content: flex-start;
+      }
+
+      .scenario-step {
+        min-height: 44px;
+        padding: 8px 11px;
+        border: 1px solid var(--outline);
+        border-radius: 9px;
+        background: var(--surface-raised);
+        color: var(--text);
+        cursor: pointer;
+        font-size: 0.75rem;
+        text-align: left;
+      }
+
+      .scenario-step.done {
+        border-color: rgba(105, 240, 174, 0.38);
+        color: var(--primary);
+      }
+
+      .scenario-step.next {
+        box-shadow: 0 0 0 2px rgba(105, 240, 174, 0.34);
+      }
+
+      .state-panel {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(90px, 1fr));
+        gap: 1px;
+        margin-top: 16px;
+        overflow: hidden;
+        border: 1px solid var(--outline);
+        border-radius: 10px;
+        background: var(--outline);
+      }
+
+      .state-cell {
+        min-height: 58px;
+        padding: 9px;
+        background: var(--surface-raised);
+      }
+
+      .state-cell span {
+        display: block;
+        color: var(--faint);
+        font-size: 0.75rem;
+      }
+
+      .state-cell strong {
+        display: block;
+        margin-top: 2px;
+        overflow: hidden;
+        font-size: 0.75rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .toast {
+        position: fixed;
+        right: 18px;
+        bottom: 18px;
+        z-index: 50;
+        max-width: min(360px, calc(100vw - 36px));
+        padding: 11px 14px;
+        border: 1px solid var(--outline);
+        border-radius: 10px;
+        background: #303030;
+        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.48);
+        color: var(--text);
+        font-size: 0.875rem;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(8px);
+        transition:
+          opacity 150ms ease-out,
+          transform 150ms ease-out;
+      }
+
+      .toast.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      @media (max-width: 980px) {
+        .editor-layout {
+          grid-template-columns: 190px minmax(320px, 1fr) 245px;
+        }
+
+        .app-bar {
+          grid-template-columns: minmax(170px, 1fr) minmax(190px, auto) auto;
+        }
+
+        .app-actions .secondary-button {
+          display: none;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .prototype-note {
+          grid-template-columns: 1fr;
+          padding: 12px 14px;
+        }
+
+        .prototype-tag {
+          display: none;
+        }
+
+        .prototype-note p:not(.question) {
+          display: none;
+        }
+
+        .app-bar {
+          position: sticky;
+          top: 0;
+          z-index: 30;
+          grid-template-columns: minmax(0, 1fr) auto;
+          min-height: 58px;
+          padding: 8px 10px;
+        }
+
+        .app-title p,
+        .template-switcher label,
+        .app-actions .secondary-button {
+          display: none;
+        }
+
+        .template-switcher {
+          display: flex;
+          grid-column: 1 / -1;
+          grid-row: 2;
+        }
+
+        .template-switcher .select-shell {
+          flex: 1;
+        }
+
+        .mobile-reset-button {
+          display: inline-flex;
+          flex: none;
+          align-items: center;
+          justify-content: center;
+          min-height: 44px;
+          padding: 8px 12px;
+          border-radius: 9px;
+          background: rgba(255, 255, 255, 0.09);
+          color: var(--text);
+          cursor: pointer;
+          font-weight: 650;
+        }
+
+        .app-actions {
+          grid-column: 2;
+          grid-row: 1;
+        }
+
+        .app-actions .primary-button {
+          min-height: 44px;
+          padding-inline: 12px;
+        }
+
+        .editor-layout {
+          display: block;
+          height: auto;
+          min-height: 0;
+        }
+
+        .workspace {
+          height: min(620px, calc(100svh - 138px));
+          min-height: 470px;
+          grid-template-rows: auto minmax(0, 1fr) auto auto;
+        }
+
+        .elements-panel,
+        .inspector-panel {
+          position: fixed;
+          right: 0;
+          bottom: 48px;
+          left: 0;
+          z-index: 40;
+          display: none;
+          max-height: 48svh;
+          overflow-y: auto;
+          border: 0;
+          border-top: 1px solid var(--outline);
+          border-radius: 16px 16px 0 0;
+          box-shadow: 0 -18px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .elements-panel.mobile-open,
+        .inspector-panel.mobile-open {
+          display: block;
+        }
+
+        .canvas-toolbar {
+          padding-inline: 8px;
+        }
+
+        .canvas-toolbar .desktop-only {
+          display: none;
+        }
+
+        .canvas-scroller {
+          place-items: center;
+          padding: 34px 28px;
+        }
+
+        .mobile-tabs {
+          z-index: 12;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          border-top: 1px solid var(--outline);
+          background: var(--surface-raised);
+        }
+
+        .mobile-tabs button {
+          min-height: 48px;
+          background: transparent;
+          color: var(--muted);
+          cursor: pointer;
+          font-size: 0.75rem;
+        }
+
+        .mobile-tabs button.active {
+          color: var(--primary);
+          box-shadow: inset 0 -2px 0 var(--primary);
+        }
+
+        .diagnostics-panel {
+          position: fixed;
+          right: 8px;
+          bottom: 55px;
+          left: 8px;
+          z-index: 45;
+          max-height: 45svh;
+        }
+
+        .walkthroughs {
+          padding: 18px 14px;
+        }
+
+        .scenario-body {
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+
+        .state-panel {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .toast {
+          right: 12px;
+          bottom: 62px;
+          left: 12px;
+          max-width: none;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      THESIS: Label editing is a focused, recoverable task mode; it refuses the floating-toolbox graphics-app pattern.
+      OWN-WORLD: Growspace carbon surfaces, printer-paper canvas, Vitality Green actions, restrained blue selection and amber/red diagnostics.
+      STORY: Choose a template, directly arrange constrained Label Elements, resolve print risks, then save a reusable draft.
+      FIRST VIEWPORT: Desktop shows Elements / label canvas / Selection; narrow screens make the canvas full-width with a three-tab bottom workbench.
+      FORM: Existing Growspace operator surface, scoped extension; no direction seed because this inherits the established card world.
+      FINISH: This throwaway branch inherits lovelace-growspace-manager-card/PRODUCT.md and DESIGN.md; prototype-only documentation is intentionally exempt, and finish requires interaction review plus a recorded human verdict.
+    -->
+    <aside class="prototype-note">
+      <div>
+        <h2>Label editing workflow prototype <span>Throwaway · Issue #201</span></h2>
+        <p class="question">
+          Does one canvas-first task mode make direct label editing understandable without becoming a general graphics application?
+        </p>
+        <p>
+          Try the guided cases below or manipulate the label freely. State is in memory only; visuals approximate the editor chrome, not printer output.
+        </p>
+      </div>
+      <span class="prototype-tag">Open this file directly</span>
+    </aside>
+
+    <header class="app-bar">
+      <div class="app-title">
+        <button class="icon-button" aria-label="Back to print settings" title="Back to print settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.42-1.41L7.83 13H20v-2Z" /></svg>
+        </button>
+        <div class="app-title-copy">
+          <h1>Edit label template</h1>
+          <p id="draft-status">Working draft · changes stay here until saved</p>
+        </div>
+      </div>
+
+      <div class="template-switcher">
+        <label for="template-select">Template</label>
+        <div class="select-shell">
+          <select id="template-select" aria-label="Label template"></select>
+        </div>
+        <button class="mobile-reset-button" id="mobile-reset-button">Reset</button>
+      </div>
+
+      <div class="app-actions">
+        <button class="secondary-button" id="reset-button">Reset draft</button>
+        <button class="primary-button" id="save-button">Save template</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="editor-layout" aria-label="Label template editor">
+        <aside class="side-panel elements-panel" id="elements-panel">
+          <div class="panel-header">
+            <h2>Label elements</h2>
+            <span id="element-count"></span>
+          </div>
+          <div class="element-list" id="element-list"></div>
+          <button class="secondary-button add-element-button" id="multi-select-toggle" aria-pressed="false">Select multiple</button>
+          <button class="secondary-button add-element-button" id="add-divider">Add divider</button>
+        </aside>
+
+        <section class="workspace">
+          <div class="canvas-toolbar">
+            <div class="toolbar-group">
+              <button class="toolbar-button" id="undo-button" aria-label="Undo" title="Undo (Ctrl+Z)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.5 8c-2.65 0-5.03 1.09-6.74 2.85L3 8v7h7l-2.62-2.62A7.04 7.04 0 0 1 12.5 10c3.54 0 6.55 2.31 7.6 5.5l1.9-.62A10 10 0 0 0 12.5 8Z" /></svg>
+              </button>
+              <button class="toolbar-button" id="redo-button" aria-label="Redo" title="Redo (Ctrl+Shift+Z)">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.5 8c2.65 0 5.03 1.09 6.74 2.85L21 8v7h-7l2.62-2.62A7.04 7.04 0 0 0 11.5 10c-3.54 0-6.55 2.31-7.6 5.5L2 14.88A10 10 0 0 1 11.5 8Z" /></svg>
+              </button>
+              <span class="toolbar-divider desktop-only"></span>
+              <button class="toolbar-button desktop-only" id="duplicate-button" aria-label="Duplicate selected element" title="Duplicate">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4a2 2 0 0 0-2 2v12h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H8V7h11v14Z" /></svg>
+              </button>
+              <button class="toolbar-button desktop-only" id="delete-button" aria-label="Delete selected element" title="Delete">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12Zm3.46-7.12 1.41-1.41L12 11.59l1.12-1.12 1.41 1.41L13.41 13l1.12 1.12-1.41 1.41L12 14.41l-1.12 1.12-1.41-1.41L10.59 13l-1.13-1.12ZM15.5 4l-1-1h-5l-1 1H5v2h14V4h-3.5Z" /></svg>
+              </button>
+            </div>
+            <div class="toolbar-group">
+              <button class="zoom-button" id="zoom-out" aria-label="Zoom out" title="Zoom out">−</button>
+              <span class="zoom-readout" id="zoom-readout">100%</span>
+              <button class="zoom-button" id="zoom-in" aria-label="Zoom in" title="Zoom in">+</button>
+              <button class="toolbar-button" id="fit-button" aria-label="Fit label to view" title="Fit label to view">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14H5v5h5v-2H7v-3Zm-2-4h2V7h3V5H5v5Zm12 7h-3v2h5v-5h-2v3Zm-3-12v2h3v3h2V5h-5Z" /></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="canvas-scroller" id="canvas-scroller">
+            <div class="label-stage" id="label-stage" role="group" aria-label="Editable label canvas"></div>
+          </div>
+
+          <button class="status-strip" id="status-strip" aria-expanded="false" aria-controls="diagnostics-panel">
+            <span class="diagnostic-icon" id="status-icon"></span>
+            <span class="status-copy"><strong id="status-title"></strong><span id="status-detail"></span></span>
+            <span class="status-count" id="status-count"></span>
+          </button>
+
+          <nav class="mobile-tabs" aria-label="Editor workbench">
+            <button id="mobile-elements" aria-controls="elements-panel" aria-expanded="false">Elements</button>
+            <button id="mobile-selection" aria-controls="inspector-panel" aria-expanded="false">Selection</button>
+            <button id="mobile-checks" aria-controls="diagnostics-panel" aria-expanded="false">Checks</button>
+          </nav>
+
+          <div class="diagnostics-panel" id="diagnostics-panel"></div>
+        </section>
+
+        <aside class="side-panel inspector-panel" id="inspector-panel">
+          <div class="panel-header">
+            <h2>Selection</h2>
+            <span id="selection-count"></span>
+          </div>
+          <div id="inspector-body"></div>
+        </aside>
+      </section>
+
+      <section class="walkthroughs">
+        <div class="walkthrough-heading">
+          <div>
+            <h2>Guided reaction prompts</h2>
+            <p>Each step changes the same editor state. Notice what feels obvious, surprising, or too tool-like.</p>
+          </div>
+        </div>
+        <div class="scenario-tabs" id="scenario-tabs" role="tablist"></div>
+        <div class="scenario-body">
+          <div class="scenario-copy" id="scenario-copy"></div>
+          <div class="scenario-steps" id="scenario-steps"></div>
+        </div>
+        <div class="state-panel" id="state-panel" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      (() => {
+        "use strict";
+
+        const icons = {
+          text: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v3h5.5v12h3V7H19V4H5Z"/></svg>',
+          qr: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h8v8H3V3Zm2 2v4h4V5H5Zm8-2h8v8h-8V3Zm2 2v4h4V5h-4ZM3 13h8v8H3v-8Zm2 2v4h4v-4H5Zm8-2h3v3h-3v-3Zm5 0h3v3h-3v-3Zm-5 5h3v3h-3v-3Zm5 0h3v3h-3v-3Z"/></svg>',
+          logo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2ZM8.5 11.5l2.5 3.01L14.5 10l4.5 6H5l3.5-4.5Z"/></svg>',
+          divider: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11h18v2H3z"/></svg>',
+          ok: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17Z"/></svg>',
+          warning: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21Zm12-3h-2v-2h2v2Zm0-4h-2v-4h2v4Z"/></svg>',
+          error: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 .01 20.01A10 10 0 0 0 12 2Zm1 15h-2v-2h2v2Zm0-4h-2V7h2v6Z"/></svg>',
+          up: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 7-6 6 1.41 1.41L11 10.83V18h2v-7.17l3.59 3.58L18 13l-6-6Z"/></svg>',
+          down: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 17 6-6-1.41-1.41L13 13.17V6h-2v7.17L7.41 9.59 6 11l6 6Z"/></svg>',
+          left: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 12 6 6 1.41-1.41L10.83 13H18v-2h-7.17l3.58-3.59L13 6l-6 6Z"/></svg>',
+          right: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m17 12-6-6-1.41 1.41L13.17 11H6v2h7.17l-3.58 3.59L11 18l6-6Z"/></svg>',
+        };
+
+        const qrPattern = [
+          "111111101",
+          "100000101",
+          "101110111",
+          "101110001",
+          "101110111",
+          "100000101",
+          "111111111",
+          "001011001",
+          "111001111",
+        ];
+
+        const templates = {
+          bench: {
+            id: "bench",
+            name: "Bench plant · 50 × 30 mm",
+            size: { width: 50, height: 30 },
+            elements: [
+              { id: "name", type: "text", label: "Strain name", required: true, x: 3, y: 3, w: 31, h: 7, content: "Blue Dream", fontSize: 4.2, bold: true, align: "left" },
+              { id: "divider", type: "divider", label: "Divider", x: 3, y: 11, w: 31, h: 1, content: "", fontSize: 2, bold: false, align: "left" },
+              { id: "details", type: "text", label: "Plant details", x: 3, y: 13, w: 28, h: 10, content: "Clone 3 · Flower day 18\nHumboldt Seed Co.", fontSize: 2.2, bold: false, align: "left" },
+              { id: "qr", type: "qr", label: "Plant QR", x: 37, y: 5, w: 10, h: 10, content: "growspace://plant/clone-3", fontSize: 2, bold: false, align: "center" },
+              { id: "logo", type: "logo", label: "Breeder logo", x: 37, y: 18, w: 10, h: 7, content: "HSC", fontSize: 2, bold: true, align: "center" },
+            ],
+          },
+          tall: {
+            id: "tall",
+            name: "Tall stake · 30 × 80 mm",
+            size: { width: 30, height: 80 },
+            elements: [
+              { id: "name", type: "text", label: "Strain name", required: true, x: 3, y: 4, w: 24, h: 13, content: "Northern Lights #5", fontSize: 4.2, bold: true, align: "center" },
+              { id: "logo", type: "logo", label: "Breeder logo", x: 8, y: 20, w: 14, h: 10, content: "SENSI", fontSize: 2, bold: true, align: "center" },
+              { id: "details", type: "text", label: "Plant details", x: 4, y: 34, w: 22, h: 17, content: "Mother plant\nVegetative day 96\nTent A", fontSize: 2.6, bold: false, align: "center" },
+              { id: "qr", type: "qr", label: "Plant QR", x: 8, y: 56, w: 14, h: 14, content: "growspace://plant/mother-nl5", fontSize: 2, bold: false, align: "center" },
+            ],
+          },
+          nursery: {
+            id: "nursery",
+            name: "Nursery compact · 50 × 15 mm",
+            size: { width: 50, height: 15 },
+            elements: [
+              { id: "name", type: "text", label: "Strain name", required: true, x: 2, y: 2, w: 28, h: 5, content: "Gelato 41", fontSize: 3.4, bold: true, align: "left" },
+              { id: "details", type: "text", label: "Plant details", x: 2, y: 8, w: 31, h: 4, content: "Seedling · Day 9", fontSize: 2.1, bold: false, align: "left" },
+              { id: "qr", type: "qr", label: "Plant QR", x: 38, y: 2, w: 11, h: 11, content: "growspace://plant/seedling-g41", fontSize: 2, bold: false, align: "center" },
+            ],
+          },
+        };
+
+        const clone = (value) => JSON.parse(JSON.stringify(value));
+
+        function fromTemplate(templateId) {
+          const template = clone(templates[templateId]);
+          return {
+            templateId,
+            templateName: template.name,
+            size: template.size,
+            elements: template.elements,
+            selection: [template.elements[0].id],
+            zoom: 1,
+            dirty: false,
+            message: "Template opened",
+            multiSelectMode: false,
+            mobilePanel: null,
+            diagnosticsOpen: false,
+            scenarioId: "core",
+            scenarioStep: 0,
+          };
+        }
+
+        let state = fromTemplate("bench");
+        let undoStack = [];
+        let redoStack = [];
+        const drafts = {};
+
+        function reducer(current, action) {
+          const next = clone(current);
+          const selected = () => next.elements.filter((element) => next.selection.includes(element.id));
+
+          switch (action.type) {
+            case "SELECT":
+              next.selection = action.additive
+                ? next.selection.includes(action.id)
+                  ? next.selection.filter((id) => id !== action.id)
+                  : [...next.selection, action.id]
+                : [action.id];
+              next.message = next.selection.length > 1 ? `${next.selection.length} elements selected` : "Element selected";
+              return next;
+            case "CLEAR_SELECTION":
+              next.selection = [];
+              next.message = "Selection cleared";
+              return next;
+            case "MOVE":
+              selected().forEach((element) => {
+                element.x = round(element.x + action.dx);
+                element.y = round(element.y + action.dy);
+              });
+              next.dirty = true;
+              next.message = `Moved ${next.selection.length || 1} element${next.selection.length === 1 ? "" : "s"}`;
+              return next;
+            case "RESIZE": {
+              const element = selected()[0];
+              if (!element) return current;
+              const min = element.type === "qr" ? 4 : 2;
+              element.w = round(Math.max(min, element.w + action.dw));
+              element.h = round(Math.max(min, element.h + action.dh));
+              if (element.type === "qr" || element.type === "logo") {
+                const size = Math.max(min, Math.max(element.w, element.h));
+                element.w = size;
+                element.h = size;
+              }
+              next.dirty = true;
+              next.message = `Resized ${element.label}`;
+              return next;
+            }
+            case "SET_GEOMETRY": {
+              const element = selected()[0];
+              if (!element) return current;
+              element[action.key] = round(Number(action.value));
+              next.dirty = true;
+              next.message = `Updated ${action.key.toUpperCase()}`;
+              return next;
+            }
+            case "SET_CONTENT": {
+              const element = selected()[0];
+              if (!element) return current;
+              element.content = action.value;
+              next.dirty = true;
+              next.message = `Updated ${element.label}`;
+              return next;
+            }
+            case "SET_STYLE":
+              selected().forEach((element) => {
+                element[action.key] = action.value;
+              });
+              next.dirty = true;
+              next.message = "Style updated";
+              return next;
+            case "ALIGN": {
+              const items = selected();
+              if (items.length < 2) return current;
+              if (action.edge === "left") {
+                const edge = Math.min(...items.map((item) => item.x));
+                items.forEach((item) => (item.x = edge));
+              } else if (action.edge === "center") {
+                const center = items.reduce((sum, item) => sum + item.x + item.w / 2, 0) / items.length;
+                items.forEach((item) => (item.x = round(center - item.w / 2)));
+              } else if (action.edge === "top") {
+                const edge = Math.min(...items.map((item) => item.y));
+                items.forEach((item) => (item.y = edge));
+              }
+              next.dirty = true;
+              next.message = `Aligned ${items.length} elements`;
+              return next;
+            }
+            case "DUPLICATE": {
+              const copies = selected().map((element, index) => ({
+                ...clone(element),
+                id: `${element.id}-copy-${Date.now()}-${index}`,
+                label: `${element.label} copy`,
+                x: round(element.x + 2),
+                y: round(element.y + 2),
+                required: false,
+              }));
+              next.elements.push(...copies);
+              next.selection = copies.map((element) => element.id);
+              next.dirty = true;
+              next.message = `Duplicated ${copies.length} element${copies.length === 1 ? "" : "s"}`;
+              return next;
+            }
+            case "DELETE":
+              next.elements = next.elements.filter((element) => !next.selection.includes(element.id) || element.required);
+              next.selection = next.selection.filter((id) => next.elements.some((element) => element.id === id));
+              next.dirty = true;
+              next.message = "Deleted optional selection; required elements were kept";
+              return next;
+            case "ADD_DIVIDER": {
+              const divider = {
+                id: `divider-${Date.now()}`,
+                type: "divider",
+                label: "Divider",
+                x: 5,
+                y: round(next.size.height / 2),
+                w: round(next.size.width - 10),
+                h: 1,
+                content: "",
+                fontSize: 2,
+                bold: false,
+                align: "left",
+              };
+              next.elements.push(divider);
+              next.selection = [divider.id];
+              next.dirty = true;
+              next.message = "Divider added";
+              return next;
+            }
+            case "SET_ZOOM":
+              next.zoom = Math.max(0.45, Math.min(1.8, round(action.value, 2)));
+              next.message = `Zoom ${Math.round(next.zoom * 100)}%`;
+              return next;
+            case "TOGGLE_DIAGNOSTICS":
+              next.diagnosticsOpen = action.value ?? !next.diagnosticsOpen;
+              next.mobilePanel = null;
+              return next;
+            case "SET_MOBILE_PANEL":
+              next.mobilePanel = next.mobilePanel === action.panel ? null : action.panel;
+              next.diagnosticsOpen = false;
+              return next;
+            case "TOGGLE_MULTI_SELECT":
+              next.multiSelectMode = !next.multiSelectMode;
+              next.message = next.multiSelectMode ? "Multi-select mode on" : "Multi-select mode off";
+              return next;
+            case "SET_SCENARIO":
+              next.scenarioId = action.id;
+              next.scenarioStep = 0;
+              return next;
+            case "ADVANCE_SCENARIO":
+              next.scenarioStep = Math.max(next.scenarioStep, action.step + 1);
+              return next;
+            case "LOAD_CASE":
+              return loadCase(next, action.caseId);
+            default:
+              return current;
+          }
+        }
+
+        function loadCase(current, caseId) {
+          let next;
+          if (caseId === "balanced") {
+            next = fromTemplate("bench");
+            next.message = "Loaded the balanced 50 × 30 mm case";
+          } else if (caseId === "tall") {
+            next = fromTemplate("tall");
+            next.message = "Loaded the unusually tall label";
+          } else if (caseId === "long") {
+            next = fromTemplate("bench");
+            const name = next.elements.find((element) => element.id === "name");
+            name.content = "Dr. Grinspoon Heritage Sativa Phenotype 12";
+            name.w = 20;
+            next.selection = ["name"];
+            next.dirty = true;
+            next.message = "Loaded unusually long content";
+          } else if (caseId === "missing") {
+            next = fromTemplate("bench");
+            next.elements.find((element) => element.id === "name").content = "";
+            next.elements.find((element) => element.id === "details").content = "";
+            next.selection = ["name"];
+            next.dirty = true;
+            next.message = "Loaded missing required and optional content";
+          } else if (caseId === "small-qr") {
+            next = fromTemplate("bench");
+            Object.assign(next.elements.find((element) => element.id === "qr"), { w: 6, h: 6 });
+            next.selection = ["qr"];
+            next.dirty = true;
+            next.message = "Loaded a QR code below the tested minimum";
+          } else if (caseId === "overlap") {
+            next = fromTemplate("bench");
+            Object.assign(next.elements.find((element) => element.id === "details"), { x: 25, y: 7, w: 18, h: 12 });
+            next.selection = ["details", "qr"];
+            next.dirty = true;
+            next.message = "Loaded overlapping elements";
+          } else if (caseId === "out") {
+            next = fromTemplate("bench");
+            Object.assign(next.elements.find((element) => element.id === "logo"), { x: 44, y: 24, w: 11, h: 8 });
+            next.selection = ["logo"];
+            next.dirty = true;
+            next.message = "Loaded an element beyond the label edge";
+          } else {
+            next = clone(current);
+          }
+          next.scenarioId = current.scenarioId;
+          next.scenarioStep = current.scenarioStep;
+          return next;
+        }
+
+        function round(value, places = 1) {
+          const scale = 10 ** places;
+          return Math.round(value * scale) / scale;
+        }
+
+        function snapshot(value) {
+          const copy = clone(value);
+          copy.mobilePanel = null;
+          copy.diagnosticsOpen = false;
+          return copy;
+        }
+
+        function dispatch(action, options = {}) {
+          const record = options.record !== false;
+          const before = snapshot(state);
+          const next = reducer(state, action);
+          if (next === state) return;
+          if (record && !["SELECT", "CLEAR_SELECTION", "SET_ZOOM", "TOGGLE_DIAGNOSTICS", "SET_MOBILE_PANEL", "TOGGLE_MULTI_SELECT", "SET_SCENARIO", "ADVANCE_SCENARIO"].includes(action.type)) {
+            undoStack.push(before);
+            if (undoStack.length > 60) undoStack.shift();
+            redoStack = [];
+          }
+          state = next;
+          render();
+        }
+
+        function undo() {
+          if (!undoStack.length) return;
+          redoStack.push(snapshot(state));
+          state = undoStack.pop();
+          state.message = "Undid the last edit";
+          render();
+          showToast("Last edit undone");
+        }
+
+        function redo() {
+          if (!redoStack.length) return;
+          undoStack.push(snapshot(state));
+          state = redoStack.pop();
+          state.message = "Redid the last edit";
+          render();
+          showToast("Edit restored");
+        }
+
+        function switchTemplate(templateId) {
+          if (templateId === state.templateId) return;
+          drafts[state.templateId] = snapshot(state);
+          const previous = state.templateName;
+          state = drafts[templateId] ? clone(drafts[templateId]) : fromTemplate(templateId);
+          state.message = `Switched templates; the ${previous} draft is still kept`;
+          undoStack = [];
+          redoStack = [];
+          render();
+          showToast(`Draft kept for ${previous}`);
+        }
+
+        function resetDraft() {
+          const scenarioId = state.scenarioId;
+          undoStack.push(snapshot(state));
+          state = fromTemplate(state.templateId);
+          state.scenarioId = scenarioId;
+          state.message = "Reset to the last saved template; undo is available";
+          redoStack = [];
+          render();
+          showToast("Draft reset · Undo restores it");
+        }
+
+        function saveTemplate() {
+          const diagnostics = getDiagnostics(state);
+          if (diagnostics.some((item) => item.severity === "error")) {
+            state.diagnosticsOpen = true;
+            render();
+            showToast("Resolve blocking checks before saving");
+            return;
+          }
+          templates[state.templateId] = {
+            id: state.templateId,
+            name: state.templateName,
+            size: clone(state.size),
+            elements: clone(state.elements),
+          };
+          state.dirty = false;
+          state.message = "Template saved";
+          drafts[state.templateId] = snapshot(state);
+          render();
+          showToast("Template saved");
+        }
+
+        function boxesOverlap(a, b) {
+          const xOverlap = a.x < b.x + b.w && a.x + a.w > b.x;
+          const yOverlap = a.y < b.y + b.h && a.y + a.h > b.y;
+          return xOverlap && yOverlap;
+        }
+
+        function getDiagnostics(model) {
+          const result = [];
+          const name = model.elements.find((element) => element.id === "name" || element.required);
+          if (!name || !name.content.trim()) {
+            result.push({ severity: "error", title: "Strain name is missing", detail: "Required content must be populated before this template can print.", elementIds: name ? [name.id] : [] });
+          }
+
+          model.elements.forEach((element) => {
+            if (element.x < 0 || element.y < 0 || element.x + element.w > model.size.width || element.y + element.h > model.size.height) {
+              result.push({ severity: "error", title: `${element.label} is outside the label`, detail: "Move or resize it until the complete element is on the printable canvas.", elementIds: [element.id] });
+            }
+            if (element.type === "qr" && Math.min(element.w, element.h) < 10) {
+              result.push({ severity: "error", title: "QR code is too small", detail: "This prototype uses a tested minimum of 10 × 10 mm for the sample payload.", elementIds: [element.id] });
+            }
+            if (element.type === "text" && !element.required && !element.content.trim()) {
+              result.push({ severity: "warning", title: `${element.label} has no content`, detail: "It will be omitted for this sample; the rest of the layout remains unchanged.", elementIds: [element.id] });
+            }
+            if (element.type === "text" && element.content.length > Math.max(24, element.w * element.h * 0.18)) {
+              result.push({ severity: "warning", title: `${element.label} may shrink aggressively`, detail: "The backend preview should confirm the final auto-fit size before print.", elementIds: [element.id] });
+            }
+          });
+
+          for (let index = 0; index < model.elements.length; index++) {
+            for (let otherIndex = index + 1; otherIndex < model.elements.length; otherIndex++) {
+              const a = model.elements[index];
+              const b = model.elements[otherIndex];
+              if (a.type === "divider" || b.type === "divider") continue;
+              if (boxesOverlap(a, b)) {
+                result.push({ severity: "warning", title: `${a.label} overlaps ${b.label}`, detail: "Overlap is allowed, but later elements can cover earlier print content.", elementIds: [a.id, b.id] });
+              }
+            }
+          }
+          return result;
+        }
+
+        function selectedElements() {
+          return state.elements.filter((element) => state.selection.includes(element.id));
+        }
+
+        function elementSeverity(elementId, diagnostics) {
+          const related = diagnostics.filter((item) => item.elementIds.includes(elementId));
+          return related.some((item) => item.severity === "error") ? "error" : related.length ? "warning" : "";
+        }
+
+        function qrMarkup() {
+          return `<span class="qr-grid">${qrPattern.flatMap((row) => [...row]).map((cell) => `<span class="qr-cell ${cell === "1" ? "dark" : ""}"></span>`).join("")}</span>`;
+        }
+
+        function renderLabelElement(element, diagnostics) {
+          const selected = state.selection.includes(element.id);
+          const severity = elementSeverity(element.id, diagnostics);
+          const style = [
+            `left:${(element.x / state.size.width) * 100}%`,
+            `top:${(element.y / state.size.height) * 100}%`,
+            `width:${(element.w / state.size.width) * 100}%`,
+            `height:${(element.h / state.size.height) * 100}%`,
+            `justify-content:${element.align === "left" ? "flex-start" : element.align === "right" ? "flex-end" : "center"}`,
+            `text-align:${element.align || "left"}`,
+          ].join(";");
+          let content = "";
+          if (element.type === "qr") content = qrMarkup();
+          else if (element.type === "logo") content = `<span class="label-logo">${escapeHtml(element.content || "LOGO")}</span>`;
+          else if (element.type === "divider") content = '<span class="label-divider"></span>';
+          else content = `<span class="label-text" style="font-size:${Math.max(7, element.fontSize * state.zoom * 3)}px;font-weight:${element.bold ? 800 : 500}">${escapeHtml(element.content || "Missing content").replaceAll("\n", "<br>")}</span>`;
+
+          return `<div class="label-element ${selected ? "selected" : ""} ${severity}" data-element-id="${element.id}" style="${style}" tabindex="0" role="button" aria-label="${escapeHtml(element.label)}${selected ? ", selected" : ""}">
+            ${content}
+            ${selected && state.selection.length === 1 ? `<span class="selection-size">${element.w} × ${element.h} mm</span><span class="resize-handle" data-resize-id="${element.id}" aria-hidden="true"></span>` : ""}
+          </div>`;
+        }
+
+        function render() {
+          const diagnostics = getDiagnostics(state);
+          renderTemplateSelect();
+          renderElementsList();
+          renderCanvas(diagnostics);
+          renderInspector();
+          renderDiagnostics(diagnostics);
+          renderScenarios();
+          renderState(diagnostics);
+          renderChrome(diagnostics);
+          bindDynamicEvents();
+        }
+
+        function renderTemplateSelect() {
+          const select = document.getElementById("template-select");
+          select.innerHTML = Object.values(templates).map((template) => `<option value="${template.id}" ${template.id === state.templateId ? "selected" : ""}>${escapeHtml(template.name)}</option>`).join("");
+        }
+
+        function renderElementsList() {
+          document.getElementById("element-count").textContent = `${state.elements.length} total`;
+          document.getElementById("element-list").innerHTML = state.elements.map((element) => `
+            <button class="element-row ${state.selection.includes(element.id) ? "selected" : ""}" data-list-element="${element.id}" aria-pressed="${state.selection.includes(element.id)}">
+              <span class="element-icon">${icons[element.type]}</span>
+              <span class="element-name">${escapeHtml(element.label)}<span class="element-kind">${element.type === "qr" ? "QR code" : element.type}</span></span>
+              ${element.required ? '<span class="required-mark" title="Required">Required</span>' : ""}
+            </button>`).join("");
+        }
+
+        function renderCanvas(diagnostics) {
+          const scale = 8 * state.zoom;
+          const stage = document.getElementById("label-stage");
+          stage.style.width = `${state.size.width * scale}px`;
+          stage.style.height = `${state.size.height * scale}px`;
+          stage.innerHTML = state.elements.map((element) => renderLabelElement(element, diagnostics)).join("");
+        }
+
+        function updateCanvasGeometry() {
+          const stage = document.getElementById("label-stage");
+          state.elements.forEach((element) => {
+            const node = stage.querySelector(`[data-element-id="${element.id}"]`);
+            if (!node) return;
+            node.style.left = `${(element.x / state.size.width) * 100}%`;
+            node.style.top = `${(element.y / state.size.height) * 100}%`;
+            node.style.width = `${(element.w / state.size.width) * 100}%`;
+            node.style.height = `${(element.h / state.size.height) * 100}%`;
+            const size = node.querySelector(".selection-size");
+            if (size) size.textContent = `${element.w} × ${element.h} mm`;
+          });
+        }
+
+        function renderInspector() {
+          const selection = selectedElements();
+          document.getElementById("selection-count").textContent = selection.length ? `${selection.length} selected` : "None";
+          const body = document.getElementById("inspector-body");
+          if (!selection.length) {
+            body.innerHTML = '<div class="empty-inspector">Select a Label Element on the canvas or in the list. Shift-click adds to the selection.</div>';
+            return;
+          }
+
+          if (selection.length > 1) {
+            body.innerHTML = `<div class="inspector-content">
+              <section class="inspector-section">
+                <h3 class="section-title">Arrange ${selection.length} elements</h3>
+                <div class="align-actions">
+                  <button data-align="left">Left</button>
+                  <button data-align="center">Center</button>
+                  <button data-align="top">Top</button>
+                </div>
+              </section>
+              <section class="inspector-section">
+                <h3 class="section-title">Move together</h3>
+                ${nudgeMarkup()}
+              </section>
+              <section class="inspector-section">
+                <button class="secondary-button" data-action="duplicate">Duplicate selection</button>
+              </section>
+            </div>`;
+            return;
+          }
+
+          const element = selection[0];
+          const isText = element.type === "text";
+          body.innerHTML = `<div class="inspector-content">
+            ${isText ? `<section class="inspector-section"><h3 class="section-title">Content</h3><label class="field-label" for="content-field">Sample value</label><input class="field-input" id="content-field" value="${escapeAttr(element.content)}" /></section>` : ""}
+            <section class="inspector-section">
+              <h3 class="section-title">Position &amp; size</h3>
+              <div class="number-grid">
+                ${numberField("x", "X", element.x)}${numberField("y", "Y", element.y)}${numberField("w", "Width", element.w)}${numberField("h", "Height", element.h)}
+              </div>
+            </section>
+            ${isText ? `<section class="inspector-section"><h3 class="section-title">Printer-safe text</h3>
+              <label class="field-label" for="font-size-field">Size</label>
+              <div class="number-field"><input id="font-size-field" type="number" step="0.2" min="1.5" max="8" value="${element.fontSize}" /><span>mm</span></div>
+              <label class="field-label">Alignment</label>
+              <div class="segmented">${["left", "center", "right"].map((align) => `<button data-text-align="${align}" aria-pressed="${element.align === align}" class="${element.align === align ? "active" : ""}">${titleCase(align)}</button>`).join("")}</div>
+              <label class="field-label">Weight</label><div class="segmented"><button data-bold="false" aria-pressed="${!element.bold}" class="${!element.bold ? "active" : ""}">Regular</button><button data-bold="true" aria-pressed="${element.bold}" class="${element.bold ? "active" : ""}">Bold</button><button disabled>90° only</button></div>
+            </section>` : ""}
+            <section class="inspector-section"><h3 class="section-title">Nudge</h3>${nudgeMarkup()}<p class="field-label">Arrow keys move 0.5 mm; Shift moves 2 mm.</p></section>
+          </div>`;
+        }
+
+        function numberField(key, label, value) {
+          return `<label class="number-field"><span class="field-label">${label}</span><input data-geometry="${key}" type="number" step="0.5" value="${value}" /><span>mm</span></label>`;
+        }
+
+        function nudgeMarkup() {
+          return `<div class="nudge-grid"><button data-nudge="0,-0.5" aria-label="Move up">${icons.up}</button><button data-nudge="-0.5,0" aria-label="Move left">${icons.left}</button><button data-nudge="0,0.5" aria-label="Move down">${icons.down}</button><button data-nudge="0.5,0" aria-label="Move right">${icons.right}</button></div>`;
+        }
+
+        function renderDiagnostics(diagnostics) {
+          const panel = document.getElementById("diagnostics-panel");
+          panel.classList.toggle("open", state.diagnosticsOpen);
+          if (!diagnostics.length) {
+            panel.innerHTML = '<div class="diagnostic-row"><span class="diagnostic-icon">' + icons.ok + '</span><span class="diagnostic-copy"><strong>No layout checks to resolve</strong><span>The backend raster preview remains the final print-fidelity check.</span></span></div>';
+            return;
+          }
+          panel.innerHTML = diagnostics.map((item, index) => `<div class="diagnostic-row ${item.severity}">
+            <span class="diagnostic-icon">${icons[item.severity]}</span>
+            <span class="diagnostic-copy"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.detail)}</span></span>
+            <button data-focus-diagnostic="${index}">Show</button>
+          </div>`).join("");
+        }
+
+        const scenarios = {
+          core: {
+            label: "Core editing",
+            title: "Can the basic loop explain itself?",
+            description: "Start with a usable 50 × 30 label, select content, nudge it, multi-select, align, resize, and undo. The inspector remains constrained to printable properties.",
+            steps: [
+              { label: "Load balanced 50 × 30", action: { type: "LOAD_CASE", caseId: "balanced" } },
+              { label: "Select Plant details", action: { type: "SELECT", id: "details" } },
+              { label: "Nudge right 2 mm", action: { type: "MOVE", dx: 2, dy: 0 } },
+              { label: "Add Strain name to selection", action: { type: "SELECT", id: "name", additive: true } },
+              { label: "Align left edges", action: { type: "ALIGN", edge: "left" } },
+              { label: "Undo alignment", special: "undo" },
+            ],
+          },
+          shapes: {
+            label: "Label shapes",
+            title: "Does the same workflow survive extreme proportions?",
+            description: "Switch between a familiar 50 × 30 layout and an unusually tall 30 × 80 stake. Fit-to-view changes the canvas scale, not the millimetre geometry.",
+            steps: [
+              { label: "Load tall 30 × 80", action: { type: "LOAD_CASE", caseId: "tall" } },
+              { label: "Select QR code", action: { type: "SELECT", id: "qr" } },
+              { label: "Resize +2 mm", action: { type: "RESIZE", dw: 2, dh: 2 } },
+              { label: "Fit label to view", special: "fit" },
+              { label: "Switch back to Bench template", special: "switch-bench" },
+              { label: "Return to Tall draft", special: "switch-tall" },
+            ],
+          },
+          content: {
+            label: "Content pressure",
+            title: "Are data problems distinct from layout problems?",
+            description: "Long text produces an auto-fit warning; optional missing content warns; the required strain name blocks saving. Each check points back to its element.",
+            steps: [
+              { label: "Load long strain name", action: { type: "LOAD_CASE", caseId: "long" } },
+              { label: "Open checks", action: { type: "TOGGLE_DIAGNOSTICS", value: true } },
+              { label: "Load missing content", action: { type: "LOAD_CASE", caseId: "missing" } },
+              { label: "Try to save", special: "save" },
+              { label: "Restore strain name", action: { type: "SET_CONTENT", value: "Blue Dream" } },
+              { label: "Save the valid draft", special: "save" },
+            ],
+          },
+          safety: {
+            label: "Print safety",
+            title: "Do warnings help without turning into a preflight cockpit?",
+            description: "Try a too-small QR, overlap, and out-of-bounds placement. Blocking errors disable save; overlap stays a warning because deliberate layering remains possible.",
+            steps: [
+              { label: "Load too-small QR", action: { type: "LOAD_CASE", caseId: "small-qr" } },
+              { label: "Grow QR by 4 mm", action: { type: "RESIZE", dw: 4, dh: 4 } },
+              { label: "Load overlap", action: { type: "LOAD_CASE", caseId: "overlap" } },
+              { label: "Move details left 8 mm", action: { type: "MOVE", dx: -8, dy: 0 } },
+              { label: "Load out-of-bounds logo", action: { type: "LOAD_CASE", caseId: "out" } },
+              { label: "Move logo left 7 mm", action: { type: "MOVE", dx: -7, dy: 0 } },
+            ],
+          },
+          recovery: {
+            label: "Recovery",
+            title: "Can someone explore without being afraid of losing work?",
+            description: "Template switching keeps per-template drafts. Reset is safe because it is undoable. The editor never silently commits a half-finished arrangement.",
+            steps: [
+              { label: "Load balanced label", action: { type: "LOAD_CASE", caseId: "balanced" } },
+              { label: "Move name down 5 mm", action: { type: "MOVE", dx: 0, dy: 5 } },
+              { label: "Switch to Tall template", special: "switch-tall" },
+              { label: "Return to kept Bench draft", special: "switch-bench" },
+              { label: "Reset draft", special: "reset" },
+              { label: "Undo reset", special: "undo" },
+            ],
+          },
+        };
+
+        function renderScenarios() {
+          document.getElementById("scenario-tabs").innerHTML = Object.values(scenarios).map((scenario) => `<button class="scenario-tab ${scenario === scenarios[state.scenarioId] ? "active" : ""}" data-scenario="${Object.keys(scenarios).find((key) => scenarios[key] === scenario)}" role="tab" aria-selected="${scenario === scenarios[state.scenarioId]}">${escapeHtml(scenario.label)}</button>`).join("");
+          const scenario = scenarios[state.scenarioId];
+          document.getElementById("scenario-copy").innerHTML = `<h3>${escapeHtml(scenario.title)}</h3><p>${escapeHtml(scenario.description)}</p>`;
+          document.getElementById("scenario-steps").innerHTML = scenario.steps.map((step, index) => `<button class="scenario-step ${index < state.scenarioStep ? "done" : index === state.scenarioStep ? "next" : ""}" data-scenario-step="${index}">${index + 1}. ${escapeHtml(step.label)}</button>`).join("");
+        }
+
+        function runScenarioStep(index) {
+          const step = scenarios[state.scenarioId].steps[index];
+          if (!step) return;
+          if (step.special === "undo") undo();
+          else if (step.special === "fit") fitToView();
+          else if (step.special === "switch-bench") switchTemplate("bench");
+          else if (step.special === "switch-tall") switchTemplate("tall");
+          else if (step.special === "save") saveTemplate();
+          else if (step.special === "reset") resetDraft();
+          else dispatch(step.action);
+          state.scenarioStep = Math.max(state.scenarioStep, index + 1);
+          render();
+        }
+
+        function renderState(diagnostics) {
+          const errors = diagnostics.filter((item) => item.severity === "error").length;
+          const warnings = diagnostics.filter((item) => item.severity === "warning").length;
+          const selected = selectedElements();
+          const cells = [
+            ["Template", state.templateName],
+            ["Physical size", `${state.size.width} × ${state.size.height} mm`],
+            ["Selection", selected.length ? selected.map((element) => element.label).join(", ") : "None"],
+            ["History", `${undoStack.length} undo · ${redoStack.length} redo`],
+            ["Checks", `${errors} blocking · ${warnings} warning${warnings === 1 ? "" : "s"}`],
+            ["Last change", state.message],
+          ];
+          document.getElementById("state-panel").innerHTML = cells.map(([label, value]) => `<div class="state-cell"><span>${escapeHtml(label)}</span><strong title="${escapeAttr(value)}">${escapeHtml(value)}</strong></div>`).join("");
+        }
+
+        function renderChrome(diagnostics) {
+          const errors = diagnostics.filter((item) => item.severity === "error");
+          const warnings = diagnostics.filter((item) => item.severity === "warning");
+          document.getElementById("draft-status").textContent = state.dirty ? "Unsaved working draft · switching templates keeps it" : "Saved template · edits become a working draft";
+          document.getElementById("undo-button").disabled = undoStack.length === 0;
+          document.getElementById("redo-button").disabled = redoStack.length === 0;
+          document.getElementById("duplicate-button").disabled = state.selection.length === 0;
+          document.getElementById("delete-button").disabled = state.selection.length === 0;
+          document.getElementById("zoom-readout").textContent = `${Math.round(state.zoom * 100)}%`;
+          document.getElementById("save-button").disabled = errors.length > 0;
+          const strip = document.getElementById("status-strip");
+          const severity = errors.length ? "error" : warnings.length ? "warning" : "ok";
+          strip.className = `status-strip ${severity}`;
+          strip.setAttribute("aria-expanded", String(state.diagnosticsOpen));
+          document.getElementById("status-icon").innerHTML = icons[severity];
+          document.getElementById("status-title").textContent = errors.length ? `${errors.length} blocking print ${errors.length === 1 ? "check" : "checks"}` : warnings.length ? `${warnings.length} layout ${warnings.length === 1 ? "warning" : "warnings"}` : "Ready for backend preview";
+          document.getElementById("status-detail").textContent = errors[0]?.title || warnings[0]?.title || "No local layout risks detected";
+          document.getElementById("status-count").textContent = String(errors.length + warnings.length);
+          document.getElementById("elements-panel").classList.toggle("mobile-open", state.mobilePanel === "elements");
+          document.getElementById("inspector-panel").classList.toggle("mobile-open", state.mobilePanel === "selection");
+          document.getElementById("mobile-elements").classList.toggle("active", state.mobilePanel === "elements");
+          document.getElementById("mobile-selection").classList.toggle("active", state.mobilePanel === "selection");
+          document.getElementById("mobile-checks").classList.toggle("active", state.diagnosticsOpen);
+          document.getElementById("mobile-elements").setAttribute("aria-expanded", String(state.mobilePanel === "elements"));
+          document.getElementById("mobile-selection").setAttribute("aria-expanded", String(state.mobilePanel === "selection"));
+          document.getElementById("mobile-checks").setAttribute("aria-expanded", String(state.diagnosticsOpen));
+          const multiSelect = document.getElementById("multi-select-toggle");
+          multiSelect.setAttribute("aria-pressed", String(state.multiSelectMode));
+          multiSelect.textContent = state.multiSelectMode ? "Finish selecting" : "Select multiple";
+        }
+
+        function bindDynamicEvents() {
+          document.querySelectorAll("[data-list-element]").forEach((button) => button.addEventListener("click", (event) => dispatch({ type: "SELECT", id: button.dataset.listElement, additive: state.multiSelectMode || event.shiftKey })));
+          document.querySelectorAll(".label-element").forEach((element) => {
+            element.addEventListener("pointerdown", beginPointerEdit);
+            element.addEventListener("keydown", handleElementKeydown);
+          });
+          document.querySelectorAll("[data-geometry]").forEach((input) => input.addEventListener("change", () => dispatch({ type: "SET_GEOMETRY", key: input.dataset.geometry, value: input.value })));
+          document.getElementById("content-field")?.addEventListener("change", (event) => dispatch({ type: "SET_CONTENT", value: event.target.value }));
+          document.getElementById("font-size-field")?.addEventListener("change", (event) => dispatch({ type: "SET_STYLE", key: "fontSize", value: Number(event.target.value) }));
+          document.querySelectorAll("[data-text-align]").forEach((button) => button.addEventListener("click", () => dispatch({ type: "SET_STYLE", key: "align", value: button.dataset.textAlign })));
+          document.querySelectorAll("[data-bold]").forEach((button) => button.addEventListener("click", () => dispatch({ type: "SET_STYLE", key: "bold", value: button.dataset.bold === "true" })));
+          document.querySelectorAll("[data-align]").forEach((button) => button.addEventListener("click", () => dispatch({ type: "ALIGN", edge: button.dataset.align })));
+          document.querySelectorAll("[data-nudge]").forEach((button) => button.addEventListener("click", () => {
+            const [dx, dy] = button.dataset.nudge.split(",").map(Number);
+            dispatch({ type: "MOVE", dx, dy });
+          }));
+          document.querySelectorAll("[data-action='duplicate']").forEach((button) => button.addEventListener("click", () => dispatch({ type: "DUPLICATE" })));
+          document.querySelectorAll("[data-focus-diagnostic]").forEach((button) => button.addEventListener("click", () => {
+            const diagnostic = getDiagnostics(state)[Number(button.dataset.focusDiagnostic)];
+            if (!diagnostic) return;
+            state.selection = [...diagnostic.elementIds];
+            state.diagnosticsOpen = false;
+            state.mobilePanel = window.innerWidth <= 760 ? "selection" : null;
+            state.message = diagnostic.title;
+            render();
+          }));
+          document.querySelectorAll("[data-scenario]").forEach((button) => button.addEventListener("click", () => dispatch({ type: "SET_SCENARIO", id: button.dataset.scenario })));
+          document.querySelectorAll("[data-scenario-step]").forEach((button) => button.addEventListener("click", () => runScenarioStep(Number(button.dataset.scenarioStep))));
+        }
+
+        function beginPointerEdit(event) {
+          const resizeHandle = event.target.closest("[data-resize-id]");
+          const elementNode = event.currentTarget;
+          const id = elementNode.dataset.elementId;
+          const additive = state.multiSelectMode || event.shiftKey || event.ctrlKey || event.metaKey;
+          if (additive) {
+            dispatch({ type: "SELECT", id, additive: true }, { record: false });
+            return;
+          }
+          let selectionChanged = false;
+          if (!state.selection.includes(id)) {
+            state = reducer(state, { type: "SELECT", id, additive: false });
+            elementNode.classList.add("selected");
+            selectionChanged = true;
+          }
+          event.preventDefault();
+          const pointerId = event.pointerId;
+          elementNode.setPointerCapture(pointerId);
+          let lastX = event.clientX;
+          let lastY = event.clientY;
+          const before = snapshot(state);
+          let changed = false;
+          const scale = 8 * state.zoom;
+
+          const move = (moveEvent) => {
+            const dx = (moveEvent.clientX - lastX) / scale;
+            const dy = (moveEvent.clientY - lastY) / scale;
+            if (Math.abs(dx) < 0.05 && Math.abs(dy) < 0.05) return;
+            state = reducer(state, resizeHandle ? { type: "RESIZE", dw: dx, dh: dy } : { type: "MOVE", dx, dy });
+            lastX = moveEvent.clientX;
+            lastY = moveEvent.clientY;
+            changed = true;
+            updateCanvasGeometry();
+          };
+
+          const end = () => {
+            elementNode.removeEventListener("pointermove", move);
+            elementNode.removeEventListener("pointerup", end);
+            elementNode.removeEventListener("pointercancel", end);
+            if (changed) {
+              undoStack.push(before);
+              redoStack = [];
+            }
+            if (changed || selectionChanged) render();
+          };
+
+          elementNode.addEventListener("pointermove", move);
+          elementNode.addEventListener("pointerup", end);
+          elementNode.addEventListener("pointercancel", end);
+        }
+
+        function handleElementKeydown(event) {
+          const id = event.currentTarget.dataset.elementId;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            dispatch({ type: "SELECT", id, additive: state.multiSelectMode || event.shiftKey }, { record: false });
+            return;
+          }
+          if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Delete", "Backspace"].includes(event.key)) return;
+          event.preventDefault();
+          if (!state.selection.includes(id)) state = reducer(state, { type: "SELECT", id, additive: false });
+          if (event.key === "Delete" || event.key === "Backspace") {
+            dispatch({ type: "DELETE" });
+            return;
+          }
+          const amount = event.shiftKey ? 2 : 0.5;
+          const moves = {
+            ArrowUp: [0, -amount],
+            ArrowDown: [0, amount],
+            ArrowLeft: [-amount, 0],
+            ArrowRight: [amount, 0],
+          };
+          const [dx, dy] = moves[event.key];
+          dispatch({ type: "MOVE", dx, dy });
+        }
+
+        function fitToView() {
+          const scroller = document.getElementById("canvas-scroller");
+          const availableWidth = Math.max(220, scroller.clientWidth - 64);
+          const availableHeight = Math.max(180, scroller.clientHeight - 64);
+          const zoom = Math.min(1.25, availableWidth / (state.size.width * 8), availableHeight / (state.size.height * 8));
+          dispatch({ type: "SET_ZOOM", value: zoom }, { record: false });
+        }
+
+        let toastTimer;
+        function showToast(message) {
+          const toast = document.getElementById("toast");
+          toast.textContent = message;
+          toast.classList.add("show");
+          clearTimeout(toastTimer);
+          toastTimer = setTimeout(() => toast.classList.remove("show"), 2200);
+        }
+
+        function escapeHtml(value) {
+          return String(value).replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]);
+        }
+
+        function escapeAttr(value) {
+          return escapeHtml(value).replaceAll("\n", "&#10;");
+        }
+
+        function titleCase(value) {
+          return value.charAt(0).toUpperCase() + value.slice(1);
+        }
+
+        document.getElementById("template-select").addEventListener("change", (event) => switchTemplate(event.target.value));
+        document.getElementById("reset-button").addEventListener("click", resetDraft);
+        document.getElementById("mobile-reset-button").addEventListener("click", resetDraft);
+        document.getElementById("save-button").addEventListener("click", saveTemplate);
+        document.getElementById("undo-button").addEventListener("click", undo);
+        document.getElementById("redo-button").addEventListener("click", redo);
+        document.getElementById("duplicate-button").addEventListener("click", () => dispatch({ type: "DUPLICATE" }));
+        document.getElementById("delete-button").addEventListener("click", () => dispatch({ type: "DELETE" }));
+        document.getElementById("add-divider").addEventListener("click", () => dispatch({ type: "ADD_DIVIDER" }));
+        document.getElementById("multi-select-toggle").addEventListener("click", () => dispatch({ type: "TOGGLE_MULTI_SELECT" }, { record: false }));
+        document.getElementById("zoom-in").addEventListener("click", () => dispatch({ type: "SET_ZOOM", value: state.zoom + 0.1 }, { record: false }));
+        document.getElementById("zoom-out").addEventListener("click", () => dispatch({ type: "SET_ZOOM", value: state.zoom - 0.1 }, { record: false }));
+        document.getElementById("fit-button").addEventListener("click", fitToView);
+        document.getElementById("status-strip").addEventListener("click", () => dispatch({ type: "TOGGLE_DIAGNOSTICS" }, { record: false }));
+        document.getElementById("mobile-elements").addEventListener("click", () => dispatch({ type: "SET_MOBILE_PANEL", panel: "elements" }, { record: false }));
+        document.getElementById("mobile-selection").addEventListener("click", () => dispatch({ type: "SET_MOBILE_PANEL", panel: "selection" }, { record: false }));
+        document.getElementById("mobile-checks").addEventListener("click", () => dispatch({ type: "TOGGLE_DIAGNOSTICS" }, { record: false }));
+        document.getElementById("label-stage").addEventListener("pointerdown", (event) => {
+          if (event.target.id === "label-stage") dispatch({ type: "CLEAR_SELECTION" }, { record: false });
+        });
+        document.addEventListener("keydown", (event) => {
+          const modifier = event.ctrlKey || event.metaKey;
+          if (modifier && event.key.toLowerCase() === "z") {
+            event.preventDefault();
+            event.shiftKey ? redo() : undo();
+          } else if (modifier && event.key.toLowerCase() === "y") {
+            event.preventDefault();
+            redo();
+          }
+        });
+
+        render();
+        requestAnimationFrame(fitToView);
+      })();
+    </script>
+  </body>
+</html>
