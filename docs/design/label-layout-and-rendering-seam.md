@@ -9,9 +9,11 @@ it specifies future implementation and changes no product code.
 It builds on the Label Template lifecycle contract in
 [`label-template-lifecycle.md`](label-template-lifecycle.md), the Niimbot
 rendering-envelope research from issue #204, and the accepted editor prototype
-from issue #201. The hub glossary deliberately excludes product-repository
-vocabulary, so the terms introduced here remain local to this cross-repository
-specification rather than being added to `CONTEXT.md`.
+from issue #201. Its binding placeholders are now defined by
+[`label-content-binding.md`](label-content-binding.md). The hub glossary
+deliberately excludes product-repository vocabulary, so the terms introduced
+here remain local to this cross-repository specification rather than being
+added to `CONTEXT.md`.
 
 ## Answer in brief
 
@@ -97,17 +99,16 @@ The logical shape is:
       "kind": "qr",
       "frame": { "x_mm": 37, "y_mm": 5, "width_mm": 10, "height_mm": 10 },
       "rotation": 0,
-      "content": { "binding": "plant.link", "parameters": { "target": "web" } },
+      "content": { "binding": "plant.link", "parameters": { "target": "dashboard_url" } },
       "style": { "error_correction": "high", "quiet_zone_modules": 4 }
     }
   ]
 }
 ```
 
-The example binding names illustrate the interface shape; issue #202 owns the
-binding catalogue, its parameters, required/optional status, localization, and
-missing-value behavior. It may choose different names without changing the
-layout model.
+The binding names and parameters are defined by the sibling
+[`label-content-binding.md`](label-content-binding.md) contract. Changing or
+extending that catalogue does not change the layout model.
 
 ### Closed v1 field set
 
@@ -325,8 +326,10 @@ Each catalogue entry declares:
 
 The backend rejects a binding used with the wrong element kind or context. A
 client cannot weaken a required binding or its missing-value policy by adding a
-field to the document. Issue #202 defines the catalogue and its policies; this
-document fixes the seam through which that catalogue participates in layout.
+field to the document. The sibling
+[`label-content-binding.md`](label-content-binding.md) contract defines the
+catalogue and its policies; this document fixes the seam through which that
+catalogue participates in layout.
 
 No v1 expression language combines arbitrary bindings. If the product needs a
 composite value such as localized plant details, it is a named, tested binding
@@ -653,11 +656,12 @@ by issue #205.
 The Label Renderer module, backend-owned capability catalogue, and Render Result
 replace all four independent sources of output meaning.
 
-This issue deliberately does not choose the binding catalogue and record-level
-missing-content policy (#202), warning/error thresholds and responsiveness SLA
-(#207), physical calibration and paper-fidelity test loop (#207), or rollout and
-old-client compatibility sequence (#203). Those decisions must use the document
-and rendering seam specified here rather than introducing another layout or
+The binding catalogue and record-level missing-content policy are defined by
+[`label-content-binding.md`](label-content-binding.md). This issue deliberately
+does not choose warning/error thresholds and responsiveness SLA (#207), physical
+calibration and paper-fidelity test loop (#207), or rollout and old-client
+compatibility sequence (#203). Those decisions must use the document and
+rendering seam specified here rather than introducing another layout or
 rendering path.
 
 No runtime tests were run for this documentation-only decision; no product code
