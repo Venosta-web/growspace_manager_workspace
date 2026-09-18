@@ -354,11 +354,12 @@ and card commit `0bd7af52a0a49a4da00a7b0b0d7273a92d93b201`.
   five Label Size choices. The future backend-owned model must remove this as a
   source-of-truth role rather than adding a third list.
 
-This issue does not choose the canonical Label Layout document, rendering API,
-or capability-profile schema; those belong to sibling issue #206. It does not
-define content binding across strain, plant, and batch contexts (#202), physical
-calibration and fidelity (#207), or rollout and migration from the current
-fixed-coordinate request (#203). Those decisions must preserve the identities,
+The canonical Label Layout and rendering API are defined by
+[`label-layout-and-rendering-seam.md`](label-layout-and-rendering-seam.md), and
+content binding across strain, plant, and batch contexts is defined by
+[`label-content-binding.md`](label-content-binding.md). Physical calibration and
+fidelity (#207), and rollout and migration from the current fixed-coordinate
+request (#203), remain sibling decisions. They must preserve the identities,
 state transitions, failure behavior, and acceptance cases established here.
 
 No runtime tests were run for this documentation-only decision; no product code
