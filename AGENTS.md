@@ -502,6 +502,18 @@ a runner that is not 1000.
 
 These are the exact commands to run — do not improvise venv paths or test flags.
 
+**`full` reports project coverage, not yours.** The Python repositories gate
+pull requests on a Codecov **patch** status as well as the five checks their
+rulesets require, and its target is the repository's own coverage — so every
+line a PR adds has to be executed by a test. `check <target> full` prints a
+whole-project percentage that barely moves when a new module arrives half
+covered, and `gh pr checks` has shown five green checks on a PR whose patch
+status was red. Read `gh pr view <n> --json statusCheckRollup`, and measure
+your own patch with `--cov=<the package you touched> --cov-report=term-missing`
+before pushing. Each product repo's `AGENTS.md` carries the detail; the misses
+are reliably `as_dict` wire forms, `raise` branches, and the structural
+refusals of code that parses documents from outside.
+
 `check` prints the checkouts it resolved before it runs anything, because it is
 not necessarily validating the tree you are sitting in. It takes
 `GROWSPACE_BACKEND` / `GROWSPACE_TC` / `GROWSPACE_CARD` / `GROWSPACE_VISION`
