@@ -80,6 +80,61 @@ esac
 
 prepare_tc_source
 
+# Fail before Compose does, and before 'restart' has torn anything down.
+#
+# vision-dev is pull_policy: never on purpose — the dev loop runs the image you
+# just built, not whatever a registry would hand back. So nothing fetches a tag
+# that is missing: Compose aborts with a bare "No such image", which names
+# neither the cause nor either fix. The cause is almost always a version bump —
+# the default tag follows growspace_vision/config.yaml's `version`, so moving
+# that line strands every previous local build (hit on 1.0.0 -> 1.0.1).
+#
+# 'restart' is why this is a preflight rather than a nicer error afterwards: it
+# stops Vision and Home Assistant first, so Compose's failure lands with :$PORT
+# already down.
+#
+# Compose resolves the tag rather than this script reproducing it, so the
+# default and GROWSPACE_VISION_IMAGE stay in docker-compose.yml alone. An image
+# we cannot resolve is a silent no-op: a preflight must not become the reason a
+# start fails.
+require_runtime_images() {
+  [ "$INSTANCE" = dev ] || return 0
+  command -v docker >/dev/null 2>&1 || return 0
+
+  local image version present tag
+  image="$(dc config --images vision-dev 2>/dev/null | head -1 || true)"
+  [ -n "$image" ] || return 0
+  docker image inspect "$image" >/dev/null 2>&1 && return 0
+
+  echo "ERROR: the Growspace Vision App image '$image' is not on this machine." >&2
+  echo "       vision-dev is pull_policy: never, so nothing will fetch it." >&2
+  echo >&2
+  echo "       The tag follows growspace_vision/config.yaml's version, so a bump" >&2
+  echo "       leaves the previous local build behind. Rebuild it:" >&2
+  echo "         ./scripts/vision build" >&2
+  echo >&2
+  version="${image#growspace-vision:}"
+  version="${version%-amd64}"
+  version="${version%-arm64}"
+  echo "       Or run the published App image — what a user actually gets:" >&2
+  echo "         GROWSPACE_VISION_IMAGE=ghcr.io/venosta-web/growspace-manager-vision:$version \\" >&2
+  echo "           ./scripts/ha $INSTANCE $CMD" >&2
+  # `{{.Repository}}` below is docker's own Go template, not a shell expansion.
+  present="$(docker image ls growspace-vision --format '{{.Repository}}:{{.Tag}}' 2>/dev/null || true)"
+  if [ -n "$present" ]; then
+    echo >&2
+    echo "       Built here already:" >&2
+    while IFS= read -r tag; do
+      echo "         $tag" >&2
+    done <<<"$present"
+  fi
+  exit 1
+}
+
+case "$CMD" in
+  up|restart) require_runtime_images ;;
+esac
+
 # Cache-bust the dev instance's Lovelace resources before HA reads them.
 #
 # The card's entry URL never changes shape, and HA serves /local/ with
