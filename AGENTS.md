@@ -123,6 +123,17 @@ would be running something other than what you just built. Pointing
 `GROWSPACE_VISION_IMAGE` at the published tag once is also the cheapest way to
 exercise what a user actually gets, which no other part of this hub does.
 
+Which means a version bump strands every local build, and `vision-dev` is
+`pull_policy: never` — so nothing fetches the tag Compose now asks for. Compose
+reports that as a bare `No such image`, naming neither the bump nor a fix, and
+on `restart` only after it has already stopped Home Assistant. `ha dev
+up|restart` therefore **preflights the image** and refuses first, printing both
+ways out and the builds you do have — the one that is present is what tells you
+the App version moved. Compose resolves the tag, so the default and
+`GROWSPACE_VISION_IMAGE` stay in `docker-compose.yml` alone; an image the
+preflight cannot resolve is a silent no-op, since a preflight must never become
+the reason a start fails.
+
 The **model** version — `src/growspace_vision/model_manifest.json`, textually
 identical to the App version today — is a different number and must not move
 with it. It identifies the embeddings every Baseline Bucket and Framing Epoch in

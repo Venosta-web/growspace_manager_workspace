@@ -181,9 +181,100 @@ test('ha dev commands prepare and control Vision as part of the runtime', (t) =>
   });
   assert.equal(down.status, 0, down.stderr);
   assert.deepEqual(fs.readFileSync(dockerLog, 'utf8').trim().split('\n'), [
+    // 'up' preflights the App image; 'down' has nothing to start, so it does not.
+    'compose config --images vision-dev',
     'compose up -d ha-dev',
     'compose stop ha-dev vision-dev',
   ]);
+});
+
+// The dev loop pins vision-dev to pull_policy: never, so a missing tag is fatal
+// rather than fetched. Compose reports that as a bare "No such image" — and on
+// 'restart' only after it has stopped Home Assistant, leaving :8123 down. The
+// preflight has to refuse first, and has to name the way out.
+test('a missing Vision App image is refused before restart stops anything', (t) => {
+  const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'growspace-vision-missing-'));
+  const binDir = path.join(fixtureDir, 'bin');
+  const stateDir = path.join(fixtureDir, 'vision-state');
+  const dockerLog = path.join(fixtureDir, 'docker.log');
+  fs.mkdirSync(binDir);
+  t.after(() => fs.rmSync(fixtureDir, { recursive: true, force: true }));
+
+  writeExecutable(path.join(binDir, 'git'), '#!/bin/sh\nexit 1\n');
+  writeExecutable(path.join(binDir, 'ss'), '#!/bin/sh\nexit 0\n');
+  writeExecutable(path.join(binDir, 'node'), '#!/bin/sh\nexit 0\n');
+  writeExecutable(
+    path.join(binDir, 'docker'),
+    `#!/bin/sh
+printf "%s\\n" "$*" >>"$FAKE_DOCKER_LOG"
+case "$*" in
+  "compose config --images vision-dev") printf '%s\\n' 'growspace-vision:9.9.9-amd64' ;;
+  "image inspect growspace-vision:9.9.9-amd64") exit 1 ;;
+  "image ls growspace-vision"*) printf '%s\\n' 'growspace-vision:1.0.0-amd64' ;;
+esac
+`,
+  );
+
+  const restart = spawnSync('bash', [path.join(WORKSPACE, 'scripts', 'ha'), 'dev', 'restart'], {
+    cwd: WORKSPACE,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PATH: `${binDir}:${process.env.PATH}`,
+      FAKE_DOCKER_LOG: dockerLog,
+      GROWSPACE_VISION_STATE_DIR: stateDir,
+      GROWSPACE_VISION_TOKEN: 'ha-runtime-token',
+    },
+  });
+
+  assert.equal(restart.status, 1);
+  assert.match(restart.stderr, /growspace-vision:9\.9\.9-amd64' is not on this machine/);
+  assert.match(restart.stderr, /pull_policy: never/);
+  assert.match(restart.stderr, /\.\/scripts\/vision build/);
+  assert.match(
+    restart.stderr,
+    /GROWSPACE_VISION_IMAGE=ghcr\.io\/venosta-web\/growspace-manager-vision:9\.9\.9/,
+  );
+  // The build that *is* present is what tells you the App version moved.
+  assert.match(restart.stderr, /growspace-vision:1\.0\.0-amd64/);
+
+  // The point of a preflight: the running stack is still standing.
+  const calls = fs.readFileSync(dockerLog, 'utf8').trim().split('\n');
+  assert.deepEqual(calls.filter((call) => call.startsWith('compose stop')), []);
+  assert.deepEqual(calls.filter((call) => call.startsWith('compose up')), []);
+});
+
+// An image the preflight cannot resolve must not become the reason a start
+// fails — the same policy stamp-card-resource follows.
+test('an unresolvable Vision App image leaves the start alone', (t) => {
+  const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'growspace-vision-unresolved-'));
+  const binDir = path.join(fixtureDir, 'bin');
+  const dockerLog = path.join(fixtureDir, 'docker.log');
+  fs.mkdirSync(binDir);
+  t.after(() => fs.rmSync(fixtureDir, { recursive: true, force: true }));
+
+  writeExecutable(path.join(binDir, 'git'), '#!/bin/sh\nexit 1\n');
+  writeExecutable(path.join(binDir, 'ss'), '#!/bin/sh\nexit 0\n');
+  writeExecutable(path.join(binDir, 'node'), '#!/bin/sh\nexit 0\n');
+  writeExecutable(
+    path.join(binDir, 'docker'),
+    '#!/bin/sh\nprintf "%s\\n" "$*" >>"$FAKE_DOCKER_LOG"\ncase "$*" in\n  "compose config"*) exit 1 ;;\nesac\n',
+  );
+
+  const up = spawnSync('bash', [path.join(WORKSPACE, 'scripts', 'ha'), 'dev', 'up'], {
+    cwd: WORKSPACE,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PATH: `${binDir}:${process.env.PATH}`,
+      FAKE_DOCKER_LOG: dockerLog,
+      GROWSPACE_VISION_STATE_DIR: path.join(fixtureDir, 'vision-state'),
+      GROWSPACE_VISION_TOKEN: 'ha-runtime-token',
+    },
+  });
+
+  assert.equal(up.status, 0, up.stderr);
+  assert.match(fs.readFileSync(dockerLog, 'utf8'), /compose up -d ha-dev/);
 });
 
 test('smoke analyzes both simulated cameras without exposing the token in curl arguments', (t) => {
