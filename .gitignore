@@ -78,3 +78,7 @@ worktrees/
 
 # --- Python bytecode from the e2e coverage contract ---
 __pycache__/
+.claude/*
+.claude/settings.local.json
+:memory:.ses
+growspace.code-workspace
