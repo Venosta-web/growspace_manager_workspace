@@ -57,6 +57,7 @@ the host path instead.
 ./scripts/seed-vision-history   # fake Vision Checkup history for the demo
 ./scripts/seed-tc-world         # a worked tissue-culture bench for the demo
 ./scripts/demo-dashboard        # the panel dashboard README captures come from
+./scripts/label-evidence-print  # the label printer evidence run, see docs/label-evidence.md
 ```
 
 `ha dev up|restart` starts the production Vision App image before Home
