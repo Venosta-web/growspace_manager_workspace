@@ -634,8 +634,8 @@ asserts that the workflow's pattern really selects it, expanding the glob rather
 than matching its own name as a literal: a name check would have kept passing
 while the file went unrun, which is the failure it exists to prevent.
 
-What is **not** linted is as deliberate. `.yamllint` ignores the agent skill
-manifests the installer owns, `ha-dev/packages/e2e_simulated_sensors.yaml`
+What is **not** linted is as deliberate. `.yamllint` ignores
+`ha-dev/packages/e2e_simulated_sensors.yaml`
 (generated from `e2e/entity_coverage.py`, so a fix here is undone by the next
 generation), and the stub files Home Assistant rewrites for itself. Ruff omits
 `E501`, because this repository's Python carries the same long explanatory prose
