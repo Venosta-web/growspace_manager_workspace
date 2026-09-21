@@ -82,3 +82,10 @@ __pycache__/
 .claude/settings.local.json
 :memory:.ses
 growspace.code-workspace
+
+# --- Third-party agent skills ---
+# Installed per machine (the mattpocock-skills Claude Code plugin, or a
+# user-scope `npx skills add -g`), never committed. `.claude/*` above already
+# covers .claude/skills. Un-ignore a repository-specific skill with a `!` rule.
+.agents/skills/
+skills-lock.json
