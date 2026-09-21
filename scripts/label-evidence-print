@@ -1,0 +1,351 @@
+#!/usr/bin/env node
+/*
+ * Print the evidence label for a Label Template capability profile, once per
+ * density, as many copies as repeatability needs.
+ *
+ *   ./scripts/label-evidence-print                          # every density, 1 copy
+ *   ./scripts/label-evidence-print --copies 5               # repeatability run
+ *   ./scripts/label-evidence-print --density normal
+ *   ./scripts/label-evidence-print --base-url http://homeassistant.local:8123
+ *   ./scripts/label-evidence-print --device <device registry id>
+ *
+ * Promoting a profile to product-verified takes a Release Evidence Record read
+ * off real paper (growspace_manager `labels/canonical/evidence.py`). The
+ * evidence label is the one print that record is mostly measured from: the
+ * calibration sheet's edge scales, three QR targets at the claimed minimum
+ * dots per module, text at the readable floor and comfort threshold, and the
+ * thinnest claimed rule. See docs/label-evidence.md for what to read off it.
+ *
+ * It drives `growspace_manager/print_label_evidence_sheet` on whichever Home
+ * Assistant the printer is attached to — usually not the dev instance, which
+ * has no printer — so the URL and the token are options. Each print's raster
+ * identity, density and time land in
+ * `artifacts/label-evidence/<profile>/<timestamp>.json`, beside a Release
+ * Evidence Record skeleton with every field the product requires, for the
+ * photographs and measurements to be added to.
+ */
+'use strict';
+
+const fs = require('node:fs');
+const path = require('node:path');
+const { execFileSync } = require('node:child_process');
+
+const { connectHaWebSocket } = require('./gen-e2e-dashboards.cjs');
+
+const HERE = path.resolve(__dirname, '..');
+const DOMAIN = 'growspace_manager';
+const DEFAULT_PROFILE = 'growspace.profile.niimbot-b1.50x30.v1';
+const PROCEDURE = 'growspace.label-evidence-procedure.v1';
+
+/*
+ * The eight rows of the physical matrix, in the order `EvidenceDimension`
+ * declares them. `covers` is only asked of rotation and density.
+ */
+const DIMENSIONS = [
+  'edges',
+  'rotation',
+  'text',
+  'qr',
+  'logo',
+  'density',
+  'repeatability',
+  'batch',
+];
+
+function mainHubCheckout() {
+  try {
+    const common = execFileSync(
+      'git',
+      ['-C', HERE, 'rev-parse', '--path-format=absolute', '--git-common-dir'],
+      { encoding: 'utf8' },
+    ).trim();
+    return common ? path.dirname(common) : HERE;
+  } catch {
+    return HERE;
+  }
+}
+
+function usage() {
+  return [
+    'usage: label-evidence-print [--profile <id>] [--density <name>]... [--copies <n>]',
+    '                            [--device <id>] [--base-url <url>] [--token-file <path>]',
+  ].join('\n');
+}
+
+function parseArgs(argv) {
+  const options = {
+    profile: DEFAULT_PROFILE,
+    densities: [],
+    copies: 1,
+    device: null,
+    baseUrl: process.env.HA_BASE_URL || 'http://localhost:8123',
+    tokenFile: null,
+    help: false,
+  };
+  for (let index = 0; index < argv.length; index += 1) {
+    const flag = argv[index];
+    const value = () => {
+      const next = argv[index + 1];
+      if (next === undefined || next.startsWith('--')) {
+        throw new Error(`${flag} needs a value\n${usage()}`);
+      }
+      index += 1;
+      return next;
+    };
+    if (flag === '--profile') options.profile = value();
+    else if (flag === '--density') options.densities.push(value());
+    else if (flag === '--copies') options.copies = Number(value());
+    else if (flag === '--device') options.device = value();
+    else if (flag === '--base-url') options.baseUrl = value();
+    else if (flag === '--token-file') options.tokenFile = value();
+    else if (flag === '--help' || flag === '-h') options.help = true;
+    else throw new Error(`Unknown option ${flag}\n${usage()}`);
+  }
+  if (!Number.isInteger(options.copies) || options.copies < 1) {
+    throw new Error(`--copies must be a positive whole number, not ${options.copies}`);
+  }
+  return options;
+}
+
+/*
+ * The printer is a Home Assistant device the niimbot integration owns. With
+ * one of them there is nothing to ask; with none or several, guessing would
+ * print on the wrong machine or nowhere, so it refuses and lists them.
+ */
+function pickDevice(devices, requested) {
+  const printers = devices.filter((device) =>
+    (device.identifiers || []).some(([domain]) => domain === 'niimbot'),
+  );
+  const describe = (device) =>
+    `  ${device.id}  ${device.name_by_user || device.name || '(unnamed)'}` +
+    `${device.model ? ` — ${device.model}` : ''}`;
+  if (requested) {
+    const chosen = devices.find((device) => device.id === requested);
+    if (!chosen) {
+      throw new Error(
+        `No device ${requested}. Niimbot printers here:\n` +
+          (printers.map(describe).join('\n') || '  (none)'),
+      );
+    }
+    return chosen;
+  }
+  if (printers.length === 1) return printers[0];
+  if (printers.length === 0) {
+    throw new Error('No Niimbot printer is registered on this Home Assistant.');
+  }
+  throw new Error(
+    `${printers.length} Niimbot printers are registered; choose one with --device:\n` +
+      printers.map(describe).join('\n'),
+  );
+}
+
+/*
+ * A densities list the profile does not map would print a sheet that says
+ * "unmapped", which is not evidence of anything.
+ */
+function resolveDensities(profile, requested) {
+  const mapped = Object.keys(profile.density_levels || {});
+  if (requested.length === 0) return mapped;
+  const unknown = requested.filter((name) => !mapped.includes(name));
+  if (unknown.length) {
+    throw new Error(
+      `${profile.id} maps no density ${unknown.join(', ')}; it maps ${mapped.join(', ')}.`,
+    );
+  }
+  return requested;
+}
+
+/*
+ * Every field `evidence_problems` checks, with what can be known filled in and
+ * the rest left as empty strings — which it reports as missing — so an
+ * incomplete record fails loudly instead of passing on a default.
+ */
+function recordSkeleton({ profile, capability, device, prints, recordedOn }) {
+  const versions = capability.versions || {};
+  return {
+    reference: '',
+    profile_id: profile.id,
+    profile_definition: '',
+    printer_model: device.model || '',
+    firmware: device.sw_version || '',
+    driver: '',
+    stock: profile.label_size_id,
+    procedure: PROCEDURE,
+    operator: '',
+    reviewed_by: '',
+    recorded_on: recordedOn,
+    dependencies: {
+      compiler: versions.compiler,
+      renderer: versions.renderer,
+      adapter: versions.adapter,
+      text_toolchain: versions.text_toolchain,
+      style_tokens: versions.style_tokens,
+      qr_model: versions.qr_model,
+      safety_policy: versions.safety_policy,
+    },
+    results: Object.fromEntries(
+      DIMENSIONS.map((dimension) => [
+        dimension,
+        {
+          passed: false,
+          measurements: {},
+          artifacts: [],
+          covers:
+            dimension === 'rotation'
+              ? (profile.supported_element_rotations || []).map(String)
+              : dimension === 'density'
+                ? [...new Set(prints.map((item) => item.density))]
+                : [],
+        },
+      ]),
+    ),
+    deviations: [],
+  };
+}
+
+async function printAll({ send, profile, device, densities, copies, contract, log }) {
+  const prints = [];
+  for (const density of densities) {
+    for (let copy = 1; copy <= copies; copy += 1) {
+      const reply = await send({
+        type: `${DOMAIN}/print_label_evidence_sheet`,
+        contract,
+        profile_id: profile.id,
+        device_id: device.id,
+        density,
+      });
+      if (!reply.success) {
+        throw new Error(
+          `Home Assistant rejected the print: ${reply.error?.message || JSON.stringify(reply.error)}`,
+        );
+      }
+      const result = reply.result;
+      if (result.outcome !== 'ok') {
+        const refusal = result.refusal || {};
+        throw new Error(
+          `${density} copy ${copy} was refused (${refusal.code}): ${refusal.reason}`,
+        );
+      }
+      const printed = {
+        density,
+        copy,
+        printed_at: new Date().toISOString(),
+        raster_identity: result.print.raster_identity,
+        raster_input_digest: result.print.raster_input_digest,
+      };
+      prints.push(printed);
+      log(`printed ${density} ${copy}/${copies}  ${printed.raster_identity}`);
+    }
+  }
+  return prints;
+}
+
+async function main(argv = process.argv.slice(2), log = console.log) {
+  const options = parseArgs(argv);
+  if (options.help) {
+    log(usage());
+    return 0;
+  }
+  const hub = mainHubCheckout();
+  const tokenFile = path.resolve(options.tokenFile || path.join(hub, '.ha-token'));
+  const token =
+    process.env.HA_ACCESS_TOKEN ||
+    (fs.existsSync(tokenFile) ? fs.readFileSync(tokenFile, 'utf8').trim() : '');
+  if (!token) {
+    throw new Error(
+      `No token: set HA_ACCESS_TOKEN or write a long-lived token to ${tokenFile}.`,
+    );
+  }
+
+  const cardRoot = process.env.GROWSPACE_CARD ||
+    path.join(hub, '..', 'lovelace-growspace-manager-card');
+  const WebSocket = require(require.resolve('ws', { paths: [cardRoot, HERE] }));
+  const connection = await connectHaWebSocket({ WebSocket, baseUrl: options.baseUrl, token });
+  try {
+    const send = connection.send;
+    const capabilityReply = await send({ type: `${DOMAIN}/get_label_template_capability` });
+    if (!capabilityReply.success) {
+      throw new Error(
+        'This Home Assistant does not answer the Label Template capability; ' +
+          'it needs a growspace_manager with the evidence label.',
+      );
+    }
+    const capability = capabilityReply.result;
+    const profile = (capability.catalogues?.profiles || []).find(
+      (item) => item.id === options.profile,
+    );
+    if (!profile) throw new Error(`This Home Assistant has no profile ${options.profile}.`);
+
+    const devices = (await send({ type: 'config/device_registry/list' })).result || [];
+    const device = pickDevice(devices, options.device);
+    const densities = resolveDensities(profile, options.densities);
+    log(
+      `${profile.id} on ${device.name_by_user || device.name} (${device.model || 'model unknown'}, ` +
+        `firmware ${device.sw_version || 'unknown'}) — ${densities.join(', ')} x ${options.copies}`,
+    );
+
+    const prints = await printAll({
+      send,
+      profile,
+      device,
+      densities,
+      copies: options.copies,
+      contract: capability.contract,
+      log,
+    });
+
+    const stamp = new Date().toISOString();
+    const directory = path.join(hub, 'artifacts', 'label-evidence', profile.id);
+    fs.mkdirSync(directory, { recursive: true });
+    const file = path.join(directory, `${stamp.replace(/[:.]/g, '-')}.json`);
+    const run = {
+      base_url: options.baseUrl,
+      device: {
+        id: device.id,
+        name: device.name_by_user || device.name,
+        manufacturer: device.manufacturer,
+        model: device.model,
+        sw_version: device.sw_version,
+        hw_version: device.hw_version,
+      },
+      contract: capability.contract,
+      versions: capability.versions,
+      profile: { id: profile.id, evidence: profile.evidence },
+      prints,
+      record: recordSkeleton({
+        profile,
+        capability,
+        device,
+        prints,
+        recordedOn: stamp.slice(0, 10),
+      }),
+    };
+    fs.writeFileSync(file, `${JSON.stringify(run, null, 2)}\n`);
+    log(`\n${prints.length} label(s) printed. Run recorded in ${path.relative(hub, file)}`);
+    log('Photograph each label and fill in the record: docs/label-evidence.md');
+    return 0;
+  } finally {
+    connection.close();
+  }
+}
+
+if (require.main === module) {
+  main().then(
+    (code) => process.exit(code),
+    (error) => {
+      console.error(error.message);
+      process.exit(1);
+    },
+  );
+}
+
+module.exports = {
+  DEFAULT_PROFILE,
+  DIMENSIONS,
+  PROCEDURE,
+  parseArgs,
+  pickDevice,
+  printAll,
+  recordSkeleton,
+  resolveDensities,
+};
