@@ -15,6 +15,8 @@ Most of the matrix comes from one label: the **evidence label**.
 
 ![The evidence label for growspace.profile.niimbot-b1.50x30.v1 at normal density, rendered by imagespec at 4x](acceptance/images/label-evidence-sheet-b1-50x30.png)
 
+The B1 profile was promoted on this procedure on 2026-09-22; its record, run log and photograph are in `growspace_manager/docs/evidence/labels/niimbot-b1.50x30.v1/2026-09-22/`. The run showed regular text at 1.6 mm unreadable at every density, so the profile's floor is now 2.2 mm and the sheet above is drawn at that floor.
+
 Every probe on it is sized from the profile's own claimed limits, so it tests
 exactly what the profile says it can do:
 
@@ -25,9 +27,9 @@ exactly what the profile says it can do:
 | Middle column, bottom   | QR: a dashboard plant URL (74 bytes)                                                          | typical target, same settings                                       |
 | Right, large            | QR: exactly 256 bytes ending in `#256`                                                        | the claimed maximum encoded bytes, same settings                    |
 | Left, first two lines   | `Bold 2.2`, `Mg 2.2 Ok`                                                                       | comfort threshold, both faces                                       |
-| Left, next lines        | `Bold 1.6`, `Hamburg 1.6`, `Äöü éñ ç`, a long strain name wrapped to two lines and truncated | readable floor, both faces, accented Latin, wrapping                |
+| Left, next lines        | `Äöü éñ ç` and a long strain name wrapped to two lines and truncated; a profile whose floor is below its comfort threshold also gets `Bold` and `Hamburg` at the floor | readable floor, accented Latin, wrapping                |
 | Left, two rules         | 0.25 mm and 0.5 mm                                                                            | thinnest claimed divider                                            |
-| Identity                | profile, `density (level)`, print date                                                        | which print this is; also printed at the floor                      |
+| Identity                | `b1.50x30.v1` under the large QR, `normal 3` under the rules                                  | which print this is; also printed at the floor                      |
 
 ## Printing it
 
