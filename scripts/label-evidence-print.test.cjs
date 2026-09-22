@@ -73,6 +73,16 @@ test('a named device is used, and an unknown one lists the printers', () => {
   assert.throws(() => pickDevice([LAMP, B1], 'dev-x'), /No device dev-x[\s\S]*dev-b1/);
 });
 
+test('a printer registered by Bluetooth connection alone is found through its entities', () => {
+  const b1 = { id: 'dev-b1', name: 'Niimbot 6649B9', model: 'B1', identifiers: [] };
+  const entities = [
+    { entity_id: 'light.lamp', platform: 'hue', device_id: 'dev-lamp' },
+    { entity_id: 'sensor.niimbot_6649b9_battery', platform: 'niimbot', device_id: 'dev-b1' },
+  ];
+  assert.equal(pickDevice([LAMP, b1], null, entities), b1);
+  assert.throws(() => pickDevice([LAMP, b1], null, []), /No Niimbot printer/);
+});
+
 test('densities default to every one the profile maps', () => {
   assert.deepEqual(resolveDensities(PROFILE, []), ['low', 'normal', 'high']);
   assert.deepEqual(resolveDensities(PROFILE, ['high']), ['high']);
