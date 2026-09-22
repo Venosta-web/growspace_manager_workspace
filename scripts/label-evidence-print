@@ -111,10 +111,19 @@ function parseArgs(argv) {
  * The printer is a Home Assistant device the niimbot integration owns. With
  * one of them there is nothing to ask; with none or several, guessing would
  * print on the wrong machine or nowhere, so it refuses and lists them.
+ *
+ * Ownership is read off the entity registry as well as the identifiers: the
+ * HACS niimbot integration registers its devices by Bluetooth connection
+ * alone, with an empty identifiers list, so the identifiers never name it.
  */
-function pickDevice(devices, requested) {
-  const printers = devices.filter((device) =>
-    (device.identifiers || []).some(([domain]) => domain === 'niimbot'),
+function pickDevice(devices, requested, entities = []) {
+  const owned = new Set(
+    entities.filter((entity) => entity.platform === 'niimbot').map((entity) => entity.device_id),
+  );
+  const printers = devices.filter(
+    (device) =>
+      owned.has(device.id) ||
+      (device.identifiers || []).some(([domain]) => domain === 'niimbot'),
   );
   const describe = (device) =>
     `  ${device.id}  ${device.name_by_user || device.name || '(unnamed)'}` +
@@ -277,7 +286,8 @@ async function main(argv = process.argv.slice(2), log = console.log) {
     if (!profile) throw new Error(`This Home Assistant has no profile ${options.profile}.`);
 
     const devices = (await send({ type: 'config/device_registry/list' })).result || [];
-    const device = pickDevice(devices, options.device);
+    const entities = (await send({ type: 'config/entity_registry/list' })).result || [];
+    const device = pickDevice(devices, options.device, entities);
     const densities = resolveDensities(profile, options.densities);
     log(
       `${profile.id} on ${device.name_by_user || device.name} (${device.model || 'model unknown'}, ` +
