@@ -1,0 +1,738 @@
+#!/usr/bin/env python3
+"""Characterise irrigation safety against the disposable ha-dev equipment."""
+
+import argparse
+import datetime as dt
+import hashlib
+import json
+import os
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+ROOT = Path(__file__).resolve().parent.parent
+COMMON = subprocess.check_output(
+    ["git", "-C", str(ROOT), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+    text=True,
+).strip()
+RUNTIME = Path(COMMON).parent
+SLUG = "vwc_veg"
+PUMP = f"switch.sim_e2e_{SLUG}_irrigation_pump"
+PUMP_BACKING = f"input_boolean.sim_e2e_{SLUG}_irrigation_pump"
+DRAIN = f"switch.sim_e2e_{SLUG}_drain_pump"
+STUCK = f"switch.sim_e2e_{SLUG}_irrigation_pump_stuck"
+ERROR = f"switch.sim_e2e_{SLUG}_irrigation_pump_error"
+BACKING = f"input_boolean.sim_e2e_{SLUG}_irrigation_pump_stuck"
+TANK = f"input_number.e2e_{SLUG}_irrigation_tank"
+VWC = f"input_number.e2e_{SLUG}_substrate_moisture"
+CONTROLLER = f"sensor.e2e_{SLUG}_irrigation_controller"
+OVERVIEW = f"sensor.e2e_{SLUG}_overview"
+MONITORED_OVERVIEW = "sensor.e2e_irrigation_monitored_overview"
+MONITORED_PUMP = "switch.sim_e2e_irrigation_monitored_irrigation_pump"
+MONITORED_DRAIN = "switch.sim_e2e_irrigation_monitored_drain_pump"
+SCENARIOS = (
+    "sensor_disconnect",
+    "pump_stuck_on",
+    "unexpected_on",
+    "empty_tank",
+    "invalid_vwc",
+    "stale_sensor",
+    "service_failure",
+    "overlapping_requests",
+    "manual_override",
+    "config_change",
+    "ha_restart",
+    "power_loss",
+    "dst_clock",
+)
+CHECKS = {
+    "sensor_disconnect": "unavailable VWC inhibits the controller with sensor_unavailable and pump stays OFF",
+    "pump_stuck_on": "an ON relay that ignores OFF latches a controller fault",
+    "unexpected_on": "external pump ON reports unexpected_on",
+    "empty_tank": "manual shot is skipped with tank_low and pump stays OFF",
+    "invalid_vwc": "0, -5, 150 and nan each report sensor_invalid",
+    "stale_sensor": "VWC beyond its validity window reports sensor_stale",
+    "service_failure": "erroring pump command leaves output OFF and latches a fault",
+    "overlapping_requests": "scheduled irrigation, manual run and drain never leave both pumps ON",
+    "manual_override": "manual ON under override leaves controller inhibited",
+    "config_change": "old pump is OFF before an accepted remap, or remap is refused",
+    "ha_restart": "a 60-second shot ends with pump OFF after graceful restart",
+    "power_loss": "a 60-second shot with relay persisted ON ends with pump OFF after hard restart",
+    "dst_clock": "frozen-time spring, fall and forward-jump schedule tests pass",
+}
+
+
+class HA:
+    def __init__(self, base, token):
+        parsed = urllib.parse.urlparse(base)
+        if (
+            parsed.scheme != "http"
+            or parsed.hostname not in {"localhost", "127.0.0.1"}
+            or parsed.port != 8123
+            or parsed.path not in {"", "/"}
+            or parsed.query
+            or parsed.fragment
+            or parsed.username
+            or parsed.password
+        ):
+            raise ValueError("commission only accepts the local ha-dev URL on :8123")
+        self.base = base.rstrip("/")
+        self.token = token
+
+    def request(self, path, body=None, *, timeout=12):
+        headers = {"Authorization": f"Bearer {self.token}"}
+        if body is not None:
+            headers["Content-Type"] = "application/json"
+        request = urllib.request.Request(
+            self.base + path,
+            data=None if body is None else json.dumps(body).encode(),
+            headers=headers,
+            method="GET" if body is None else "POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                raw = response.read()
+                return json.loads(raw) if raw else None
+        except urllib.error.HTTPError as err:
+            raise RuntimeError(
+                f"{path}: HTTP {err.code}: {err.read().decode()[:400]}"
+            ) from err
+
+    def state(self, entity):
+        return self.request(f"/api/states/{entity}")
+
+    def value(self, entity):
+        return self.state(entity)["state"]
+
+    def service(self, domain, action, **data):
+        return self.request(f"/api/services/{domain}/{action}", data)
+
+    def set_state(self, entity, value, attributes=None):
+        return self.request(
+            f"/api/states/{entity}",
+            {"state": str(value), "attributes": attributes or {}},
+        )
+
+    def turn(self, entity, on):
+        domain = entity.split(".", 1)[0]
+        return self.service(domain, "turn_on" if on else "turn_off", entity_id=entity)
+
+    def growspace(self):
+        return self.state(OVERVIEW)["attributes"]["identity"]["growspace_id"]
+
+    def controller(self):
+        state = self.state(CONTROLLER)
+        return {
+            "state": state["state"],
+            "reasons": state["attributes"].get("reasons", []),
+            "requires_ack": state["attributes"].get("requires_ack"),
+        }
+
+
+def wait_until(check, seconds=15, step=0.4):
+    end = time.monotonic() + seconds
+    last = None
+    while time.monotonic() < end:
+        last = check()
+        if last:
+            return True
+        time.sleep(step)
+    return bool(last)
+
+
+class Commission:
+    def __init__(self, ha, *, stale_seconds, backend_root):
+        self.ha = ha
+        self.growspace = ha.growspace()
+        self.stale_seconds = stale_seconds
+        self.backend_root = backend_root
+        self.time_zone = ZoneInfo(ha.request("/api/config")["time_zone"])
+        self.original_config = ha.state(OVERVIEW)["attributes"]["irrigation"][
+            "irrigation_config"
+        ]
+        self.original_tank = float(ha.value(TANK))
+        self.original_vwc = ha.state(VWC)
+        self.original_controller = ha.controller()
+        if self.original_controller["requires_ack"]:
+            raise ValueError(
+                "E2E VWC Veg already has a latched fault; resolve it first"
+            )
+        if self.original_config["irrigation_pump_entity"] != PUMP:
+            raise ValueError(
+                "E2E VWC Veg pump mapping is not the expected simulated pump"
+            )
+        if self.original_config["drain_pump_entity"] != DRAIN:
+            raise ValueError(
+                "E2E VWC Veg drain mapping is not the expected simulated pump"
+            )
+        if (
+            self.original_config["irrigation_times"]
+            or self.original_config["drain_times"]
+        ):
+            raise ValueError("E2E VWC Veg has existing irrigation schedules")
+        monitored_config = ha.state(MONITORED_OVERVIEW)["attributes"]["irrigation"][
+            "irrigation_config"
+        ]
+        if (
+            monitored_config["irrigation_pump_entity"] != MONITORED_PUMP
+            or monitored_config["drain_pump_entity"] != MONITORED_DRAIN
+            or monitored_config["irrigation_times"]
+            or monitored_config["drain_times"]
+        ):
+            raise ValueError(
+                "E2E Irrigation Monitored must have simulated pumps and no schedules"
+            )
+        if ha.value(PUMP) != "off":
+            raise ValueError(
+                "simulated irrigation pump must be OFF before commissioning"
+            )
+        if ha.value(DRAIN) != "off":
+            raise ValueError("simulated drain pump must be OFF before commissioning")
+
+    def call(self, action, **fields):
+        return self.ha.service(
+            "growspace_manager", action, growspace_id=self.growspace, **fields
+        )
+
+    def run_shot(self, seconds=8):
+        return self.call("run_irrigation_cycle", duration=seconds)
+
+    def pump_map(self, entity):
+        self.call("set_irrigation_settings", irrigation_pump_entity=entity)
+
+    def snapshot(self):
+        return {"pump": self.ha.value(PUMP), "controller": self.ha.controller()}
+
+    def reset(self):
+        # Clean after each case, including a failed assertion. Never leave a pump ON.
+        errors = []
+        for entity in (PUMP, DRAIN, BACKING, MONITORED_PUMP, MONITORED_DRAIN):
+            try:
+                self.ha.turn(entity, False)
+            except Exception as err:
+                errors.append(f"{entity} OFF: {err}")
+        try:
+            current = self.ha.state(OVERVIEW)["attributes"]["irrigation"][
+                "irrigation_config"
+            ]["irrigation_pump_entity"]
+            if current != self.original_config["irrigation_pump_entity"]:
+                self.pump_map(self.original_config["irrigation_pump_entity"])
+        except Exception as err:
+            errors.append(f"restore pump mapping: {err}")
+        try:
+            self.ha.service(
+                "input_number", "set_value", entity_id=TANK, value=self.original_tank
+            )
+        except Exception as err:
+            errors.append(f"restore tank: {err}")
+        try:
+            self.ha.service(
+                "input_number",
+                "set_value",
+                entity_id=VWC,
+                value=float(self.original_vwc["state"]),
+            )
+        except Exception as err:
+            errors.append(f"restore VWC: {err}")
+        try:
+            if self.ha.controller()["requires_ack"]:
+                self.call("acknowledge_fault")
+        except Exception as err:
+            errors.append(f"acknowledge test fault: {err}")
+        # A controller reason can remain latched until its next telemetry tick.
+        # The fixture is restored once the helper reports the original value;
+        # waiting for a reason to clear would make a current backend gap prevent
+        # every later commissioning case from running.
+        if not errors and float(self.ha.value(TANK)) != self.original_tank:
+            errors.append("tank helper did not return to its original value")
+        if not errors and not wait_until(
+            lambda: all(
+                self.ha.value(entity) == "off"
+                for entity in (PUMP, DRAIN, STUCK, MONITORED_PUMP, MONITORED_DRAIN)
+            ),
+            10,
+            0.5,
+        ):
+            errors.append("a simulated pump remained ON after cleanup")
+        if errors:
+            raise RuntimeError("commission cleanup failed: " + "; ".join(errors))
+
+    def sensor_disconnect(self):
+        self.ha.set_state(VWC, "unavailable", self.original_vwc["attributes"])
+        wait_until(
+            lambda: any(
+                r.get("code") == "sensor_unavailable"
+                for r in self.ha.controller()["reasons"]
+            ),
+            35,
+            1,
+        )
+        observed = {"vwc": self.ha.value(VWC), **self.snapshot()}
+        return observed["pump"] == "off" and any(
+            r.get("code") == "sensor_unavailable"
+            for r in observed["controller"]["reasons"]
+        ), observed
+
+    def pump_stuck_on(self):
+        try:
+            self.ha.state(STUCK)
+        except RuntimeError as err:
+            if "HTTP 404" in str(err):
+                return None, {
+                    "reason": "generated stuck switch is not loaded in ha-dev"
+                }
+            raise
+        self.pump_map(STUCK)
+        self.run_shot(2)
+        started = wait_until(lambda: self.ha.value(STUCK) == "on", 12)
+        wait_until(lambda: self.ha.controller()["state"] == "fault", 25, 0.5)
+        observed = {
+            "started": started,
+            "stuck": self.ha.value(STUCK),
+            "controller": self.ha.controller(),
+        }
+        return started and observed["controller"]["state"] == "fault", observed
+
+    def unexpected_on(self):
+        self.ha.turn(PUMP, True)
+        wait_until(
+            lambda: any(
+                r.get("code") == "unexpected_on"
+                for r in self.ha.controller()["reasons"]
+            ),
+            12,
+        )
+        observed = self.snapshot()
+        return any(
+            r.get("code") == "unexpected_on" for r in observed["controller"]["reasons"]
+        ), observed
+
+    def _restart(self, *, kill):
+        self.run_shot(60)
+        if not wait_until(lambda: self.ha.value(PUMP) == "on", 12):
+            return False, {"error": "pump did not start"}
+        backing_before = self.ha.state(PUMP_BACKING) if kill else None
+        persisted_on = False
+        if kill:
+            subprocess.run(
+                ["docker", "kill", "growspace-ha-dev"], check=True, timeout=30
+            )
+            action = "up"
+            try:
+                persisted_on = self._persist_power_loss_state(backing_before)
+            finally:
+                subprocess.run(
+                    [str(RUNTIME / "scripts/ha"), "dev", action],
+                    cwd=RUNTIME,
+                    check=True,
+                    timeout=240,
+                )
+        else:
+            action = "restart"
+            subprocess.run(
+                [str(RUNTIME / "scripts/ha"), "dev", action],
+                cwd=RUNTIME,
+                check=True,
+                timeout=240,
+            )
+        if not wait_until(lambda: self._ready(), 120, 1):
+            raise RuntimeError("ha-dev did not finish reloading after the shot")
+        wait_until(lambda: self.ha.value(PUMP) == "off", 20, 1)
+        observed = {"persisted_on": persisted_on, **self.snapshot()}
+        return observed["pump"] == "off" and (not kill or persisted_on), observed
+
+    def _persist_power_loss_state(self, before):
+        """Model a relay that keeps its ON state while the HA process is dead."""
+        path = RUNTIME / "ha-dev/.storage/core.restore_state"
+        payload = json.loads(path.read_text())
+        found = False
+        for entry in payload["data"]:
+            state = entry.get("state", {})
+            if state.get("entity_id") != PUMP_BACKING:
+                continue
+            state["state"] = "on"
+            for field in ("last_changed", "last_reported", "last_updated"):
+                state[field] = before[field]
+            found = True
+            break
+        if not found:
+            raise RuntimeError("pump backing is absent from HA restore state")
+        staged = path.with_name("core.restore_state.commission")
+        staged.write_text(json.dumps(payload))
+        os.replace(staged, path)
+        return True
+
+    def _ready(self):
+        try:
+            return (
+                self.ha.request("/api/config")["location_name"] == "Growspace Dev"
+                and self.ha.state(OVERVIEW)["state"] not in {"unavailable", "unknown"}
+                and self.ha.state(CONTROLLER)["state"] not in {"unavailable", "unknown"}
+                and self.ha.state(PUMP)["state"] in {"on", "off"}
+                and self.ha.state(DRAIN)["state"] in {"on", "off"}
+            )
+        except Exception:
+            return False
+
+    def ha_restart(self):
+        return self._restart(kill=False)
+
+    def power_loss(self):
+        return self._restart(kill=True)
+
+    def empty_tank(self):
+        self.ha.service("input_number", "set_value", entity_id=TANK, value=0)
+        self.run_shot(3)
+        time.sleep(2)
+        observed = {"tank": self.ha.value(TANK), **self.snapshot()}
+        return observed["pump"] == "off" and any(
+            r.get("code") == "tank_low" for r in observed["controller"]["reasons"]
+        ), observed
+
+    def invalid_vwc(self):
+        readings = []
+        for value in ("0", "-5", "150", "nan"):
+            self.ha.set_state(VWC, value, self.original_vwc["attributes"])
+            wait_until(
+                lambda: any(
+                    r.get("code") == "sensor_invalid"
+                    for r in self.ha.controller()["reasons"]
+                ),
+                5,
+                1,
+            )
+            readings.append(
+                {
+                    "injected": value,
+                    "observed": self.ha.value(VWC),
+                    "controller": self.ha.controller(),
+                }
+            )
+        return all(
+            any(r.get("code") == "sensor_invalid" for r in row["controller"]["reasons"])
+            for row in readings
+        ), {"readings": readings}
+
+    def stale_sensor(self):
+        self.ha.service("input_number", "set_value", entity_id=VWC, value=52)
+        time.sleep(self.stale_seconds)
+        observed = {"vwc": self.ha.state(VWC)["last_reported"], **self.snapshot()}
+        return any(
+            reason.get("code") == "sensor_stale"
+            for reason in observed["controller"]["reasons"]
+        ), observed
+
+    def service_failure(self):
+        try:
+            self.ha.state(ERROR)
+        except RuntimeError as err:
+            if "HTTP 404" in str(err):
+                return None, {
+                    "reason": "generated error switch is not loaded in ha-dev"
+                }
+            raise
+        self.pump_map(ERROR)
+        command_error = None
+        try:
+            self.run_shot(3)
+        except RuntimeError as err:
+            # A synchronous service error is one possible observation of the
+            # deliberately failing switch, not a harness failure.
+            command_error = str(err)
+        wait_until(lambda: self.ha.controller()["state"] == "fault", 20, 0.5)
+        observed = {
+            "command_error": command_error,
+            "error_switch": self.ha.value(ERROR),
+            "controller": self.ha.controller(),
+        }
+        return observed["error_switch"] == "off" and observed["controller"][
+            "state"
+        ] == "fault", observed
+
+    def overlapping_requests(self):
+        monitored_id = self.ha.state(MONITORED_OVERVIEW)["attributes"]["identity"][
+            "growspace_id"
+        ]
+        if (
+            self.ha.value(MONITORED_PUMP) != "off"
+            or self.ha.value(MONITORED_DRAIN) != "off"
+        ):
+            raise RuntimeError(
+                "monitored irrigation pumps must be OFF before overlap test"
+            )
+
+        def monitored_call(action, **fields):
+            return self.ha.service(
+                "growspace_manager", action, growspace_id=monitored_id, **fields
+            )
+
+        schedule = (dt.datetime.now(self.time_zone) + dt.timedelta(minutes=2)).strftime(
+            "%H:%M:00"
+        )
+        added_irrigation = False
+        added_drain = False
+        try:
+            monitored_call("add_irrigation_time", time=schedule, duration=12)
+            added_irrigation = True
+            monitored_call("add_drain_time", time=schedule, duration=3)
+            added_drain = True
+            samples = []
+
+            def sample_until_pump_on():
+                sample = {
+                    "pump": self.ha.value(MONITORED_PUMP),
+                    "drain": self.ha.value(MONITORED_DRAIN),
+                }
+                samples.append(sample)
+                return sample["pump"] == "on"
+
+            started = wait_until(sample_until_pump_on, 135, 0.5)
+            if started:
+                monitored_call("run_irrigation_cycle", duration=3)
+            for _ in range(25):
+                samples.append(
+                    {
+                        "pump": self.ha.value(MONITORED_PUMP),
+                        "drain": self.ha.value(MONITORED_DRAIN),
+                    }
+                )
+                time.sleep(0.2)
+            observed = {
+                "scheduled_start": started,
+                "schedule": schedule,
+                "samples": samples,
+                "pump": self.ha.value(MONITORED_PUMP),
+                "drain": self.ha.value(MONITORED_DRAIN),
+            }
+            if not started or not any(sample["drain"] == "on" for sample in samples):
+                return None, {
+                    **observed,
+                    "reason": "scheduled irrigation or drain did not start",
+                }
+            return not any(
+                sample["pump"] == "on" and sample["drain"] == "on" for sample in samples
+            ) and observed["pump"] == "off", observed
+        finally:
+            if added_irrigation:
+                monitored_call("remove_irrigation_time", time=schedule)
+            if added_drain:
+                monitored_call("remove_drain_time", time=schedule)
+            self.ha.turn(MONITORED_PUMP, False)
+            self.ha.turn(MONITORED_DRAIN, False)
+
+    def manual_override(self):
+        services = self.ha.request("/api/services")
+        names = next(
+            row["services"] for row in services if row["domain"] == "growspace_manager"
+        )
+        if "set_override" not in names:
+            return None, {
+                "reason": "set_override service has not landed in the backend"
+            }
+        self.call("set_override", enabled=True)
+        try:
+            self.ha.turn(PUMP, True)
+            observed = self.snapshot()
+        finally:
+            self.call("set_override", enabled=False)
+        return observed["controller"]["state"] == "inhibited", observed
+
+    def config_change(self):
+        try:
+            self.ha.state(STUCK)
+        except RuntimeError as err:
+            if "HTTP 404" in str(err):
+                return None, {
+                    "reason": "generated alternate switch is not loaded in ha-dev"
+                }
+            raise
+        self.run_shot(12)
+        started = wait_until(lambda: self.ha.value(PUMP) == "on", 10)
+        change_result = "accepted"
+        try:
+            self.pump_map(STUCK)
+        except RuntimeError as err:
+            change_result = f"refused: {err}"
+        old_pump_at_change = self.ha.value(PUMP)
+        mapping_at_change = self.ha.state(OVERVIEW)["attributes"]["irrigation"][
+            "irrigation_config"
+        ]["irrigation_pump_entity"]
+        wait_until(lambda: self.ha.value(PUMP) == "off", 16, 0.5)
+        mapping = self.ha.state(OVERVIEW)["attributes"]["irrigation"][
+            "irrigation_config"
+        ]["irrigation_pump_entity"]
+        observed = {
+            "started": started,
+            "change_result": change_result,
+            "old_pump_at_change": old_pump_at_change,
+            "mapping_at_change": mapping_at_change,
+            "current_mapping": mapping,
+            "old_pump": self.ha.value(PUMP),
+            "new_pump": self.ha.value(STUCK),
+            "controller": self.ha.controller(),
+        }
+        return started and observed["old_pump"] == "off" and (
+            (change_result.startswith("refused") and mapping_at_change == PUMP)
+            or (
+                change_result == "accepted"
+                and mapping_at_change == STUCK
+                and old_pump_at_change == "off"
+            )
+        ), observed
+
+    def dst_clock(self):
+        relative = "tests/domain/test_irrigation_clock_commissioning.py"
+        if not (self.backend_root / relative).exists():
+            return None, {
+                "reason": "backend frozen-time commissioning test is not present",
+                "backend_test": relative,
+            }
+        pytest = RUNTIME.parent / "growspace_manager/.venv/bin/pytest"
+        result = subprocess.run(
+            [str(pytest), relative, "-q", "-rx", "-p", "no:cacheprovider"],
+            cwd=self.backend_root,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        observed = {
+            "backend_test": relative,
+            "exit_code": result.returncode,
+            "output": (result.stdout + result.stderr)[-3000:],
+        }
+        if result.returncode:
+            raise RuntimeError(f"backend clock tests failed: {observed['output']}")
+        return "xfailed" not in result.stdout, observed
+
+
+def git_sha(path):
+    return subprocess.check_output(
+        ["git", "-C", str(path), "rev-parse", "HEAD"], text=True
+    ).strip()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--base-url", default=os.environ.get("HA_BASE_URL", "http://127.0.0.1:8123")
+    )
+    parser.add_argument(
+        "--scenario", action="append", choices=SCENARIOS, dest="scenarios"
+    )
+    parser.add_argument("--stale-seconds", type=int, default=960)
+    parser.add_argument("--backend-root", type=Path)
+    parser.add_argument("--list", action="store_true")
+    args = parser.parse_args()
+    if args.list:
+        print("\n".join(SCENARIOS))
+        return 0
+    backend_source = Path(
+        os.environ.get(
+            "GROWSPACE_BACKEND_SRC",
+            RUNTIME.parent / "growspace_manager/custom_components/growspace_manager",
+        )
+    ).resolve()
+    backend_source_root = backend_source.parents[1]
+    backend_root = (args.backend_root or backend_source_root).resolve()
+    if backend_root != backend_source_root:
+        raise ValueError("backend clock tests must use the live backend checkout")
+    token = (
+        os.environ.get("HA_ACCESS_TOKEN") or (RUNTIME / ".ha-token").read_text().strip()
+    )
+    ha = HA(args.base_url, token)
+
+    def ready():
+        try:
+            config = ha.request("/api/config")
+            state = ha.state(OVERVIEW)
+            return config if state["state"] not in {"unavailable", "unknown"} else None
+        except Exception:
+            return None
+
+    if not wait_until(ready, 120, 1):
+        raise RuntimeError("ha-dev did not become ready within 120 seconds")
+    config = ha.request("/api/config")
+    if config["location_name"] != "Growspace Dev" or config["config_dir"] != "/config":
+        raise ValueError("target does not identify as the ha-dev instance")
+    runner = Commission(ha, stale_seconds=args.stale_seconds, backend_root=backend_root)
+    local_store = json.loads(
+        (RUNTIME / "ha-dev/.storage/growspace_manager.config").read_text()
+    )
+    if runner.growspace not in local_store["data"]["growspaces"]:
+        raise ValueError("target growspace does not belong to the local ha-dev store")
+    selected = args.scenarios or SCENARIOS
+    record = {
+        "started_at": dt.datetime.now(dt.UTC).isoformat(),
+        "environment": "simulated",
+        "home_assistant_version": config["version"],
+        "hub_revision": git_sha(ROOT),
+        "backend_revision": git_sha(backend_source_root),
+        "backend_source": str(backend_source),
+        "backend_test_revision": git_sha(backend_root),
+        "harness_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "growspace_id": runner.growspace,
+        "irrigation_config": runner.original_config,
+        "stale_wait_seconds": args.stale_seconds,
+        "scenarios": [],
+    }
+    artifact = (
+        RUNTIME
+        / "artifacts/commissioning"
+        / (dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H-%M-%S-%fZ") + ".json")
+    )
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        for name in selected:
+            print(f"{name} ...", flush=True)
+            started = time.monotonic()
+            try:
+                met, observed = getattr(runner, name)()
+                outcome = "not_exercised" if met is None else "met" if met else "gap"
+            except Exception as err:
+                outcome, observed = "error", {"error": str(err)}
+            try:
+                runner.reset()
+            except Exception as err:
+                outcome = "error"
+                observed["cleanup_error"] = str(err)
+            record["scenarios"].append(
+                {
+                    "name": name,
+                    "environment": "simulated",
+                    "check": CHECKS[name],
+                    "outcome": outcome,
+                    "observed": observed,
+                    "elapsed_seconds": round(time.monotonic() - started, 1),
+                }
+            )
+            artifact.write_text(json.dumps(record, indent=2, default=str) + "\n")
+            if outcome == "error" and "cleanup_error" in observed:
+                break
+    finally:
+        try:
+            runner.reset()
+        except Exception as err:
+            record["final_cleanup_error"] = str(err)
+        record["finished_at"] = dt.datetime.now(dt.UTC).isoformat()
+        artifact.write_text(json.dumps(record, indent=2, default=str) + "\n")
+    print("\nScenario                 Outcome")
+    print("------------------------ ------------")
+    for row in record["scenarios"]:
+        print(f"{row['name']:24} {row['outcome']}")
+    print(f"\nRecord: {artifact}")
+    return (
+        1
+        if record.get("final_cleanup_error")
+        or any(row["outcome"] == "error" for row in record["scenarios"])
+        else 0
+    )
+
+
+if __name__ == "__main__":
+    sys.exit(main())

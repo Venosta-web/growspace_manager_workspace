@@ -1130,6 +1130,54 @@ ROLES: tuple[CoverageRole, ...] = (
         ),
     ),
     CoverageRole(
+        "simulation.irrigation_pump_stuck",
+        "internal",
+        "Commissioning switch that accepts ON but ignores OFF",
+        EXACTLY_ONE,
+        (
+            Assignment(
+                "vwc",
+                "switch.sim_e2e_{slug}_irrigation_pump_stuck",
+                "switch",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="template_switch_stuck",
+            ),
+        ),
+    ),
+    CoverageRole(
+        "simulation.irrigation_pump_error",
+        "internal",
+        "Commissioning switch whose ON service raises an error",
+        EXACTLY_ONE,
+        (
+            Assignment(
+                "vwc",
+                "switch.sim_e2e_{slug}_irrigation_pump_error",
+                "switch",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="template_switch_error",
+            ),
+        ),
+    ),
+    CoverageRole(
+        "simulation.irrigation_pump_stuck_state",
+        "internal",
+        "Backing state for the commissioning stuck switch",
+        EXACTLY_ONE,
+        (
+            Assignment(
+                "vwc",
+                "input_boolean.sim_e2e_{slug}_irrigation_pump_stuck",
+                "input_boolean",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="input_boolean",
+            ),
+        ),
+    ),
+    CoverageRole(
         "simulation.irrigation_pump_state",
         "internal",
         "Persistent backing state for an irrigation pump template switch",
@@ -2642,7 +2690,12 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
             instance for profile in PROFILES for instance in profile.instances
         )
     }
-    switches = [record for record in active if record.generator == "template_switch"]
+    switches = [
+        record
+        for record in active
+        if record.generator
+        in {"template_switch", "template_switch_stuck", "template_switch_error"}
+    ]
     switches.sort(
         key=lambda record: (
             instance_order[record.slug],
@@ -2658,6 +2711,17 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
     for record in switches:
         unique_id = record.entity_id.split(".", 1)[1]
         backing = f"input_boolean.{unique_id}"
+        if record.generator == "template_switch_error":
+            lines += [
+                f"      - name: {unique_id.replace('_', ' ')}",
+                f"        unique_id: {unique_id}",
+                '        state: "{{ false }}"',
+                "        turn_on:",
+                "          - stop: Simulated pump service failure",
+                "            error: true",
+                "        turn_off: []",
+            ]
+            continue
         if record.role_id.startswith("irrigation."):
             kind = unique_id.rsplit("_", 2)[-2] + "_pump"
             name = f"sim e2e {record.slug} {kind}"
@@ -2672,9 +2736,15 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
             "          target:",
             f"            entity_id: {backing}",
             "        turn_off:",
-            "          action: input_boolean.turn_off",
-            "          target:",
-            f"            entity_id: {backing}",
+            *(
+                ["          stop: Simulated relay ignored OFF"]
+                if record.generator == "template_switch_stuck"
+                else [
+                    "          action: input_boolean.turn_off",
+                    "          target:",
+                    f"            entity_id: {backing}",
+                ]
+            ),
         ]
 
     simulated_switches = [
@@ -2879,7 +2949,9 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
     ]
     for record in boolean_backings:
         object_id = record.entity_id.split(".", 1)[1]
-        if record.role_id.startswith(
+        if record.role_id == "simulation.irrigation_pump_stuck_state":
+            name = f"sim e2e {record.slug} irrigation_pump_stuck"
+        elif record.role_id.startswith(
             "simulation.irrigation"
         ) or record.role_id.startswith("simulation.drain"):
             kind = object_id.rsplit("_", 2)[-2] + "_pump"
@@ -2889,7 +2961,12 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
         lines += [
             f"  {object_id}:",
             f"    name: {name}",
-            "    initial: false",
+            *(
+                []
+                if record.role_id == "simulation.irrigation_pump_state"
+                and record.slug == "vwc_veg"
+                else ["    initial: false"]
+            ),
         ]
     lines += ["", "input_number:"]
     for instance in (

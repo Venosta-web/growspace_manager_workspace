@@ -8,6 +8,8 @@ The supported operator path is [the reproducible E2E workflow](E2E-WORKFLOW.md).
 `./scripts/e2e provision` owns generation, restart, profile setup, dashboards,
 and the final live health verdict.
 
+For the irrigation fault and recovery run, see [Irrigation safety commissioning](COMMISSIONING.md).
+
 ## 1. Simulated sensors
 
 `./scripts/gen-e2e-sensors` writes `ha-dev/packages/e2e_simulated_sensors.yaml`,
@@ -192,6 +194,9 @@ the same generator command. A second generation must produce no diff.
 | `irrigation.drain_pump` | irrigation | `stage` (veg, clone, mother, flower, dry, cure) | `switch.sim_e2e_{slug}_drain_pump` | `switch` | exactly one (1) | controllable | covered |
 | `irrigation.drain_pump` | irrigation | `vwc` (vwc_veg, vwc_flower) | `switch.sim_e2e_{slug}_drain_pump` | `switch` | exactly one (1) | controllable | covered |
 | `irrigation.drain_pump` | irrigation | `irrigation_monitored` (irrigation_monitored) | `switch.sim_e2e_{slug}_drain_pump` | `switch` | exactly one (1) | controllable | covered |
+| `simulation.irrigation_pump_stuck` | internal | `vwc` (vwc_veg, vwc_flower) | `switch.sim_e2e_{slug}_irrigation_pump_stuck` | `switch` | exactly one (1) | controllable | covered |
+| `simulation.irrigation_pump_error` | internal | `vwc` (vwc_veg, vwc_flower) | `switch.sim_e2e_{slug}_irrigation_pump_error` | `switch` | exactly one (1) | controllable | covered |
+| `simulation.irrigation_pump_stuck_state` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_irrigation_pump_stuck` | `input_boolean` | exactly one (1) | controllable | covered |
 | `simulation.irrigation_pump_state` | internal | `stage` (veg, clone, mother, flower, dry, cure) | `input_boolean.sim_e2e_{slug}_irrigation_pump` | `input_boolean` | exactly one (1) | controllable | covered |
 | `simulation.irrigation_pump_state` | internal | `vwc` (vwc_veg, vwc_flower) | `input_boolean.sim_e2e_{slug}_irrigation_pump` | `input_boolean` | exactly one (1) | controllable | covered |
 | `simulation.irrigation_pump_state` | internal | `irrigation_monitored` (irrigation_monitored) | `input_boolean.sim_e2e_{slug}_irrigation_pump` | `input_boolean` | exactly one (1) | controllable | covered |

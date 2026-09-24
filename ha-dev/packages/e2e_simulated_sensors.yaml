@@ -1665,6 +1665,22 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_vwc_veg_irrigation_pump
+      - name: sim e2e vwc veg irrigation pump stuck
+        unique_id: sim_e2e_vwc_veg_irrigation_pump_stuck
+        state: "{{ is_state('input_boolean.sim_e2e_vwc_veg_irrigation_pump_stuck', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_veg_irrigation_pump_stuck
+        turn_off:
+          stop: Simulated relay ignored OFF
+      - name: sim e2e vwc veg irrigation pump error
+        unique_id: sim_e2e_vwc_veg_irrigation_pump_error
+        state: "{{ false }}"
+        turn_on:
+          - stop: Simulated pump service failure
+            error: true
+        turn_off: []
       - name: sim e2e vwc_veg drain_pump
         unique_id: sim_e2e_vwc_veg_drain_pump
         state: "{{ is_state('input_boolean.sim_e2e_vwc_veg_drain_pump', 'on') }}"
@@ -1687,6 +1703,22 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.sim_e2e_vwc_flower_irrigation_pump
+      - name: sim e2e vwc flower irrigation pump stuck
+        unique_id: sim_e2e_vwc_flower_irrigation_pump_stuck
+        state: "{{ is_state('input_boolean.sim_e2e_vwc_flower_irrigation_pump_stuck', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.sim_e2e_vwc_flower_irrigation_pump_stuck
+        turn_off:
+          stop: Simulated relay ignored OFF
+      - name: sim e2e vwc flower irrigation pump error
+        unique_id: sim_e2e_vwc_flower_irrigation_pump_error
+        state: "{{ false }}"
+        turn_on:
+          - stop: Simulated pump service failure
+            error: true
+        turn_off: []
       - name: sim e2e vwc_flower drain_pump
         unique_id: sim_e2e_vwc_flower_drain_pump
         state: "{{ is_state('input_boolean.sim_e2e_vwc_flower_drain_pump', 'on') }}"
@@ -3061,6 +3093,12 @@ template:
               entity_id: input_boolean.e2e_lighting_growlight_dimmable
 
 input_boolean:
+  sim_e2e_vwc_veg_irrigation_pump_stuck:
+    name: sim e2e vwc_veg irrigation_pump_stuck
+    initial: false
+  sim_e2e_vwc_flower_irrigation_pump_stuck:
+    name: sim e2e vwc_flower irrigation_pump_stuck
+    initial: false
   sim_e2e_veg_irrigation_pump:
     name: sim e2e veg irrigation_pump
     initial: false
@@ -3081,7 +3119,6 @@ input_boolean:
     initial: false
   sim_e2e_vwc_veg_irrigation_pump:
     name: sim e2e vwc_veg irrigation_pump
-    initial: false
   sim_e2e_vwc_flower_irrigation_pump:
     name: sim e2e vwc_flower irrigation_pump
     initial: false
