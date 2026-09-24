@@ -2236,6 +2236,12 @@ def validate_contract(
     return errors
 
 
+# The regulation sensors the Climate Fail-Safe watches for freshness.
+_CLIMATE_INPUT_FIELDS = frozenset(
+    {"vpd_sensors", "temperature_sensors", "humidity_sensors"}
+)
+
+
 def _assign_setup_value(target: dict[str, Any], record: EntityRecord) -> None:
     setup = record.setup
     if setup is None:
@@ -2259,6 +2265,17 @@ def _assign_setup_value(target: dict[str, Any], record: EntityRecord) -> None:
             ] = 0
     elif setup.shape == "list":
         service.setdefault(setup.field, []).append(record.entity_id)
+        if setup.field in _CLIMATE_INPUT_FIELDS and record.entity_id.startswith(
+            "input_number."
+        ):
+            # The humidifier, dehumidifier and exhaust are driven by writing
+            # these inputs, which report only when written: a steady reading
+            # would go stale 30 minutes after every start and put the climate
+            # controllers in their fail-safe ten minutes later (GSM ADR-0052).
+            # 0 switches that check off, as it does for the moisture input.
+            service.setdefault("climate_fail_safe_config", {})[
+                "sensor_stale_after_minutes"
+            ] = 0
     elif setup.shape == "tank_list":
         tank: dict[str, Any] = {
             "name": f"Tank {record.ordinal}",

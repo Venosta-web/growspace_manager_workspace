@@ -235,6 +235,28 @@ class EntityCoverageContractTest(unittest.TestCase):
                 profile["profile"],
             )
 
+    def test_only_writable_climate_inputs_switch_climate_staleness_off(self) -> None:
+        climate_fields = ("vpd_sensors", "temperature_sensors", "humidity_sensors")
+        writable_seen = False
+        for profile in build_card_manifest()["profiles"]:
+            environment = profile["services"].get("configure_environment", {})
+            inputs = [
+                entity_id
+                for field in climate_fields
+                for entity_id in environment.get(field, [])
+            ]
+            writable = any(entity.startswith("input_number.") for entity in inputs)
+            writable_seen = writable_seen or writable
+            fail_safe = environment.get("climate_fail_safe_config")
+            # The writable inputs report only when written, so the Climate
+            # Fail-Safe's staleness check is off for them (GSM ADR-0052).
+            self.assertEqual(
+                fail_safe,
+                {"sensor_stale_after_minutes": 0} if writable else None,
+                profile["profile"],
+            )
+        self.assertTrue(writable_seen)
+
     def test_controllable_tanks_use_safe_percentage_limits(self) -> None:
         package = render_ha_package()
 
