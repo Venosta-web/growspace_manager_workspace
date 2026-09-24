@@ -2186,6 +2186,16 @@ def _assign_setup_value(target: dict[str, Any], record: EntityRecord) -> None:
                 f"multiple scalar setup entities for {record.profile}/{record.slug}/{setup.field}"
             )
         service[setup.field] = record.entity_id
+        if setup.field == "soil_moisture_sensor" and record.entity_id.startswith(
+            "input_number."
+        ):
+            # Crop steering is driven by writing this input, which reports only
+            # when written: a steady reading would go stale 30 minutes after
+            # every start and withhold every shot (GSM ADR-0051). 0 switches
+            # that check off, as stale_after_minutes: 0 does for tanks below.
+            target.setdefault("set_irrigation_settings", {})[
+                "sensor_stale_after_minutes"
+            ] = 0
     elif setup.shape == "list":
         service.setdefault(setup.field, []).append(record.entity_id)
     elif setup.shape == "tank_list":
