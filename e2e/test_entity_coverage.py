@@ -210,6 +210,30 @@ class EntityCoverageContractTest(unittest.TestCase):
                 "irrigation_pump_entity",
                 profile["services"]["set_irrigation_settings"],
             )
+            # The writable moisture input reports only when written, so its
+            # staleness check is off (GSM ADR-0051).
+            self.assertTrue(
+                environment["soil_moisture_sensor"].startswith("input_number.")
+            )
+            self.assertEqual(
+                profile["services"]["set_irrigation_settings"][
+                    "sensor_stale_after_minutes"
+                ],
+                0,
+            )
+
+    def test_only_a_writable_moisture_input_switches_staleness_off(self) -> None:
+        for profile in build_card_manifest()["profiles"]:
+            services = profile["services"]
+            moisture = services.get("configure_environment", {}).get(
+                "soil_moisture_sensor", ""
+            )
+            settings = services.get("set_irrigation_settings", {})
+            self.assertEqual(
+                "sensor_stale_after_minutes" in settings,
+                moisture.startswith("input_number."),
+                profile["profile"],
+            )
 
     def test_controllable_tanks_use_safe_percentage_limits(self) -> None:
         package = render_ha_package()
