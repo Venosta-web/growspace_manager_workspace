@@ -431,6 +431,14 @@ class Commission:
         return self._restart(kill=True)
 
     def empty_tank(self):
+        wait_until(
+            lambda: (
+                self.ha.controller()["state"] in {"idle", "ready"}
+                and not self.ha.controller()["reasons"]
+            ),
+            20,
+            0.5,
+        )
         baseline = self.ha.controller()
         if baseline["state"] not in {"idle", "ready"} or baseline["reasons"]:
             return None, {
@@ -733,6 +741,8 @@ def main():
     if args.list:
         print("\n".join(SCENARIOS))
         return 0
+    if args.stale_seconds < 1:
+        parser.error("--stale-seconds must be positive")
     backend_source = Path(
         os.environ.get(
             "GROWSPACE_BACKEND_SRC",
