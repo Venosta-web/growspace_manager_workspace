@@ -29,6 +29,33 @@ from e2e.entity_coverage import (
 
 
 class EntityCoverageContractTest(unittest.TestCase):
+    def test_commissioning_fault_switches_are_generated_from_roles(self) -> None:
+        package = render_ha_package()
+        entities = {
+            item["entity_id"]: item for item in build_card_manifest()["entities"]
+        }
+        for slug in ("vwc_veg", "vwc_flower"):
+            stuck = f"switch.sim_e2e_{slug}_irrigation_pump_stuck"
+            error = f"switch.sim_e2e_{slug}_irrigation_pump_error"
+            backing = f"input_boolean.sim_e2e_{slug}_irrigation_pump_stuck"
+            self.assertIn(stuck, entities)
+            self.assertIn(error, entities)
+            self.assertIn(backing, entities)
+            stuck_block = package.split(
+                f"        unique_id: {stuck.split('.', 1)[1]}\n", 1
+            )[1].split("      - name:", 1)[0]
+            error_block = package.split(
+                f"        unique_id: {error.split('.', 1)[1]}\n", 1
+            )[1].split("      - name:", 1)[0]
+            self.assertIn("stop: Simulated relay ignored OFF", stuck_block)
+            self.assertNotIn("action: input_boolean.turn_off", stuck_block)
+            self.assertIn("stop: Simulated pump service failure", error_block)
+            self.assertIn("error: true", error_block)
+        pump_backing = package.split("  sim_e2e_vwc_veg_irrigation_pump:\n", 1)[
+            1
+        ].split("  sim_e2e_", 1)[0]
+        self.assertNotIn("initial:", pump_backing)
+
     def test_every_dashboard_profile_exposes_complete_environment_equipment(
         self,
     ) -> None:
@@ -76,8 +103,8 @@ class EntityCoverageContractTest(unittest.TestCase):
             counts,
             {
                 "sensor": 212,
-                "input_number": 96,
-                "input_boolean": 114,
+                "input_number": 97,
+                "input_boolean": 117,
                 "binary_sensor": 2,
                 "light": 1,
                 "fan": 2,
@@ -86,7 +113,7 @@ class EntityCoverageContractTest(unittest.TestCase):
                 "select": 5,
                 "number": 62,
                 "time": 2,
-                "switch": 39,
+                "switch": 43,
                 "weather": 1,
             },
         )
@@ -422,6 +449,22 @@ class EntityCoverageContractTest(unittest.TestCase):
             "{{ states('input_number.sim_e2e_telemetry_multi_temperature_1') "
             "| float(0) | round(2) if",
             block,
+        )
+
+    def test_commissioning_vwc_mirror_stops_periodic_reports_when_pinned(self) -> None:
+        package = render_ha_package()
+        block = (
+            package.split("# e2e_irrigation_monitored — ", 1)[1]
+            .split("\n  - trigger:", 1)[1]
+            .split("\n  # ---", 1)[0]
+        )
+        gate = "input_boolean.sim_e2e_irrigation_monitored_manual_telemetry"
+        backing = "input_number.sim_e2e_irrigation_monitored_substrate_moisture"
+        self.assertIn(f"          - {gate}\n", block)
+        self.assertIn(f"          - {backing}\n", block)
+        self.assertIn("id: periodic", block)
+        self.assertIn(
+            f"trigger.id != 'periodic' or not is_state('{gate}', 'on')", block
         )
 
     def test_paired_sensors_start_apart_and_never_share_a_waveform(self) -> None:

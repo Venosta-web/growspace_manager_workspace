@@ -890,6 +890,20 @@ ROLES: tuple[CoverageRole, ...] = (
         # Crop Steering is driven by writing this reading, so a VWC growspace
         # keeps a writable input where every other dashboard gets a waveform.
         writable_profiles=("vwc",),
+        # Commissioning needs a real sensor whose reports can be paused while
+        # its last reading stays pinned. The monitored irrigation profile owns
+        # both that sensor and a separate pump/drain pair.
+        extra_assignments=(
+            Assignment(
+                "irrigation_monitored",
+                "sensor.e2e_{slug}_substrate_moisture",
+                "sensor",
+                Behavior.READ_ONLY,
+                Status.COVERED,
+                generator=MIRROR_SENSOR,
+                setup=_setup("soil_moisture_sensor"),
+            ),
+        ),
     ),
     _telemetry_role(
         role_id="environment.power",
@@ -1130,6 +1144,54 @@ ROLES: tuple[CoverageRole, ...] = (
         ),
     ),
     CoverageRole(
+        "simulation.irrigation_pump_stuck",
+        "internal",
+        "Commissioning switch that accepts ON but ignores OFF",
+        EXACTLY_ONE,
+        (
+            Assignment(
+                "vwc",
+                "switch.sim_e2e_{slug}_irrigation_pump_stuck",
+                "switch",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="template_switch_stuck",
+            ),
+        ),
+    ),
+    CoverageRole(
+        "simulation.irrigation_pump_error",
+        "internal",
+        "Commissioning switch whose ON service raises an error",
+        EXACTLY_ONE,
+        (
+            Assignment(
+                "vwc",
+                "switch.sim_e2e_{slug}_irrigation_pump_error",
+                "switch",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="template_switch_error",
+            ),
+        ),
+    ),
+    CoverageRole(
+        "simulation.irrigation_pump_stuck_state",
+        "internal",
+        "Backing state for the commissioning stuck switch",
+        EXACTLY_ONE,
+        (
+            Assignment(
+                "vwc",
+                "input_boolean.sim_e2e_{slug}_irrigation_pump_stuck",
+                "input_boolean",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                generator="input_boolean",
+            ),
+        ),
+    ),
+    CoverageRole(
         "simulation.irrigation_pump_state",
         "internal",
         "Persistent backing state for an irrigation pump template switch",
@@ -1323,7 +1385,7 @@ def _mirror_support_roles(roles: Sequence[CoverageRole]) -> tuple[CoverageRole, 
     instead, from the same assignment that declares the mirror.
     """
 
-    backing: list[CoverageRole] = []
+    backing: dict[str, CoverageRole] = {}
     gated_profiles: list[str] = []
     for role in roles:
         for assignment in role.assignments:
@@ -1331,26 +1393,25 @@ def _mirror_support_roles(roles: Sequence[CoverageRole]) -> tuple[CoverageRole, 
                 continue
             if assignment.profile not in gated_profiles:
                 gated_profiles.append(assignment.profile)
-            backing.append(
-                CoverageRole(
-                    f"simulation.{role.simulation.suffix}_input",
-                    "internal",
-                    f"Writable backing value for "
-                    f"{role.description[:1].lower()}{role.description[1:]}",
-                    role.cardinality,
-                    (
-                        Assignment(
-                            assignment.profile,
-                            mirror_backing_entity_id(assignment.entity_id_rule),
-                            "input_number",
-                            Behavior.CONTROLLABLE,
-                            Status.COVERED,
-                            count=assignment.count,
-                            generator="input_number",
-                        ),
-                    ),
-                    role.simulation,
-                )
+            backing_id = f"simulation.{role.simulation.suffix}_input"
+            backing_assignment = Assignment(
+                assignment.profile,
+                mirror_backing_entity_id(assignment.entity_id_rule),
+                "input_number",
+                Behavior.CONTROLLABLE,
+                Status.COVERED,
+                count=assignment.count,
+                generator="input_number",
+            )
+            previous = backing.get(backing_id)
+            backing[backing_id] = CoverageRole(
+                backing_id,
+                "internal",
+                f"Writable backing value for "
+                f"{role.description[:1].lower()}{role.description[1:]}",
+                role.cardinality,
+                (previous.assignments if previous else ()) + (backing_assignment,),
+                role.simulation,
             )
 
     gates = (
@@ -1372,7 +1433,7 @@ def _mirror_support_roles(roles: Sequence[CoverageRole]) -> tuple[CoverageRole, 
             ),
         ),
     )
-    return tuple(backing) + (gates if gated_profiles else ())
+    return tuple(backing.values()) + (gates if gated_profiles else ())
 
 
 def _plain_climate_roles() -> tuple[CoverageRole, ...]:
@@ -2575,12 +2636,21 @@ def _mirror_template_lines(
                 "  # ---------------------------------------------------------------",
                 "  - trigger:",
                 "      - platform: time_pattern",
+                "        id: periodic",
                 '        seconds: "/30"',
                 "      - platform: state",
+                "        id: manual",
                 "        entity_id:",
                 f"          - {gate}",
             ]
             lines += [f"          - {backing}" for backing in backings]
+            if profile.id == "irrigation_monitored":
+                lines += [
+                    "    conditions:",
+                    "      - condition: template",
+                    "        value_template: >-",
+                    f"          {{{{ trigger.id != 'periodic' or not is_state('{gate}', 'on') }}}}",
+                ]
             lines.append("    sensor:")
             for record, backing in zip(mirrors, backings, strict=True):
                 sim = record.role.simulation
@@ -2669,7 +2739,12 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
             instance for profile in PROFILES for instance in profile.instances
         )
     }
-    switches = [record for record in active if record.generator == "template_switch"]
+    switches = [
+        record
+        for record in active
+        if record.generator
+        in {"template_switch", "template_switch_stuck", "template_switch_error"}
+    ]
     switches.sort(
         key=lambda record: (
             instance_order[record.slug],
@@ -2685,6 +2760,17 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
     for record in switches:
         unique_id = record.entity_id.split(".", 1)[1]
         backing = f"input_boolean.{unique_id}"
+        if record.generator == "template_switch_error":
+            lines += [
+                f"      - name: {unique_id.replace('_', ' ')}",
+                f"        unique_id: {unique_id}",
+                '        state: "{{ false }}"',
+                "        turn_on:",
+                "          - stop: Simulated pump service failure",
+                "            error: true",
+                "        turn_off: []",
+            ]
+            continue
         if record.role_id.startswith("irrigation."):
             kind = unique_id.rsplit("_", 2)[-2] + "_pump"
             name = f"sim e2e {record.slug} {kind}"
@@ -2699,9 +2785,15 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
             "          target:",
             f"            entity_id: {backing}",
             "        turn_off:",
-            "          action: input_boolean.turn_off",
-            "          target:",
-            f"            entity_id: {backing}",
+            *(
+                ["          stop: Simulated relay ignored OFF"]
+                if record.generator == "template_switch_stuck"
+                else [
+                    "          action: input_boolean.turn_off",
+                    "          target:",
+                    f"            entity_id: {backing}",
+                ]
+            ),
         ]
 
     simulated_switches = [
@@ -2906,7 +2998,9 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
     ]
     for record in boolean_backings:
         object_id = record.entity_id.split(".", 1)[1]
-        if record.role_id.startswith(
+        if record.role_id == "simulation.irrigation_pump_stuck_state":
+            name = f"sim e2e {record.slug} irrigation_pump_stuck"
+        elif record.role_id.startswith(
             "simulation.irrigation"
         ) or record.role_id.startswith("simulation.drain"):
             kind = object_id.rsplit("_", 2)[-2] + "_pump"
@@ -2916,7 +3010,12 @@ def render_ha_package(records: Sequence[EntityRecord] | None = None) -> str:
         lines += [
             f"  {object_id}:",
             f"    name: {name}",
-            "    initial: false",
+            *(
+                []
+                if record.role_id == "simulation.irrigation_pump_state"
+                and record.slug == "vwc_veg"
+                else ["    initial: false"]
+            ),
         ]
     lines += ["", "input_number:"]
     for instance in (
