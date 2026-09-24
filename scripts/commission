@@ -35,6 +35,10 @@ OVERVIEW = f"sensor.e2e_{SLUG}_overview"
 MONITORED_OVERVIEW = "sensor.e2e_irrigation_monitored_overview"
 MONITORED_PUMP = "switch.sim_e2e_irrigation_monitored_irrigation_pump"
 MONITORED_DRAIN = "switch.sim_e2e_irrigation_monitored_drain_pump"
+MONITORED_VWC = "sensor.e2e_irrigation_monitored_substrate_moisture"
+MONITORED_VWC_BACKING = "input_number.sim_e2e_irrigation_monitored_substrate_moisture"
+MONITORED_GATE = "input_boolean.sim_e2e_irrigation_monitored_manual_telemetry"
+MONITORED_CONTROLLER = "sensor.e2e_irrigation_monitored_irrigation_controller"
 SCENARIOS = (
     "sensor_disconnect",
     "pump_stuck_on",
@@ -125,8 +129,8 @@ class HA:
     def growspace(self):
         return self.state(OVERVIEW)["attributes"]["identity"]["growspace_id"]
 
-    def controller(self):
-        state = self.state(CONTROLLER)
+    def controller(self, entity=CONTROLLER):
+        state = self.state(entity)
         return {
             "state": state["state"],
             "reasons": state["attributes"].get("reasons", []),
@@ -145,6 +149,16 @@ def wait_until(check, seconds=15, step=0.4):
     return bool(last)
 
 
+def new_reason(controller, code, started_at):
+    """Require a reason produced by this injection, not a prior run's latch."""
+    return any(
+        reason.get("code") == code
+        and reason.get("since")
+        and dt.datetime.fromisoformat(reason["since"]) >= started_at
+        for reason in controller["reasons"]
+    )
+
+
 class Commission:
     def __init__(self, ha, *, stale_seconds, backend_root):
         self.ha = ha
@@ -157,6 +171,16 @@ class Commission:
         ]
         self.original_tank = float(ha.value(TANK))
         self.original_vwc = ha.state(VWC)
+        try:
+            self.original_monitored_vwc_backing = float(ha.value(MONITORED_VWC_BACKING))
+            if ha.value(MONITORED_GATE) != "off":
+                raise ValueError(
+                    "monitored VWC manual gate must be OFF before commissioning"
+                )
+        except RuntimeError as err:
+            if "HTTP 404" not in str(err):
+                raise
+            self.original_monitored_vwc_backing = None
         self.original_controller = ha.controller()
         if self.original_controller["requires_ack"]:
             raise ValueError(
@@ -216,6 +240,17 @@ class Commission:
                 self.ha.turn(entity, False)
             except Exception as err:
                 errors.append(f"{entity} OFF: {err}")
+        if self.original_monitored_vwc_backing is not None:
+            try:
+                self.ha.turn(MONITORED_GATE, False)
+                self.ha.service(
+                    "input_number",
+                    "set_value",
+                    entity_id=MONITORED_VWC_BACKING,
+                    value=self.original_monitored_vwc_backing,
+                )
+            except Exception as err:
+                errors.append(f"restore monitored VWC: {err}")
         try:
             current = self.ha.state(OVERVIEW)["attributes"]["irrigation"][
                 "irrigation_config"
@@ -263,19 +298,33 @@ class Commission:
             raise RuntimeError("commission cleanup failed: " + "; ".join(errors))
 
     def sensor_disconnect(self):
-        self.ha.set_state(VWC, "unavailable", self.original_vwc["attributes"])
+        if self.original_monitored_vwc_backing is None:
+            return None, {"reason": "generated monitored VWC mirror is not loaded"}
+        self.ha.turn(MONITORED_GATE, True)
+        pinned = wait_until(
+            lambda: self.ha.value(MONITORED_VWC) not in {"unknown", "unavailable"}, 5
+        )
+        if not pinned:
+            return None, {"reason": "monitored mirror did not become available"}
+        original = self.ha.state(MONITORED_VWC)
+        started_at = dt.datetime.now(dt.UTC)
+        self.ha.set_state(MONITORED_VWC, "unavailable", original["attributes"])
         wait_until(
-            lambda: any(
-                r.get("code") == "sensor_unavailable"
-                for r in self.ha.controller()["reasons"]
+            lambda: new_reason(
+                self.ha.controller(MONITORED_CONTROLLER),
+                "sensor_unavailable",
+                started_at,
             ),
             35,
             1,
         )
-        observed = {"vwc": self.ha.value(VWC), **self.snapshot()}
-        return observed["pump"] == "off" and any(
-            r.get("code") == "sensor_unavailable"
-            for r in observed["controller"]["reasons"]
+        observed = {
+            "vwc": self.ha.value(MONITORED_VWC),
+            "pump": self.ha.value(MONITORED_PUMP),
+            "controller": self.ha.controller(MONITORED_CONTROLLER),
+        }
+        return observed["pump"] == "off" and new_reason(
+            observed["controller"], "sensor_unavailable", started_at
         ), observed
 
     def pump_stuck_on(self):
@@ -299,18 +348,14 @@ class Commission:
         return started and observed["controller"]["state"] == "fault", observed
 
     def unexpected_on(self):
+        started_at = dt.datetime.now(dt.UTC)
         self.ha.turn(PUMP, True)
         wait_until(
-            lambda: any(
-                r.get("code") == "unexpected_on"
-                for r in self.ha.controller()["reasons"]
-            ),
+            lambda: new_reason(self.ha.controller(), "unexpected_on", started_at),
             12,
         )
         observed = self.snapshot()
-        return any(
-            r.get("code") == "unexpected_on" for r in observed["controller"]["reasons"]
-        ), observed
+        return new_reason(observed["controller"], "unexpected_on", started_at), observed
 
     def _restart(self, *, kill):
         self.run_shot(60)
@@ -386,22 +431,42 @@ class Commission:
         return self._restart(kill=True)
 
     def empty_tank(self):
+        baseline = self.ha.controller()
+        if baseline["state"] not in {"idle", "ready"} or baseline["reasons"]:
+            return None, {
+                "reason": "controller was already inhibited before lowering the tank",
+                "baseline": baseline,
+            }
+        started_at = dt.datetime.now(dt.UTC)
         self.ha.service("input_number", "set_value", entity_id=TANK, value=0)
-        self.run_shot(3)
-        time.sleep(2)
-        observed = {"tank": self.ha.value(TANK), **self.snapshot()}
-        return observed["pump"] == "off" and any(
-            r.get("code") == "tank_low" for r in observed["controller"]["reasons"]
+        command_error = None
+        try:
+            self.run_shot(3)
+        except RuntimeError as err:
+            command_error = str(err)
+        samples = []
+        until = time.monotonic() + 4
+        while time.monotonic() < until:
+            samples.append(self.ha.value(PUMP))
+            time.sleep(0.2)
+        observed = {
+            "tank": self.ha.value(TANK),
+            "pump_samples": samples,
+            "command_error": command_error,
+            **self.snapshot(),
+        }
+        return not any(sample == "on" for sample in samples) and new_reason(
+            observed["controller"], "tank_low", started_at
         ), observed
 
     def invalid_vwc(self):
         readings = []
         for value in ("0", "-5", "150", "nan"):
+            started_at = dt.datetime.now(dt.UTC)
             self.ha.set_state(VWC, value, self.original_vwc["attributes"])
             wait_until(
-                lambda: any(
-                    r.get("code") == "sensor_invalid"
-                    for r in self.ha.controller()["reasons"]
+                lambda started_at=started_at: new_reason(
+                    self.ha.controller(), "sensor_invalid", started_at
                 ),
                 5,
                 1,
@@ -409,23 +474,45 @@ class Commission:
             readings.append(
                 {
                     "injected": value,
+                    "started_at": started_at.isoformat(),
                     "observed": self.ha.value(VWC),
                     "controller": self.ha.controller(),
                 }
             )
         return all(
-            any(r.get("code") == "sensor_invalid" for r in row["controller"]["reasons"])
+            new_reason(
+                row["controller"],
+                "sensor_invalid",
+                dt.datetime.fromisoformat(row["started_at"]),
+            )
             for row in readings
         ), {"readings": readings}
 
     def stale_sensor(self):
-        self.ha.service("input_number", "set_value", entity_id=VWC, value=52)
+        if self.original_monitored_vwc_backing is None:
+            return None, {"reason": "generated monitored VWC mirror is not loaded"}
+        self.ha.service(
+            "input_number", "set_value", entity_id=MONITORED_VWC_BACKING, value=52
+        )
+        self.ha.turn(MONITORED_GATE, True)
+        if not wait_until(lambda: self.ha.value(MONITORED_VWC) == "52.0", 10):
+            return None, {"reason": "monitored VWC did not pin to 52"}
+        last_reported = self.ha.state(MONITORED_VWC)["last_reported"]
+        started_at = dt.datetime.now(dt.UTC)
         time.sleep(self.stale_seconds)
-        observed = {"vwc": self.ha.state(VWC)["last_reported"], **self.snapshot()}
-        return any(
-            reason.get("code") == "sensor_stale"
-            for reason in observed["controller"]["reasons"]
-        ), observed
+        observed = {
+            "vwc": self.ha.value(MONITORED_VWC),
+            "last_reported_before": last_reported,
+            "last_reported_after": self.ha.state(MONITORED_VWC)["last_reported"],
+            "pump": self.ha.value(MONITORED_PUMP),
+            "controller": self.ha.controller(MONITORED_CONTROLLER),
+        }
+        if observed["last_reported_after"] != last_reported:
+            return None, {
+                **observed,
+                "reason": "mirror continued to report while pinned",
+            }
+        return new_reason(observed["controller"], "sensor_stale", started_at), observed
 
     def service_failure(self):
         try:
@@ -492,9 +579,13 @@ class Commission:
                 return sample["pump"] == "on"
 
             started = wait_until(sample_until_pump_on, 135, 0.5)
+            manual_error = None
             if started:
-                monitored_call("run_irrigation_cycle", duration=3)
-            for _ in range(25):
+                try:
+                    monitored_call("run_irrigation_cycle", duration=3)
+                except RuntimeError as err:
+                    manual_error = str(err)
+            for _ in range(75):
                 samples.append(
                     {
                         "pump": self.ha.value(MONITORED_PUMP),
@@ -504,6 +595,7 @@ class Commission:
                 time.sleep(0.2)
             observed = {
                 "scheduled_start": started,
+                "manual_request_error": manual_error,
                 "schedule": schedule,
                 "samples": samples,
                 "pump": self.ha.value(MONITORED_PUMP),
@@ -592,7 +684,12 @@ class Commission:
                 "reason": "backend frozen-time commissioning test is not present",
                 "backend_test": relative,
             }
-        pytest = RUNTIME.parent / "growspace_manager/.venv/bin/pytest"
+        pytest = self.backend_root / ".venv/bin/pytest"
+        if not pytest.is_file():
+            return None, {
+                "reason": "live backend checkout has no pytest environment",
+                "backend_test": relative,
+            }
         result = subprocess.run(
             [str(pytest), relative, "-q", "-rx", "-p", "no:cacheprovider"],
             cwd=self.backend_root,
@@ -615,6 +712,10 @@ def git_sha(path):
     return subprocess.check_output(
         ["git", "-C", str(path), "rev-parse", "HEAD"], text=True
     ).strip()
+
+
+def file_sha256(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def main():
@@ -671,11 +772,20 @@ def main():
         "started_at": dt.datetime.now(dt.UTC).isoformat(),
         "environment": "simulated",
         "home_assistant_version": config["version"],
+        "backend_integration_version": json.loads(
+            (backend_source / "manifest.json").read_text()
+        )["version"],
         "hub_revision": git_sha(ROOT),
         "backend_revision": git_sha(backend_source_root),
         "backend_source": str(backend_source),
         "backend_test_revision": git_sha(backend_root),
-        "harness_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "harness_sha256": file_sha256(Path(__file__)),
+        "declared_fixture_sha256": file_sha256(
+            ROOT / "ha-dev/packages/e2e_simulated_sensors.yaml"
+        ),
+        "runtime_fixture_sha256": file_sha256(
+            RUNTIME / "ha-dev/packages/e2e_simulated_sensors.yaml"
+        ),
         "growspace_id": runner.growspace,
         "irrigation_config": runner.original_config,
         "stale_wait_seconds": args.stale_seconds,
@@ -721,10 +831,16 @@ def main():
             record["final_cleanup_error"] = str(err)
         record["finished_at"] = dt.datetime.now(dt.UTC).isoformat()
         artifact.write_text(json.dumps(record, indent=2, default=str) + "\n")
-    print("\nScenario                 Outcome")
-    print("------------------------ ------------")
+    print("\nScenario                 Outcome         Seconds  Note")
+    print(
+        "------------------------ --------------- -------- ------------------------------"
+    )
     for row in record["scenarios"]:
-        print(f"{row['name']:24} {row['outcome']}")
+        note = row["observed"].get("reason") or row["observed"].get("error", "")
+        print(
+            f"{row['name']:24} {row['outcome']:15} "
+            f"{row['elapsed_seconds']:8.1f} {note[:90]}"
+        )
     print(f"\nRecord: {artifact}")
     return (
         1

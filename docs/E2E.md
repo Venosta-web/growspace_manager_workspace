@@ -144,7 +144,6 @@ the same generator command. A second generation must produce no diff.
 | `environment.substrate_temperature` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_substrate_temperature{ordinal_suffix}` | `sensor` | one or more (2) | read-only | covered |
 | `environment.substrate_moisture` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.substrate_moisture` | environment | `vwc` (vwc_veg, vwc_flower) | `input_number.e2e_{slug}_substrate_moisture` | `input_number` | exactly one (1) | controllable | covered |
-| `environment.substrate_moisture` | environment | `irrigation_monitored` (irrigation_monitored) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.substrate_moisture` | environment | `irrigation_tanks` (irrigation_tanks) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.substrate_moisture` | environment | `lighting` (lighting) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.substrate_moisture` | environment | `climate_plain` (climate_plain) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
@@ -152,6 +151,7 @@ the same generator command. A second generation must produce no diff.
 | `environment.substrate_moisture` | environment | `vision` (vision) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.substrate_moisture` | environment | `demo` (demo) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.substrate_moisture` | environment | `telemetry_multi` (telemetry_multi) | `sensor.e2e_{slug}_substrate_moisture{ordinal_suffix}` | `sensor` | exactly one (1) | read-only | covered |
+| `environment.substrate_moisture` | environment | `irrigation_monitored` (irrigation_monitored) | `sensor.e2e_{slug}_substrate_moisture` | `sensor` | exactly one (1) | read-only | covered |
 | `environment.power` | environment | `stage` (veg, clone, mother, flower, dry, cure) | `sensor.e2e_{slug}_power` | `sensor` | one or more (1) | read-only | covered |
 | `environment.power` | environment | `vwc` (vwc_veg, vwc_flower) | `sensor.e2e_{slug}_power` | `sensor` | one or more (1) | read-only | covered |
 | `environment.power` | environment | `irrigation_monitored` (irrigation_monitored) | `sensor.e2e_{slug}_power` | `sensor` | one or more (1) | read-only | covered |
@@ -222,10 +222,12 @@ the same generator command. A second generation must produce no diff.
 | `simulation.ph_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_ph{ordinal_suffix}` | `input_number` | one or more (1) | controllable | covered |
 | `simulation.substrate_temperature_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_substrate_temperature{ordinal_suffix}` | `input_number` | one or more (2) | controllable | covered |
 | `simulation.substrate_moisture_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_substrate_moisture{ordinal_suffix}` | `input_number` | exactly one (1) | controllable | covered |
+| `simulation.substrate_moisture_input` | internal | `irrigation_monitored` (irrigation_monitored) | `input_number.sim_e2e_{slug}_substrate_moisture` | `input_number` | exactly one (1) | controllable | covered |
 | `simulation.power_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_power{ordinal_suffix}` | `input_number` | one or more (1) | controllable | covered |
 | `simulation.energy_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_energy{ordinal_suffix}` | `input_number` | one or more (1) | controllable | covered |
 | `simulation.light_input` | internal | `telemetry_multi` (telemetry_multi) | `input_number.sim_e2e_{slug}_light{ordinal_suffix}` | `input_number` | one or more (2) | controllable | covered |
 | `simulation.manual_telemetry` | internal | `telemetry_multi` (telemetry_multi) | `input_boolean.sim_e2e_{slug}_manual_telemetry` | `input_boolean` | exactly one (1) | controllable | covered |
+| `simulation.manual_telemetry` | internal | `irrigation_monitored` (irrigation_monitored) | `input_boolean.sim_e2e_{slug}_manual_telemetry` | `input_boolean` | exactly one (1) | controllable | covered |
 | `climate.circulation_percentage` | climate | `climate_plain` (climate_plain) | `fan.e2e_{slug}_circulation_fan_percentage` | `fan` | one or more (1) | controllable | covered |
 | `climate.circulation_numeric` | climate | `climate_plain` (climate_plain) | `input_number.e2e_{slug}_circulation_fan_speed` | `input_number` | one or more (1) | controllable | covered |
 | `climate.circulation_binary` | climate | `climate_plain` (climate_plain) | `switch.e2e_{slug}_circulation_fan_switch` | `switch` | one or more (1) | controllable | covered |

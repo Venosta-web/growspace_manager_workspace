@@ -9,6 +9,10 @@ The target must be `http://127.0.0.1:8123` (or localhost on the same port),
 identify itself as `Growspace Dev`, and have the E2E profile installed. The
 runner refuses `ha-test` and other Home Assistant instances. A token from
 `.ha-token` or `HA_ACCESS_TOKEN` is required.
+The full run takes at least 16 minutes because the stale-sensor case waits
+through the validity window. Use `--scenario NAME` for focused reruns;
+`--stale-seconds` changes the observation interval and should only be shortened
+for harness debugging.
 
 The record distinguishes `met`, `gap`, `not_exercised`, and `error`. A `gap`
 means the observed state did not satisfy the scenario's stated safety check.
@@ -24,15 +28,22 @@ lands. The harness does not certify a physical installation.
 
 The stuck relay and erroring switch are generated from
 `e2e/entity_coverage.py` along with the other E2E equipment. Regenerate with
-`./scripts/gen-e2e-sensors --card-root <card-checkout>` and restart `ha-dev`
-before using those cases. The stuck switch deliberately needs its backing
+`./scripts/e2e provision` from the main hub checkout after the change is
+merged; it generates the package that the main `ha-dev` bind mount actually
+serves. Generating inside a hub worktree writes that worktree's package and
+does not update the running instance. Missing fixtures are reported as
+`not_exercised`. The stuck switch deliberately needs its backing
 `input_boolean` cleared after the case. The runner does this in cleanup.
-The VWC profile currently configures a writable `input_number` directly; the
-disconnect and invalid-value cases inject an HA state through the REST API,
-while the stale case stops reporting from that same helper. This exercises the
-backend sensor path but does not prove a physical probe's disconnect behavior.
-The overlap case uses `E2E Irrigation Monitored`, which has a schedule and a
-separate drain pump; the other live cases use `E2E VWC Veg`.
+The disconnect and stale cases use the `E2E Irrigation Monitored` mirrored VWC
+sensor. Its manual gate pins the last reading and pauses periodic reports, so
+the stale case waits through a real validity window. The disconnect case sets
+that sensor `unavailable` while the gate is pinned. The invalid-value case uses
+the writable VWC helper in `E2E VWC Veg`, since an `input_number` cannot accept
+negative, out-of-range, or `nan` values through its normal service. These
+injections exercise the backend sensor path but do not prove a physical probe's
+disconnect behavior. The overlap case also uses `E2E Irrigation Monitored`,
+which has a schedule and a separate drain pump; other live cases use
+`E2E VWC Veg`.
 
 ## Repeating the cases on physical equipment
 

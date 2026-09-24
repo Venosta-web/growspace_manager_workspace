@@ -103,8 +103,8 @@ class EntityCoverageContractTest(unittest.TestCase):
             counts,
             {
                 "sensor": 212,
-                "input_number": 96,
-                "input_boolean": 116,
+                "input_number": 97,
+                "input_boolean": 117,
                 "binary_sensor": 2,
                 "light": 1,
                 "fan": 2,
@@ -427,6 +427,22 @@ class EntityCoverageContractTest(unittest.TestCase):
             "{{ states('input_number.sim_e2e_telemetry_multi_temperature_1') "
             "| float(0) | round(2) if",
             block,
+        )
+
+    def test_commissioning_vwc_mirror_stops_periodic_reports_when_pinned(self) -> None:
+        package = render_ha_package()
+        block = (
+            package.split("# e2e_irrigation_monitored — ", 1)[1]
+            .split("\n  - trigger:", 1)[1]
+            .split("\n  # ---", 1)[0]
+        )
+        gate = "input_boolean.sim_e2e_irrigation_monitored_manual_telemetry"
+        backing = "input_number.sim_e2e_irrigation_monitored_substrate_moisture"
+        self.assertIn(f"          - {gate}\n", block)
+        self.assertIn(f"          - {backing}\n", block)
+        self.assertIn("id: periodic", block)
+        self.assertIn(
+            f"trigger.id != 'periodic' or not is_state('{gate}', 'on')", block
         )
 
     def test_paired_sensors_start_apart_and_never_share_a_waveform(self) -> None:
