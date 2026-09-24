@@ -156,6 +156,8 @@ class EntityCoverageContractTest(unittest.TestCase):
         self.assertEqual(len(tank_rows), 2)
         self.assertEqual([row["name"] for row in tank_rows], ["Tank 1", "Tank 2"])
         self.assertTrue(all(row["volume_liters"] == 50 for row in tank_rows))
+        # Writable input_number tanks never re-report a steady level.
+        self.assertTrue(all(row["stale_after_minutes"] == 0 for row in tank_rows))
         self.assertNotIn("irrigation_flow_sensors", tanks["configure_environment"])
         self.assertNotIn("drain_volume_sensors", tanks["configure_environment"])
         self.assertEqual(
@@ -173,6 +175,8 @@ class EntityCoverageContractTest(unittest.TestCase):
         for profile in vwc_profiles:
             environment = profile["services"]["configure_environment"]
             self.assertEqual(len(environment["irrigation_tanks"]), 1)
+            [tank] = environment["irrigation_tanks"]
+            self.assertEqual(tank["stale_after_minutes"], 0)
             self.assertNotIn("irrigation_flow_sensors", environment)
             self.assertNotIn("drain_volume_sensors", environment)
             self.assertIn(

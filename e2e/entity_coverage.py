@@ -2189,13 +2189,18 @@ def _assign_setup_value(target: dict[str, Any], record: EntityRecord) -> None:
     elif setup.shape == "list":
         service.setdefault(setup.field, []).append(record.entity_id)
     elif setup.shape == "tank_list":
-        service.setdefault(setup.field, []).append(
-            {
-                "name": f"Tank {record.ordinal}",
-                "sensor_entity": record.entity_id,
-                "volume_liters": setup.volume_liters or 50,
-            }
-        )
+        tank: dict[str, Any] = {
+            "name": f"Tank {record.ordinal}",
+            "sensor_entity": record.entity_id,
+            "volume_liters": setup.volume_liters or 50,
+        }
+        if record.entity_id.startswith("input_number."):
+            # A writable input_number reports only when it is written, so a
+            # steady level would read as stale two hours after every start and
+            # hold the tank's irrigation (GSM ADR-0050). 0 switches that check
+            # off; the template sims re-render every minute and keep it.
+            tank["stale_after_minutes"] = 0
+        service.setdefault(setup.field, []).append(tank)
     elif setup.shape == "bundle":
         if setup.member is None:
             raise ValueError(f"bundle setup for {record.role_id} has no member")
