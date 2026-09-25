@@ -299,6 +299,15 @@ function codexFixture(t) {
   initRepository(path.join(root, 'growspace_manager_tc'), { 'requirements.txt': 'x\n' });
   initRepository(path.join(root, 'growspace_manager_vision'), { 'pyproject.toml': '\n' });
   initRepository(path.join(root, 'lovelace-growspace-manager-card'), { 'package-lock.json': '{}\n' });
+  // Each repository's integration branch, as a fetch would leave it.
+  for (const [name, branch] of [
+    ['growspace_manager', 'prerelease'],
+    ['growspace_manager_tc', 'main'],
+    ['growspace_manager_vision', 'main'],
+    ['lovelace-growspace-manager-card', 'dev'],
+  ]) {
+    git(path.join(root, name), 'update-ref', `refs/remotes/origin/${branch}`, 'HEAD');
+  }
   executable(path.join(root, 'growspace_manager', '.venv', 'bin', 'python'), '#!/bin/sh\n');
   executable(path.join(root, 'growspace_manager_vision', '.venv', 'bin', 'python'), '#!/bin/sh\n');
   fs.mkdirSync(path.join(root, 'lovelace-growspace-manager-card', 'node_modules'));

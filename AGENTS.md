@@ -721,6 +721,19 @@ argument lists every sibling that is cloned. Node scripts reach it through
 pair made from a worktree therefore lands in the **main** hub's `worktrees/`,
 where it outlives the session that made it.
 
+Each worktree starts from the branch **its own repository** integrates on —
+backend `origin/prerelease`, TC and Vision `origin/main`, card `origin/dev` —
+and the resolver is where that is written down too: `growspace-repos --base
+<repo>` prints it, and `feature` and `codex-worktree` both ask it. Override one
+repository at a time with `GROWSPACE_{BACKEND,TC,CARD,VISION}_BASE_BRANCH`. A
+base that is not there refuses, naming the repository and the branch, before
+`feature` makes any worktree; nothing falls back to `main`. That fallback is how
+a card pair once started from `main` under a success line that said
+`base: origin/prerelease`, which is also why a global `BASE=` is refused rather
+than honoured: one branch for every repository is the bug. The success output
+names each worktree's actual start point, or that it reused an existing
+`feature/<name>` branch.
+
 Worktrees accumulate: a merged feature leaves its directories behind, and a card
 worktree costs ~700 MB in build caches even though its `node_modules` is a
 symlink. **Nothing upstream collects them.** A merge happens on a GitHub runner

@@ -29,26 +29,19 @@ require_repo() {
   }
 }
 
-resolve_base() {
-  local repo="$1" preferred="$2" candidate
-  for candidate in \
-    "refs/remotes/origin/$preferred" \
-    "refs/heads/$preferred" \
-    refs/remotes/origin/main \
-    refs/heads/main; do
-    if git -C "$repo" show-ref --verify --quiet "$candidate"; then
-      printf '%s\n' "$candidate"
-      return
-    fi
-  done
-  echo "ERROR: no usable $preferred or main base in $repo" >&2
-  exit 1
-}
+# Where each worktree came from, for the summary: its base when this run made
+# it, otherwise that it already existed.
+declare -A FROM=()
 
+# A new worktree starts from the base scripts/growspace-repos names for its
+# repository — the same one scripts/feature uses — and refuses when that base
+# is missing rather than settling for another branch. An existing worktree is
+# left alone, so a later `check` or `status` never needs the base at all.
 add_worktree() {
-  local repo="$1" destination="$2" base="$3"
+  local repo="$1" name="$2" destination="$3" base
 
   if [ -d "$destination" ] && git -C "$destination" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    FROM[$name]="existing worktree"
     return
   fi
   if [ -e "$destination" ]; then
@@ -56,11 +49,16 @@ add_worktree() {
     exit 1
   fi
 
-  mkdir -p "$(dirname "$destination")"
   if git -C "$repo" show-ref --verify --quiet "refs/heads/$BRANCH"; then
+    mkdir -p "$(dirname "$destination")"
     git -C "$repo" worktree add "$destination" "$BRANCH"
+    FROM[$name]="existing branch $BRANCH"
   else
+    git -C "$repo" fetch --quiet origin || true
+    base="$("$HUB_WORKTREE/scripts/growspace-repos" --base "$name")"
+    mkdir -p "$(dirname "$destination")"
     git -C "$repo" worktree add -b "$BRANCH" "$destination" "$base"
+    FROM[$name]="base $base"
   fi
 }
 
@@ -82,19 +80,10 @@ prepare_backend_venv() {
 }
 
 prepare_tc_venv() {
-  # Ticket #112 owns the initial TC Python scaffold. Until requirements.txt
-  # exists, create the correctly placed worktree and let a later setup rerun
-  # materialize its private environment.
-  if [ ! -f "$TC_WORKTREE/requirements.txt" ]; then
-    echo "→ TC checkout has no requirements.txt yet; deferring its venv until the scaffold lands"
-    return 0
-  fi
   "$HUB_WORKTREE/scripts/backend-venv" "$TC_REPO" "$TC_WORKTREE" tc
 }
 
 setup_pair() {
-  local backend_base tc_base card_base vision_base
-
   require_repo "$BACKEND_REPO"
   require_repo "$TC_REPO"
   require_repo "$CARD_REPO"
@@ -114,16 +103,11 @@ setup_pair() {
     exit 1
   }
 
-  backend_base="$(resolve_base "$BACKEND_REPO" "${CODEX_BACKEND_BASE:-prerelease}")"
-  tc_base="$(resolve_base "$TC_REPO" "${CODEX_TC_BASE:-main}")"
-  card_base="$(resolve_base "$CARD_REPO" "${CODEX_CARD_BASE:-dev}")"
-  vision_base="$(resolve_base "$VISION_REPO" "${CODEX_VISION_BASE:-main}")"
-
   mkdir -p "$BACKEND_CONTAINER" "$TC_CONTAINER" "$PAIR_ROOT/.cache"
-  add_worktree "$BACKEND_REPO" "$BACKEND_WORKTREE" "$backend_base"
-  add_worktree "$TC_REPO" "$TC_WORKTREE" "$tc_base"
-  add_worktree "$CARD_REPO" "$CARD_WORKTREE" "$card_base"
-  add_worktree "$VISION_REPO" "$VISION_WORKTREE" "$vision_base"
+  add_worktree "$BACKEND_REPO" growspace_manager "$BACKEND_WORKTREE"
+  add_worktree "$TC_REPO" growspace_manager_tc "$TC_WORKTREE"
+  add_worktree "$CARD_REPO" lovelace-growspace-manager-card "$CARD_WORKTREE"
+  add_worktree "$VISION_REPO" growspace_manager_vision "$VISION_WORKTREE"
   ln -sfn "$BACKEND_WORKTREE" "$PAIR_ROOT/backend"
   ln -sfn "$TC_WORKTREE" "$PAIR_ROOT/tc"
   prepare_backend_venv
@@ -131,10 +115,10 @@ setup_pair() {
   link_node_modules
 
   printf 'Matched Codex worktrees ready on %s\n' "$BRANCH"
-  printf '  backend: %s\n' "$BACKEND_WORKTREE"
-  printf '  tc:      %s\n' "$TC_WORKTREE"
-  printf '  card:    %s\n' "$CARD_WORKTREE"
-  printf '  vision:  %s\n' "$VISION_WORKTREE"
+  printf '  backend: %s  (%s)\n' "$BACKEND_WORKTREE" "${FROM[growspace_manager]}"
+  printf '  tc:      %s  (%s)\n' "$TC_WORKTREE" "${FROM[growspace_manager_tc]}"
+  printf '  card:    %s  (%s)\n' "$CARD_WORKTREE" "${FROM[lovelace-growspace-manager-card]}"
+  printf '  vision:  %s  (%s)\n' "$VISION_WORKTREE" "${FROM[growspace_manager_vision]}"
   printf '  pair:    %s\n' "$PAIR_ROOT"
 }
 
@@ -168,15 +152,10 @@ run_card_precommit() {
 
 run_tc_precommit() {
   setup_pair >/dev/null
-  local runner="$TC_WORKTREE/.venv/bin/pre-commit"
-  # The documentation-only repository intentionally has no venv yet. Borrow
-  # the backend checkout's pre-commit executable until TC's scaffold exists;
-  # pre-commit still reads hooks and configuration from the TC checkout.
-  [ -x "$runner" ] || runner="$BACKEND_REPO/.venv/bin/pre-commit"
   export PRE_COMMIT_HOME="$PAIR_ROOT/.cache/pre-commit"
   export PYTHONDONTWRITEBYTECODE=1
   cd "$TC_WORKTREE"
-  exec "$runner" run --all-files
+  exec ./.venv/bin/pre-commit run --all-files
 }
 
 # Wait until the shared dev runtime serves a card bundle again after a restart.

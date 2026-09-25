@@ -59,9 +59,9 @@ claude --add-dir ../card
 ```
 
 The backend branch must start at fresh **`origin/prerelease`**, and the card branch at
-fresh **`origin/dev`**, following each product repo's canonical `AGENTS.md`. Verify
-both after the helper runs; a fallback branch selected by workspace tooling does not
-override a target repo's base-branch rule.
+fresh **`origin/dev`**, following each product repo's canonical `AGENTS.md`. The helper
+fetches and starts each from exactly that base, refuses when one is missing rather than
+falling back to another branch, and prints the base each worktree started from.
 
 ### Backward-safe card change
 

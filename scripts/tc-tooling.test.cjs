@@ -43,6 +43,11 @@ function initRepository(repository, files = {}) {
   git(repository, "commit", "-q", "-m", "fixture");
 }
 
+// Stand in for a fetched `origin/<branch>`: the base a new worktree starts from.
+function originBranch(repository, branch) {
+  git(repository, "update-ref", `refs/remotes/origin/${branch}`, "HEAD");
+}
+
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "growspace-tc-tooling-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -200,6 +205,8 @@ test("feature --tc creates a hook-depth TC worktree paired with the card", (t) =
   const helperLog = path.join(root, "helper.log");
   initRepository(tc, { "requirements.txt": "homeassistant==2026.8.0\n" });
   initRepository(card, { "package-lock.json": "{}\n" });
+  originBranch(tc, "main");
+  originBranch(card, "dev");
   fs.mkdirSync(hub, { recursive: true });
   copyScript("feature", hub);
   executable(
@@ -216,7 +223,7 @@ test("feature --tc creates a hook-depth TC worktree paired with the card", (t) =
     ["new", "culture-lines", "--tc"],
     {
       encoding: "utf8",
-      env: { ...process.env, BASE: "main", HELPER_LOG: helperLog },
+      env: { ...process.env, HELPER_LOG: helperLog },
     },
   );
 
@@ -255,6 +262,10 @@ test("Codex setup gives TC a private-venv-compatible worktree depth", (t) => {
     "pyproject.toml": "[project]\nname='vision'\nversion='1'\n",
   });
   initRepository(card, { "package-lock.json": "{}\n" });
+  originBranch(backend, "prerelease");
+  originBranch(tc, "main");
+  originBranch(vision, "main");
+  originBranch(card, "dev");
   executable(
     path.join(backend, ".venv", "bin", "python"),
     "#!/usr/bin/env bash\n",
@@ -309,6 +320,56 @@ test("Codex setup gives TC a private-venv-compatible worktree depth", (t) => {
     fs.readFileSync(helperLog, "utf8"),
     /venv:.*growspace_manager_tc.*\|tc/,
   );
+  assert.match(result.stdout, /backend: .*\(base origin\/prerelease\)$/m);
+  assert.match(result.stdout, /tc: .*\(base origin\/main\)$/m);
+  assert.match(result.stdout, /card: .*\(base origin\/dev\)$/m);
+  assert.match(result.stdout, /vision: .*\(base origin\/main\)$/m);
+
+  const rerun = spawnSync(
+    path.join(hub, "scripts", "codex-worktree"),
+    ["setup"],
+    { encoding: "utf8", env: { ...process.env, HELPER_LOG: helperLog } },
+  );
+  assert.equal(rerun.status, 0, rerun.stderr);
+  assert.match(rerun.stdout, /card: .*\(existing worktree\)$/m);
+});
+
+test("Codex setup refuses a missing base instead of falling back to main", (t) => {
+  const { root, hub } = fixture(t);
+  const backend = path.join(root, "growspace_manager");
+  const tc = path.join(root, "growspace_manager_tc");
+  const vision = path.join(root, "growspace_manager_vision");
+  const card = path.join(root, "lovelace-growspace-manager-card");
+  initRepository(hub, { "README.md": "fixture\n" });
+  initRepository(backend, { "requirements.txt": "homeassistant==2026.8.0\n" });
+  initRepository(tc, { "requirements.txt": "homeassistant==2026.8.0\n" });
+  initRepository(vision, { "pyproject.toml": "[project]\nname='vision'\nversion='1'\n" });
+  initRepository(card, { "package-lock.json": "{}\n" });
+  originBranch(backend, "prerelease");
+  originBranch(tc, "main");
+  originBranch(vision, "main");
+  originBranch(card, "main");
+  executable(path.join(backend, ".venv", "bin", "python"), "#!/usr/bin/env bash\n");
+  executable(path.join(vision, ".venv", "bin", "python"), "#!/usr/bin/env bash\n");
+  fs.mkdirSync(path.join(card, "node_modules"), { recursive: true });
+  copyScript("codex-worktree", hub);
+  executable(path.join(hub, "scripts", "backend-venv"), "#!/usr/bin/env bash\n");
+  executable(path.join(hub, "scripts", "card-node-modules"), "#!/usr/bin/env bash\n");
+
+  const result = spawnSync(
+    path.join(hub, "scripts", "codex-worktree"),
+    ["setup"],
+    { encoding: "utf8" },
+  );
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /lovelace-growspace-manager-card has no origin\/dev/);
+  const pairRoot = spawnSync(
+    path.join(hub, "scripts", "codex-worktree"),
+    ["path"],
+    { encoding: "utf8" },
+  ).stdout.trim();
+  assert.equal(fs.existsSync(path.join(pairRoot, "card")), false);
 });
 
 test("Codex setup includes the Vision checkout used by workspace checks", (t) => {
@@ -323,6 +384,10 @@ test("Codex setup includes the Vision checkout used by workspace checks", (t) =>
   initRepository(tc, { "requirements.txt": "homeassistant==2026.8.0\n" });
   initRepository(vision, { "pyproject.toml": "[project]\nname='vision'\nversion='1'\n" });
   initRepository(card, { "package-lock.json": "{}\n" });
+  originBranch(backend, "prerelease");
+  originBranch(tc, "main");
+  originBranch(vision, "main");
+  originBranch(card, "dev");
   executable(path.join(backend, ".venv", "bin", "python"), "#!/usr/bin/env bash\n");
   executable(path.join(vision, ".venv", "bin", "python"), "#!/usr/bin/env bash\n");
   fs.mkdirSync(path.join(card, "node_modules"), { recursive: true });
