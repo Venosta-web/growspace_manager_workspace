@@ -78,11 +78,15 @@ function executable(file, contents) {
   fs.writeFileSync(file, contents, { mode: 0o755 });
 }
 
+// Every hub script finds its checkouts through scripts/growspace-repos, so a
+// copied script always brings the resolver along.
 function copyScript(name, hub) {
-  const destination = path.join(hub, "scripts", name);
-  fs.mkdirSync(path.dirname(destination), { recursive: true });
-  fs.copyFileSync(path.join(SOURCE_ROOT, "scripts", name), destination);
-  fs.chmodSync(destination, 0o755);
+  for (const script of [name, "growspace-repos"]) {
+    const destination = path.join(hub, "scripts", script);
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.copyFileSync(path.join(SOURCE_ROOT, "scripts", script), destination);
+    fs.chmodSync(destination, 0o755);
+  }
 }
 
 function git(repository, ...args) {

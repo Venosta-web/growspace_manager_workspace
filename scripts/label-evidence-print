@@ -28,7 +28,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
+const { mainHub, siblingRepo } = require('./growspace-repos.cjs');
 
 const { connectHaWebSocket } = require('./gen-e2e-dashboards.cjs');
 
@@ -51,19 +51,6 @@ const DIMENSIONS = [
   'repeatability',
   'batch',
 ];
-
-function mainHubCheckout() {
-  try {
-    const common = execFileSync(
-      'git',
-      ['-C', HERE, 'rev-parse', '--path-format=absolute', '--git-common-dir'],
-      { encoding: 'utf8' },
-    ).trim();
-    return common ? path.dirname(common) : HERE;
-  } catch {
-    return HERE;
-  }
-}
 
 function usage() {
   return [
@@ -255,7 +242,7 @@ async function main(argv = process.argv.slice(2), log = console.log) {
     log(usage());
     return 0;
   }
-  const hub = mainHubCheckout();
+  const hub = mainHub();
   const tokenFile = path.resolve(options.tokenFile || path.join(hub, '.ha-token'));
   const token =
     process.env.HA_ACCESS_TOKEN ||
@@ -267,7 +254,7 @@ async function main(argv = process.argv.slice(2), log = console.log) {
   }
 
   const cardRoot = process.env.GROWSPACE_CARD ||
-    path.join(hub, '..', 'lovelace-growspace-manager-card');
+    siblingRepo('lovelace-growspace-manager-card');
   const WebSocket = require(require.resolve('ws', { paths: [cardRoot, HERE] }));
   const connection = await connectHaWebSocket({ WebSocket, baseUrl: options.baseUrl, token });
   try {

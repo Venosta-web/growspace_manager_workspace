@@ -10,7 +10,7 @@ set -euo pipefail
 
 WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STATE_DIR="${GROWSPACE_VISION_STATE_DIR:-$WS/vision-dev}"
-VISION_SRC="${GROWSPACE_VISION_SRC:-$WS/../growspace_manager_vision}"
+VISION_SRC="${GROWSPACE_VISION_SRC:-$("$WS/scripts/growspace-repos" growspace_manager_vision)}"
 OPTIONS_FILE="$STATE_DIR/options.json"
 SERVICE_ENV_FILE="$STATE_DIR/service.env"
 COMMAND="${1:-}"

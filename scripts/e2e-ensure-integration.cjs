@@ -4,6 +4,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { siblingRepo } = require('./growspace-repos.cjs');
 const { connectHaWebSocket, parseEnvFile } = require('./gen-e2e-dashboards.cjs');
 
 async function postJson(baseUrl, token, pathname, data) {
@@ -77,7 +78,7 @@ function readOption(argv, name, fallback) {
 
 async function main(argv = process.argv.slice(2)) {
   const workspace = path.resolve(__dirname, '..');
-  const cardRoot = path.resolve(readOption(argv, '--card-root', process.env.GROWSPACE_CARD || path.join(workspace, '..', 'lovelace-growspace-manager-card')));
+  const cardRoot = path.resolve(readOption(argv, '--card-root', process.env.GROWSPACE_CARD || siblingRepo('lovelace-growspace-manager-card')));
   const envFile = path.resolve(readOption(argv, '--env-file', path.join(cardRoot, 'tests/e2e/.env.test')));
   const tokenFile = path.resolve(readOption(argv, '--token-file', path.join(workspace, '.ha-token')));
   const env = { ...parseEnvFile(envFile), ...process.env };

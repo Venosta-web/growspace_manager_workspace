@@ -30,7 +30,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
+const { mainHub, siblingRepo } = require('./growspace-repos.cjs');
 
 const {
   connectHaWebSocket,
@@ -38,28 +38,13 @@ const {
   parseEnvFile,
 } = require('./gen-e2e-dashboards.cjs');
 
-const HERE = path.resolve(__dirname, '..');
-
 /*
  * The runtime belongs to the MAIN hub checkout — `scripts/ha` refuses to drive
  * it from anywhere else, so its `.ha-token` and its sibling repositories are
  * the ones to read whichever checkout this was invoked from. The same rule
  * `scripts/seed-demo` follows, for the same reason.
  */
-function mainHubCheckout() {
-  try {
-    const common = execFileSync(
-      'git',
-      ['-C', HERE, 'rev-parse', '--path-format=absolute', '--git-common-dir'],
-      { encoding: 'utf8' },
-    ).trim();
-    return common ? path.dirname(common) : HERE;
-  } catch {
-    return HERE;
-  }
-}
-
-const WORKSPACE = mainHubCheckout();
+const WORKSPACE = mainHub();
 
 // One fixed dashboard, whatever it is pointed at. A path derived from the
 // growspace name would collide with the generated profile dashboards — the
@@ -259,7 +244,7 @@ async function main(argv = process.argv.slice(2)) {
   const cardRoot = path.resolve(readOption(
     argv,
     '--card-root',
-    process.env.GROWSPACE_CARD || path.join(WORKSPACE, '..', 'lovelace-growspace-manager-card'),
+    process.env.GROWSPACE_CARD || siblingRepo('lovelace-growspace-manager-card'),
   ));
   const envFile = path.resolve(readOption(argv, '--env-file', path.join(cardRoot, 'tests/e2e/.env.test')));
   const tokenFile = path.resolve(readOption(argv, '--token-file', path.join(WORKSPACE, '.ha-token')));

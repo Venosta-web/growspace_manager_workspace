@@ -38,10 +38,14 @@
 set -euo pipefail
 
 WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BACKEND="$WS/../growspace_manager"
-TC="$WS/../growspace_manager_tc"
-CARD="$WS/../lovelace-growspace-manager-card"
-ROOT="$WS/worktrees"
+# Repositories and the pair root both belong to the MAIN hub checkout, so a pair
+# made from a hub worktree is the same pair, in the same place, as one made from
+# the hub itself — and outlives the worktree it was made from.
+HUB="$("$WS/scripts/growspace-repos" --hub)"
+BACKEND="$("$WS/scripts/growspace-repos" growspace_manager)"
+TC="$("$WS/scripts/growspace-repos" growspace_manager_tc)"
+CARD="$("$WS/scripts/growspace-repos" lovelace-growspace-manager-card)"
+ROOT="$HUB/worktrees"
 BASE="${BASE:-prerelease}"
 
 add_wt() { # repo, dest, branch

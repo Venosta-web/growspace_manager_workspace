@@ -54,8 +54,7 @@ HERE="$(pwd -P)"
 
 # Sibling checkouts hang off the MAIN hub checkout, not off $WS — run this from
 # a hub worktree and $WS/.. is `worktrees/`, where no sibling repository lives.
-HUB="$(git -C "$WS" rev-parse --path-format=absolute --git-common-dir)"
-HUB="$(cd "$(dirname "$HUB")" && pwd -P)"
+HUB="$("$WS/scripts/growspace-repos" --hub)"
 
 PRUNE=0
 UNTRACKED=0

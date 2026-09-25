@@ -16,11 +16,18 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent.parent
-COMMON = subprocess.check_output(
-    ["git", "-C", str(ROOT), "rev-parse", "--path-format=absolute", "--git-common-dir"],
-    text=True,
-).strip()
-RUNTIME = Path(COMMON).parent
+
+
+def growspace_repos(*args: str) -> Path:
+    """Ask scripts/growspace-repos, the one place hub tooling locates a checkout."""
+    return Path(
+        subprocess.check_output(
+            [str(ROOT / "scripts" / "growspace-repos"), *args], text=True
+        ).strip()
+    )
+
+
+RUNTIME = growspace_repos("--hub")
 SLUG = "vwc_veg"
 PUMP = f"switch.sim_e2e_{SLUG}_irrigation_pump"
 PUMP_BACKING = f"input_boolean.sim_e2e_{SLUG}_irrigation_pump"
@@ -746,7 +753,8 @@ def main():
     backend_source = Path(
         os.environ.get(
             "GROWSPACE_BACKEND_SRC",
-            RUNTIME.parent / "growspace_manager/custom_components/growspace_manager",
+            growspace_repos("growspace_manager")
+            / "custom_components/growspace_manager",
         )
     ).resolve()
     backend_source_root = backend_source.parents[1]

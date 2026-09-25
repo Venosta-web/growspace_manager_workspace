@@ -34,7 +34,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
-const { CARD_REPOSITORY, mainHubCheckout } = require("./card-hacs-update");
+const { CARD_REPOSITORY } = require("./card-hacs-update");
+const { mainHub } = require("./growspace-repos.cjs");
 
 const RELEASES_PER_PAGE = 100;
 /* Enough to reach the previous stable across a long prerelease run — the card
@@ -323,7 +324,7 @@ async function main(argv = process.argv.slice(2)) {
   log(`checking the HACS update ${from} → ${tag} of ${repository}`);
   if (switches.has("--resolve-only")) return 0;
 
-  const hub = mainHubCheckout();
+  const hub = mainHub();
   const artifact = reportPath(hub, from, tag);
   fs.rmSync(artifact, { force: true });
 

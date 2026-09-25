@@ -4,13 +4,11 @@
 set -euo pipefail
 
 HUB_WORKTREE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HUB_COMMON_GIT_DIR="$(git -C "$HUB_WORKTREE" rev-parse --path-format=absolute --git-common-dir)"
-LOCAL_HUB="$(dirname "$HUB_COMMON_GIT_DIR")"
-DEV_ROOT="$(dirname "$LOCAL_HUB")"
-BACKEND_REPO="$DEV_ROOT/growspace_manager"
-TC_REPO="$DEV_ROOT/growspace_manager_tc"
-CARD_REPO="$DEV_ROOT/lovelace-growspace-manager-card"
-VISION_REPO="$DEV_ROOT/growspace_manager_vision"
+LOCAL_HUB="$("$HUB_WORKTREE/scripts/growspace-repos" --hub)"
+BACKEND_REPO="$("$HUB_WORKTREE/scripts/growspace-repos" growspace_manager)"
+TC_REPO="$("$HUB_WORKTREE/scripts/growspace-repos" growspace_manager_tc)"
+CARD_REPO="$("$HUB_WORKTREE/scripts/growspace-repos" lovelace-growspace-manager-card)"
+VISION_REPO="$("$HUB_WORKTREE/scripts/growspace-repos" growspace_manager_vision)"
 
 WORKTREE_KEY="$(printf '%s' "$HUB_WORKTREE" | sha256sum | cut -c1-12)"
 NAME="codex-$WORKTREE_KEY"
