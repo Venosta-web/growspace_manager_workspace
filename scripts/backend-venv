@@ -2,29 +2,43 @@
 # Safely prepare the Python environment for a backend-type worktree.
 #
 # The counterpart to scripts/card-node-modules, and deliberately NOT the same
-# policy — see docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md.
-# uv installs from a hardlinked content-addressed cache, so a private venv costs
-# ~7.9 MiB and ~0.4 s warm. Sharing therefore buys nothing here, and costs a
-# destructive write-through class npm's link does not have.
+# policy — see docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md
+# and docs/adr/0004-python-hooks-run-the-worktrees-own-venv.md. uv installs from
+# a hardlinked content-addressed cache, so a private venv costs ~7.9 MiB and
+# ~0.4 s warm. Sharing therefore buys nothing here, and costs a destructive
+# write-through class npm's link does not have.
 #
 #   backend-venv <main-checkout> <worktree> [backend|tc]
 #
-# The environment a backend-type worktree actually runs is fixed by upstream's
-# pre-commit hooks, declared with `../../.venv/bin/...` entries. That path is
-# relative to the worktree, so where the worktree sits decides who owns it:
+# The environment a backend-type worktree actually runs is fixed by that
+# branch's own pre-commit hooks, so this reads them before deciding anything.
+# Two forms exist, and a repository moves from one to the other one branch at a
+# time:
 #
-#   growspace_manager/.worktrees/<name>       -> growspace_manager/.venv
-#                                                the MAIN checkout's venv;
-#                                                structurally shared. Verify it.
-#   <pair>/growspace_manager/.worktrees/backend -> <pair>/growspace_manager/.venv
-#                                                a hub-owned path. Make it a
-#                                                real, private venv.
-#   growspace_manager_tc/.worktrees/<name>    -> growspace_manager_tc/.venv
-#   <pair>/growspace_manager_tc/.worktrees/tc -> <pair>/growspace_manager_tc/.venv
-#                                                the same two ownership modes.
+#   entry: python3 .github/scripts/run_venv_tool.py pytest
+#       The hooks run <worktree>/.venv. Every layout gets a real, private venv
+#       there, and a `.venv` link to the main venv is replaced by one.
 #
-# Either way the worktree gets a `.venv` entry pointing at that one environment,
-# so `./scripts/check backend|tc` and the hooks agree about what is being run.
+#   entry: ../../.venv/bin/pytest
+#       The hooks run whatever `../../.venv` is from the worktree, so where the
+#       worktree sits decides who owns it:
+#
+#         growspace_manager/.worktrees/<name>       -> growspace_manager/.venv
+#                                                      the MAIN checkout's venv;
+#                                                      structurally shared. Verify it.
+#         <pair>/growspace_manager/.worktrees/backend -> <pair>/growspace_manager/.venv
+#                                                      a hub-owned path. Make it a
+#                                                      real, private venv.
+#
+#       (The same two for growspace_manager_tc.) A private venv in the worktree
+#       would be ignored by every commit, so none is built.
+#
+# Either way the worktree ends with a `.venv` entry that is the environment its
+# hooks run, so `./scripts/check backend|tc` and pre-commit agree about it.
+#
+# The main checkout's venv matches the main checkout's own pins and nothing
+# else. No path through here rebuilds it, and no message advises rebuilding it
+# from a branch's pins: that is how it ended up on one branch's fpdf2 once.
 set -euo pipefail
 
 MAIN="${1:?usage: backend-venv <main-checkout> <worktree>}"
@@ -34,10 +48,13 @@ KIND="${3:-backend}"
 MAIN="$(cd "$MAIN" && pwd)"
 WORKTREE="$(cd "$WORKTREE" && pwd)"
 MAIN_VENV="$MAIN/.venv"
-# Where `../../.venv` lands when pre-commit runs a hook from $WORKTREE.
+OWN_VENV="$WORKTREE/.venv"
+# Where `../../.venv` lands when an old-form hook runs from $WORKTREE.
 HOOK_DIR="$(cd "$WORKTREE/../.." && pwd)"
 HOOK_VENV="$HOOK_DIR/.venv"
 REQUIREMENTS="$WORKTREE/requirements.txt"
+HOOK_CONFIG="$WORKTREE/.pre-commit-config.yaml"
+CONSTRAINTS_PY='import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")'
 
 die() {
   echo "ERROR: $*" >&2
@@ -57,7 +74,15 @@ uv_bin() {
   return 1
 }
 
-# Does this environment realize the requirements this branch declares?
+# Does this branch's pre-commit still run `../../.venv/bin/...`? Asked of the
+# branch's own config, because that — not the repository's default branch — is
+# what a commit from this worktree will execute. A branch with no config runs no
+# hooks at all, so its own `.venv` is the only thing that reads an environment.
+fixed_path_hooks() {
+  [ -f "$HOOK_CONFIG" ] && grep -Eq '^[[:space:]]*entry:[[:space:]]*\.\./\.\./\.venv/bin/' "$HOOK_CONFIG"
+}
+
+# Does this environment realize these requirements?
 #
 # `uv pip install --dry-run --offline` is the Python integrations' answer to npm's
 # `npm ci --dry-run --offline`, and a better one: it reports whether the
@@ -65,27 +90,25 @@ uv_bin() {
 # passes and changing one fails. That is the question worth asking, and it
 # costs ~0.1 s. There is no lockfile here to compare byte-for-byte, and after
 # this check there would be no point to one.
-verify_env() { # venv, quiet
-  local venv="$1" quiet="${2:-}" py uv constraints plan
+verify_env() { # venv, requirements, quiet
+  local venv="$1" requirements="$2" quiet="${3:-}" py uv constraints plan
   py="$venv/bin/python"
 
   [ -x "$py" ] || { [ -n "$quiet" ] || echo "ERROR: no interpreter at $py" >&2; return 1; }
-  [ -f "$REQUIREMENTS" ] || { echo "ERROR: missing $REQUIREMENTS" >&2; return 1; }
+  [ -f "$requirements" ] || { echo "ERROR: missing $requirements" >&2; return 1; }
   uv="$(uv_bin)" || { echo "ERROR: no uv binary to validate $venv with" >&2; return 1; }
 
   # The venv is built in two phases against Home Assistant's own constraints
   # (see the repositories' setup docs), so verify against them too — otherwise the
   # check asks a looser question than the install answered. An unimportable
   # homeassistant is itself drift.
-  constraints="$(
-    "$py" -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")' 2>/dev/null
-  )" || {
+  constraints="$("$py" -c "$CONSTRAINTS_PY" 2>/dev/null)" || {
     [ -n "$quiet" ] || echo "ERROR: homeassistant is not importable from $venv" >&2
     return 1
   }
 
   if ! plan="$("$uv" pip install --python "$py" --dry-run --offline \
-      -r "$REQUIREMENTS" -c "$constraints" 2>&1)"; then
+      -r "$requirements" -c "$constraints" 2>&1)"; then
     [ -n "$quiet" ] || printf '%s\n' "$plan" >&2
     return 1
   fi
@@ -129,75 +152,111 @@ build_private_venv() { # destination
   quietly "$uv" venv --python "$series" "$dest" \
     || die "could not create a venv at $dest"
 
-# Two-phase, exactly as the Python repository setup documents: homeassistant
+  # Two-phase, exactly as the Python repository setup documents: homeassistant
   # first, then everything else under the constraints it ships. One
   # unconstrained pass is what let hassil float past the pinned HA release.
   quietly "$uv" pip install --python "$dest/bin/python" \
     "$(grep '^homeassistant==' "$REQUIREMENTS")" \
     || die "could not install homeassistant into $dest"
-  constraints="$(
-    "$dest/bin/python" -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")'
-  )"
+  constraints="$("$dest/bin/python" -c "$CONSTRAINTS_PY")"
   quietly "$uv" pip install --python "$dest/bin/python" -r "$REQUIREMENTS" -c "$constraints" \
     || die "could not install $REQUIREMENTS into $dest"
 }
 
-# Point the worktree's own `.venv` at the environment its hooks will use, so
-# `./scripts/check backend|tc` cannot validate a different one.
+# A private venv that is missing, is a link, or has drifted is (re)built; one
+# that already realizes this branch's requirements is left alone.
+ensure_private_venv() { # destination
+  local dest="$1"
+  if [ -L "$dest" ]; then
+    printf '→ replacing the %s venv link %s -> %s with a private venv\n' \
+      "$KIND" "$dest" "$(readlink "$dest")"
+    build_private_venv "$dest"
+  elif [ ! -x "$dest/bin/python" ]; then
+    build_private_venv "$dest"
+  elif ! verify_env "$dest" "$REQUIREMENTS" quiet; then
+    printf '→ private %s venv at %s no longer realizes requirements.txt; rebuilding\n' "$KIND" "$dest"
+    build_private_venv "$dest"
+  fi
+  verify_env "$dest" "$REQUIREMENTS" || die "the private venv at $dest still does not realize $REQUIREMENTS"
+}
+
+# Point the worktree's own `.venv` at the environment its old-form hooks will
+# use, so `./scripts/check backend|tc` cannot validate a different one.
 link_worktree_venv() { # target
   local target="$1"
   [ "$WORKTREE" = "$HOOK_DIR" ] && return 0
-  if [ -e "$WORKTREE/.venv" ] && [ ! -L "$WORKTREE/.venv" ]; then
-    die "$WORKTREE/.venv is a real directory; the hooks will use $target instead — remove it"
+  if [ -e "$OWN_VENV" ] && [ ! -L "$OWN_VENV" ]; then
+    die "$OWN_VENV is a real directory, but this branch's hooks declare \`entry: ../../.venv/bin/...\` and will use $target instead — remove it"
   fi
-  ln -sfn "$target" "$WORKTREE/.venv"
+  ln -sfn "$target" "$OWN_VENV"
 }
 
+[ "$WORKTREE" != "$MAIN" ] || die "$WORKTREE is the main $KIND checkout. Its venv realizes its own requirements.txt and is built by hand — see the $KIND repo's AGENTS.md. backend-venv only prepares worktrees."
 [ -f "$REQUIREMENTS" ] || die "missing worktree requirements: $REQUIREMENTS"
 
-if [ "$HOOK_DIR" = "$MAIN" ]; then
-  # scripts/feature layout. `../../.venv` IS the main checkout's venv; there is
-  # no link to redirect and a private venv here would be a decoy nothing reads.
-  # So verify, and refuse rather than repair — rebuilding the shared venv from
-  # one branch's pins is a decision about every other worktree too.
-  [ -x "$MAIN_VENV/bin/python" ] || die "shared $KIND venv missing at $MAIN_VENV; see the $KIND repo's AGENTS.md"
-  if ! verify_env "$MAIN_VENV"; then
-    cat >&2 <<MSG
-ERROR: the shared $KIND venv does not realize $REQUIREMENTS
-
-  $WORKTREE runs against $MAIN_VENV — upstream's hooks are
-  entry: ../../.venv/bin/pytest, which from this layout is the main checkout's
-  venv. A private venv in the worktree would not be read.
-
-  Either refresh the shared venv from this branch's pins (it then has to satisfy
-  every other worktree too, which their own guard re-checks):
-
-    cd $MAIN && uv pip install --python .venv/bin/python -r requirements.txt -c "\$(
-      .venv/bin/python -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")'
-    )"
-
-  or take the dependency change on a Codex-managed set, which owns its venv.
-MSG
-    exit 1
-  fi
-  link_worktree_venv "$MAIN_VENV"
-  printf '→ sharing the main %s venv at %s (verified against this branch)\n' "$KIND" "$MAIN_VENV"
+if ! fixed_path_hooks; then
+  # The hooks run <worktree>/.venv, in every layout. So that is where the
+  # private venv goes — never at `../../.venv`, which from the scripts/feature
+  # layout is the main checkout's venv.
+  ensure_private_venv "$OWN_VENV"
+  printf '→ private %s venv at %s (this branch'"'"'s hooks run the worktree'"'"'s own .venv)\n' "$KIND" "$OWN_VENV"
   exit 0
 fi
 
-# Hub-owned layout. The hub owns $HOOK_VENV, so it can hold a real private venv
-# — which is both nearly free and the only way to contain `uv venv --clear`,
-# measured to destroy the lender's venv when run through a symlink.
-if [ -L "$HOOK_VENV" ]; then
-  printf '→ replacing the shared venv link in %s with a private venv\n' "$HOOK_DIR"
-  build_private_venv "$HOOK_VENV"
-elif [ ! -x "$HOOK_VENV/bin/python" ]; then
-  build_private_venv "$HOOK_VENV"
-elif ! verify_env "$HOOK_VENV" quiet; then
-  printf '→ private %s venv in %s no longer realizes requirements.txt; rebuilding\n' "$KIND" "$HOOK_DIR"
-  build_private_venv "$HOOK_VENV"
+WHY="this branch's hooks declare \`entry: ../../.venv/bin/...\`"
+
+if [ "$HOOK_DIR" = "$MAIN" ]; then
+  # scripts/feature layout, old-form hooks. `../../.venv` IS the main checkout's
+  # venv; there is no link to redirect and a private venv here would be a decoy
+  # nothing reads. So verify, and refuse rather than repair.
+  [ -x "$MAIN_VENV/bin/python" ] || die "main $KIND venv missing at $MAIN_VENV; see the $KIND repo's AGENTS.md"
+  if ! plan="$(verify_env "$MAIN_VENV" "$REQUIREMENTS" 2>&1)"; then
+    {
+      echo "ERROR: the main $KIND venv does not realize $REQUIREMENTS"
+      printf '%s\n' "$plan" | grep -v '^Using Python' | sed 's/^/  │ /'
+      echo
+      echo "  ${WHY^}, which from"
+      echo "  $WORKTREE"
+      echo "  is the main checkout's venv, $MAIN_VENV. A private venv in the worktree"
+      echo "  would not be read, so this branch can only share that one."
+      echo
+      if verify_env "$MAIN_VENV" "$MAIN/requirements.txt" quiet; then
+        echo "  The main venv does realize the main checkout's own requirements.txt: it is"
+        echo "  this branch's pins that differ. The main venv serves the main checkout only"
+        echo "  and is never rebuilt from a branch's pins. Instead, either:"
+        echo
+        echo "    - bring this branch onto a base whose hooks run the worktree's own venv"
+        echo "      (python3 .github/scripts/run_venv_tool.py ...), then, from the main hub checkout:"
+        echo
+        echo "        ./scripts/feature env $(basename "$WORKTREE")"
+        echo
+        echo "      which gives it a private venv; or"
+        echo "    - take the change on a Codex-managed set (./scripts/codex-worktree setup),"
+        echo "      which owns its venv whatever the hook form."
+      else
+        echo "  The main venv does not realize the main checkout's own requirements.txt"
+        echo "  either, so it is the main venv that has drifted. Update the main checkout"
+        echo "  (git -C $MAIN pull), or rebuild the main venv from main's own pins:"
+        echo
+        echo "    cd $MAIN && uv pip install --python .venv/bin/python -r requirements.txt -c \"\$("
+        echo "      .venv/bin/python -c '$CONSTRAINTS_PY'"
+        echo "    )\""
+        echo
+        echo "  then re-run. If this branch's pins still differ from main's after that,"
+        echo "  this refusal will say so."
+      fi
+    } >&2
+    exit 1
+  fi
+  link_worktree_venv "$MAIN_VENV"
+  printf '→ sharing the main %s venv at %s — %s (verified against this branch)\n' "$KIND" "$MAIN_VENV" "$WHY"
+  exit 0
 fi
 
-verify_env "$HOOK_VENV" || die "the private venv at $HOOK_VENV still does not realize $REQUIREMENTS"
+# Hub-owned layout, old-form hooks. The hub owns $HOOK_VENV, so it can hold a
+# real private venv — which is both nearly free and the only way to contain
+# `uv venv --clear`, measured to destroy the lender's venv when run through a
+# symlink.
+ensure_private_venv "$HOOK_VENV"
 link_worktree_venv "$HOOK_VENV"
-printf '→ private %s venv at %s\n' "$KIND" "$HOOK_VENV"
+printf '→ private %s venv at %s — %s\n' "$KIND" "$HOOK_VENV" "$WHY"
