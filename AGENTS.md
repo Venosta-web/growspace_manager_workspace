@@ -49,6 +49,7 @@ the host path instead.
 ./scripts/ha dev logs      # follow
 ./scripts/ha dev reload    # reload growspace_manager without restarting HA
 ./scripts/ha dev restart   # full restart (manifest/import changes need this)
+./scripts/ha dev mounts    # which checkout each source mount serves right now
 ./scripts/ha dev reset     # wipe .storage + DB, back to onboarding
 ./scripts/ha test up       # http://localhost:8124 — virgin config, HACS test
 ./scripts/vision build     # build the locked native amd64 Vision App image
@@ -89,6 +90,39 @@ GROWSPACE_TC_SRC=~/dev/growspace_manager_tc/.worktrees/<name>/custom_components/
 GROWSPACE_CARD_DIST=./worktrees/<name>/card/dist \
   ./scripts/ha dev restart
 ```
+
+#### An override outlives the restart that set it
+
+The runtime is one container shared by every session, so its mounts are shared
+state. **`ha dev up|restart` keeps every mount the caller does not name**: it
+reads what the `growspace-ha-dev` container mounts — running or stopped — and
+carries each override forward. A plain `./scripts/ha dev restart` therefore
+changes no mount, and `GROWSPACE_CARD_DIST=<x> ./scripts/ha dev restart` leaves
+another session's backend or TC worktree exactly where it was. The container is
+the record on purpose: it is the one place that cannot disagree with what is
+actually being served, and an override lives exactly as long as it does.
+
+Going back to the main checkouts is therefore explicit:
+
+```bash
+./scripts/ha dev mounts                     # each mount, marked main or override
+./scripts/ha dev restart --main             # all three back to the main checkouts
+./scripts/ha dev restart --main backend     # just that one; tc and card also work
+```
+
+Per mount, a restart takes `--main`, then an explicit `GROWSPACE_*` variable,
+then the container's current mount, then the main checkout — and refuses
+`--main` and a variable for the same mount rather than guessing. Two cases fall
+back to main on their own, each with a line saying so where it matters: an
+inherited path that **no longer exists** (a removed worktree — Docker would
+otherwise create it as an empty root-owned directory and serve 404s), and the
+TC placeholder, which counts as main so a TC checkout that appears later is
+picked up. Every start prints the three mounts it resolved. Before this, each
+override lasted only until the next restart that did not repeat it, and nothing
+recorded that it had ever been set.
+
+`mounts --porcelain` prints `name<TAB>main|override<TAB>path` per mount for
+scripts, and nothing at all when there is no container.
 
 Vision runs the exact App image rather than a live source mount. `./scripts/vision
 build` delegates to `../growspace_manager_vision`; select a Vision worktree with
@@ -378,7 +412,10 @@ mounted so chunk imports resolve; never mount just the entry file.
 >
 > `./scripts/codex-worktree card-e2e` is the exception — it builds, remounts the
 > shared runtime at its own `dist/` via `GROWSPACE_CARD_DIST`, waits for the
-> bundle to serve, and hands the runtime back on exit.
+> bundle to serve, and on exit, pass or fail, hands back the card bundle it found
+> (the main `dist/` when there was no container). The backend and TC mounts it
+> leaves to inheritance in both directions, so a session that remounts one of
+> those mid-run is not rolled back when the suite finishes.
 
 So: edit Python → `./scripts/ha dev reload`. Edit TypeScript → `npm run watch`
 in the card repo → hard-refresh the browser. **Neither needs HACS.** HACS is the

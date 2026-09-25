@@ -179,26 +179,50 @@ run_tc_precommit() {
   exec "$runner" run --all-files
 }
 
-# Point the shared dev runtime at a card dist/ and wait for it to serve again.
-# scripts/ha refuses to run from a worktree — the compose file resolves ha-dev/
-# and integration mounts relative to itself — so drive the main checkout's copy
-# and override only the card bundle.
-remount_card_dist() {
-  local dist="$1" code
-  GROWSPACE_CARD_DIST="$dist" "$LOCAL_HUB/scripts/ha" dev restart >/dev/null
-
+# Wait until the shared dev runtime serves a card bundle again after a restart.
+wait_for_card() {
+  local code
   for _ in $(seq 1 60); do
     code="$(curl -s -o /dev/null -w '%{http_code}' \
       http://localhost:8123/local/community/lovelace-growspace-manager-card/growspace-manager-card.js 2>/dev/null || true)"
-    [ "$code" = "200" ] && { printf '→ HA serving %s\n' "$dist"; return 0; }
+    [ "$code" = "200" ] && return 0
     sleep 2
   done
-
-  echo "ERROR: HA did not serve the card bundle from $dist within 120s" >&2
   return 1
 }
 
+# Point the shared dev runtime at a card dist/ and wait for it to serve again.
+# scripts/ha refuses to run from a worktree — the compose file resolves ha-dev/
+# and integration mounts relative to itself — so drive the main checkout's copy
+# and override only the card bundle. scripts/ha keeps every mount it is not
+# told about, so another session's backend or TC worktree stays mounted.
+remount_card_dist() {
+  local dist="$1"
+  GROWSPACE_CARD_DIST="$dist" "$LOCAL_HUB/scripts/ha" dev restart >/dev/null
+  wait_for_card || {
+    echo "ERROR: HA did not serve the card bundle from $dist within 120s" >&2
+    return 1
+  }
+  printf '→ HA serving %s\n' "$dist"
+}
+
+# Put the card mount back to what it was before this run. Only the card mount:
+# it is the one this run changed, and the backend and TC mounts are inherited by
+# the restart — so a session that remounted one of those while the suite ran
+# keeps it, instead of being rolled back to what this run happened to see.
+# A bundle that has gone since, or no container at all, means the main dist/.
+restore_card_dist() {
+  local previous="$1"
+  if [ -n "$previous" ] && [ -e "$previous" ]; then
+    GROWSPACE_CARD_DIST="$previous" "$LOCAL_HUB/scripts/ha" dev restart >/dev/null
+  else
+    "$LOCAL_HUB/scripts/ha" dev restart --main card >/dev/null
+  fi
+  wait_for_card
+}
+
 run_card_e2e() {
+  local previous_card
   setup_pair >/dev/null
   [ -f "$CARD_WORKTREE/tests/e2e/.env.test" ] || {
     echo "ERROR: copy the card E2E config into $CARD_WORKTREE/tests/e2e/.env.test first" >&2
@@ -213,10 +237,12 @@ run_card_e2e() {
   # the remount has to happen after the build or Docker holds the dead inode.
   npm run build
 
-  # The runtime is a singleton shared with the main checkout; hand it back on
-  # the way out however we exit, so a failed run does not leave :8123 serving
-  # this worktree's bundle.
-  trap 'remount_card_dist "$CARD_REPO/dist" >/dev/null 2>&1 || true' EXIT
+  # The runtime is a singleton shared with other sessions; hand it back on the
+  # way out however we exit, to exactly the card bundle it was serving — which
+  # need not be the main checkout's.
+  previous_card="$("$LOCAL_HUB/scripts/ha" dev mounts --porcelain | awk -F'\t' '$1 == "card" { print $3 }')"
+  # shellcheck disable=SC2064  # expand now: the trap must restore what was seen here
+  trap "restore_card_dist $(printf '%q' "$previous_card") >/dev/null 2>&1 || true" EXIT
   remount_card_dist "$CARD_WORKTREE/dist"
 
   npm run test:ha

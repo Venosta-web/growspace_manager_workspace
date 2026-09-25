@@ -181,7 +181,9 @@ test('ha dev commands prepare and control Vision as part of the runtime', (t) =>
   });
   assert.equal(down.status, 0, down.stderr);
   assert.deepEqual(fs.readFileSync(dockerLog, 'utf8').trim().split('\n'), [
-    // 'up' preflights the App image; 'down' has nothing to start, so it does not.
+    // 'up' reads the source mounts it inherits (see ha-mounts.test.cjs) and
+    // preflights the App image; 'down' has nothing to start, so it does neither.
+    'inspect --format {{.State.Status}}{{"\\n"}}{{range .Mounts}}{{.Destination}}{{"\\t"}}{{.Source}}{{"\\n"}}{{end}} growspace-ha-dev',
     'compose config --images vision-dev',
     'compose up -d ha-dev',
     'compose stop ha-dev vision-dev',
