@@ -557,6 +557,10 @@ against Home Assistant's own constraints, which costs about 0.1 s and names the
 requirement that is unmet. This catches a worktree whose branch moved its pins,
 a shared venv nobody rebuilt after the pins moved on `prerelease`, and an
 environment that has drifted out from under both.
+The refusal names the setup that owns that venv:
+`./scripts/feature env <name>` for a `scripts/feature` worktree,
+`./scripts/codex-worktree setup` for a Codex-managed set, and the checkout's own
+pins for a main checkout. `check` itself never rebuilds anything.
 
 A card check also refuses if the checkout it resolved has a
 **shared dependency link** whose `package-lock.json` no longer matches the
@@ -729,34 +733,60 @@ localhost/loopback allowlist. E2E credentials are never copied automatically;
 place the ignored `tests/e2e/.env.test` in the managed card worktree explicitly
 when E2E is required.
 
-**Backend and TC worktrees must live at `<repo>/.worktrees/<name>`.** Their
-pre-commit hooks resolve Python tools through `../../.venv/bin/...`; that path
-reaches the repo venv only from exactly that depth. From a main checkout it
-resolves to `~/dev/.venv`, which does not exist, so Python hooks fail and every
-commit from the protected checkout is rejected. This is a side effect of the
-path, not a separate check.
+**Backend and TC worktrees live at `<repo>/.worktrees/<name>`.** Which Python
+environment one runs is decided by its branch's own pre-commit hooks, and the
+two repositories are part-way through moving between two forms of them:
 
-`./scripts/feature` creates Python worktrees at the required depth and symlinks
-them to `worktrees/<name>/backend` or `worktrees/<name>/tc` for the paired view.
-Run their tests from a worktree as `../../.venv/bin/pytest tests/ -q`.
+- **Worktree-venv hooks** — `entry: python3 .github/scripts/run_venv_tool.py pytest`.
+  The hook runs `<worktree>/.venv`, falls back to the main checkout's venv (found
+  through `git rev-parse --git-common-dir`), and falls back to `PATH` for the lint
+  tools only. Where the worktree sits no longer matters. `growspace_manager` has
+  these on `prerelease` since
+  [GSM#841](https://github.com/Venosta-web/growspace_manager/issues/841);
+  `growspace_manager_tc` does not yet
+  ([TC#23](https://github.com/Venosta-web/growspace_manager_tc/issues/23)).
+- **Fixed-path hooks** — `entry: ../../.venv/bin/pytest`. The path is relative to
+  the worktree, so it reaches a repo venv only from exactly
+  `<repo>/.worktrees/<name>`, and from there it *is* the main checkout's venv.
+  `growspace_manager`'s `main` and every TC branch still carry them.
 
-That same `../../.venv` decides which Python environment the worktree runs, and
-where the worktree sits decides who owns it — which is why the two setup paths
-behave differently:
+With fixed-path hooks, a commit from the main checkout was rejected only as a
+side effect of the path: from there `../../.venv` is `~/dev/.venv`, which does
+not exist. Worktree-venv hooks remove that accident, so `growspace_manager` now
+lists `prerelease` in `no-commit-to-branch` explicitly. TC still relies on the
+side effect until TC#23 lands.
 
-| layout | `../../.venv` is | what setup does |
+`scripts/backend-venv` is the one implementation for both repositories, and every
+setup path calls it. It reads the worktree's own `.pre-commit-config.yaml` and
+acts on the hook form it finds there:
+
+| hooks | layout | what setup does |
 |---|---|---|
-| `growspace_manager/.worktrees/<name>` (`scripts/feature`) | the main checkout's venv | **verifies** it realizes the branch's `requirements.txt`, and refuses if not |
-| `<pair>/growspace_manager/.worktrees/backend` (`scripts/codex-worktree`) | a hub-owned path | builds a **private venv** there |
-| `growspace_manager_tc/.worktrees/<name>` (`scripts/feature --tc`) | the main TC checkout's venv | **verifies** it realizes the branch's `requirements.txt`, and refuses if not |
-| `<pair>/growspace_manager_tc/.worktrees/tc` (`scripts/codex-worktree`) | a hub-owned path | builds a **private venv** there |
+| worktree-venv | any | builds a **private venv** at `<worktree>/.venv`; replaces a link to the main venv with one; rebuilds one that drifted |
+| fixed-path | `<repo>/.worktrees/<name>` (`scripts/feature`) | **verifies** the main checkout's venv realizes the branch's `requirements.txt`, links `<worktree>/.venv` to it, and refuses if not |
+| fixed-path | `<pair>/<repo>/.worktrees/{backend,tc}` (`scripts/codex-worktree`) | builds a **private venv** at `<pair>/<repo>/.venv`, the hub-owned path those hooks read, and links `<worktree>/.venv` to it |
 
-`scripts/backend-venv` is the shared implementation for both Python repositories;
-all setup paths call it, and both then point the worktree's own `.venv` at
-whichever environment the hooks will use, so `./scripts/check backend` and
-`./scripts/check tc` cannot validate a different one.
+Either way `<worktree>/.venv` ends up as the environment the hooks run, so
+`./scripts/check backend` and `./scripts/check tc` cannot validate a different
+one. Run tests from a worktree as `.venv/bin/pytest tests/ -q`.
 
-Codex-managed backend and TC worktrees do **not** share a venv the way card
+**The main checkout's venv matches the main checkout's own pins and serves
+nothing else.** No setup path rebuilds it from a branch's `requirements.txt`, and
+no message advises doing so. Refreshing the shared venv from one branch's pins is
+how it ended up on that branch's fpdf2 2.8.8 on 2026-09-24, underneath every
+other worktree. When a fixed-path branch's pins differ from main's, the refusal
+says so and names both ways out: bring the branch onto a base with worktree-venv
+hooks and run `feature env`, or take the change on a Codex-managed set. When the
+main venv has drifted from the main checkout itself, the refusal says that
+instead, and points at the main checkout's own pins.
+
+`./scripts/feature env <name>` re-runs `backend-venv` for an existing pair's
+backend and TC worktrees. Use it to convert a linked worktree once its branch has
+the new hooks, or to rebuild a private venv that drifted. Run it from the main hub
+checkout, since like `feature new` it finds the product repositories relative to
+the hub it runs from.
+
+Hub-managed backend and TC worktrees do **not** share a venv the way card
 worktrees share `node_modules`, and the reversal is measured rather than
 stylistic: `uv` installs by hardlinking from a content-addressed cache, so a
 private venv costs ~7.9 MiB of unique disk and ~0.4 s warm, against the card's
@@ -765,13 +795,15 @@ private venv costs ~7.9 MiB of unique disk and ~0.4 s warm, against the card's
 environment the way `npm ci` does, it **destroys the lender's**, and so does
 every other install verb, because pip and uv follow the symlink to the real
 `sys.prefix`. See
-[`docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md`](docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md).
+[`docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md`](docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md)
+and
+[`docs/adr/0004-python-hooks-run-the-worktrees-own-venv.md`](docs/adr/0004-python-hooks-run-the-worktrees-own-venv.md).
 
-A `scripts/feature` pair therefore cannot carry a backend or TC dependency
-change: its hook path *is* the corresponding main checkout's venv, so there is
-nothing to redirect and a private venv in the worktree would be read by nothing.
-Take pin changes on a Codex-managed set, or rebuild the shared venv deliberately
-— every other worktree's guard re-checks it on the next run.
+A `scripts/feature` worktree on a **fixed-path** branch still cannot carry a
+dependency change: its hook path *is* the main checkout's venv, so a private venv
+in the worktree would be read by nothing. That limit now comes from the hook
+form, not from the layout. Once the branch has worktree-venv hooks, the same
+worktree carries pin changes in its own private venv after `feature env`.
 
 The card has no such constraint — its hooks are `npm run ...` — but how it gets
 `node_modules` depends on who created the worktree. The vocabulary, used

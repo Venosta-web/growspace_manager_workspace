@@ -65,6 +65,12 @@ blocks `main` and `dev`.
 Verified: hooks from a generated worktree give pytest Passed / mypy Passed;
 from the main checkout, both Failed.
 
+> **Since GSM#841 (2026-09-25) this holds only for fixed-path branches.** On
+> `prerelease` the hooks run `.github/scripts/run_venv_tool.py`, which uses the
+> worktree's own `.venv`, so the main-checkout rejection above no longer comes
+> from the path. `no-commit-to-branch` lists `prerelease` explicitly instead.
+> Hub worktrees on those branches get a private venv; see ADR 0004.
+
 > Do **not** run `pre-commit run --all-files` casually — prettier and
 > `ruff --fix` rewrite files (43 in one observed run). Normal commits only run
 > hooks on staged files.

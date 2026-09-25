@@ -70,12 +70,15 @@ link_node_modules() {
   "$HUB_WORKTREE/scripts/card-node-modules" "$CARD_REPO" "$CARD_WORKTREE"
 }
 
-# This managed set owns the path upstream's hooks resolve — `../../.venv` from
-# $BACKEND_WORKTREE is $BACKEND_CONTAINER/.venv — so it gets a real private
-# venv rather than a link into the main checkout. uv hardlinks from its cache,
-# so that costs ~7.9 MiB and ~0.4 s warm, and it is the only way to contain
-# `uv venv --clear`, which through a link destroys the lender's venv instead.
-# See docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md.
+# Every Python worktree in this set gets a real private venv, never a link into
+# the main checkout. Where it goes follows the branch's own hooks, which
+# scripts/backend-venv reads: hooks that run the worktree's own `.venv` get it at
+# $BACKEND_WORKTREE/.venv, and old-form `../../.venv/bin/...` hooks get it at
+# $BACKEND_CONTAINER/.venv, the path this set owns for them. uv hardlinks from
+# its cache, so either costs ~7.9 MiB and ~0.4 s warm, and it is the only way to
+# contain `uv venv --clear`, which through a link destroys the lender's venv.
+# See docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md and
+# docs/adr/0004-python-hooks-run-the-worktrees-own-venv.md.
 prepare_backend_venv() {
   "$HUB_WORKTREE/scripts/backend-venv" "$BACKEND_REPO" "$BACKEND_WORKTREE" backend
 }

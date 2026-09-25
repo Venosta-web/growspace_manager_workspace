@@ -236,28 +236,67 @@ guard_card_deps() {
 }
 
 # The Python environment a backend or TC check is about to run is not necessarily
-# the one that branch declares. Their worktrees resolve hooks through
-# `../../.venv`, and whether that venv still realizes the worktree's own
-# requirements.txt is an agreement made once, at worktree setup.
-# See docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md.
+# the one that branch declares. Whether a worktree's `.venv` still realizes its
+# own requirements.txt is an agreement made once, at worktree setup.
+# See docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md and
+# docs/adr/0004-python-hooks-run-the-worktrees-own-venv.md.
 #
 # Unlike the card, there is no lockfile to compare byte-for-byte and no reason to
 # want one: `uv pip install --dry-run --offline` answers the better question —
 # do the INSTALLED versions satisfy the declared requirements — in ~0.1 s. So the
 # full guard runs here, not a cheap half of it.
 #
-# This refuses; it never repairs. Rebuilding a venv is a decision about every
-# worktree that shares it, which a validation command has no standing to make.
+# This refuses; it never repairs. Setup heals — the refusal names the setup
+# command that owns this checkout's venv — and validation only stops.
+
+# Which setup owns this checkout's venv, as the lines a refusal should print.
+# Decided from where the checkout sits, since that is what decides who made it.
+venv_remedy() { # kind, checkout
+  local kind="$1" checkout="$2" common main owner
+  common="$(git -C "$checkout" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || common=""
+  main="${common%/.git}"
+
+  if [ -n "$common" ] && [ "$main" = "$checkout" ]; then
+    # The main checkout's venv serves the main checkout and matches its pins.
+    # Never advise rebuilding it from anything else.
+    printf '%s\n' \
+      "this is the main $kind checkout; its venv must realize its own requirements.txt" \
+      "update the checkout (git -C $checkout pull) or rebuild the venv from its own pins —" \
+      "see the $kind repo's AGENTS.md"
+    return
+  fi
+  case "$checkout" in
+    */worktrees/codex-*/growspace_manager*/.worktrees/*)
+      owner="${checkout%%/worktrees/codex-*}"
+      printf '%s\n' \
+        "this checkout belongs to a Codex-managed set; its setup rebuilds the venv:" \
+        "  (cd $owner && ./scripts/codex-worktree setup)"
+      return
+      ;;
+  esac
+  if [ -n "$main" ] && [ "$checkout" = "$main/.worktrees/$(basename "$checkout")" ]; then
+    printf '%s\n' \
+      "this is a scripts/feature worktree; from the main hub checkout, run:" \
+      "  ./scripts/feature env $(basename "$checkout")" \
+      "which builds it a private venv, or says why its branch's hooks cannot use one"
+    return
+  fi
+  printf '%s\n' \
+    "re-run the hub setup that created this worktree, or rebuild its .venv from its" \
+    "own requirements.txt — see the $kind repo's AGENTS.md"
+}
+
 guard_python_venv() {
   local kind="$1" checkout="$2" venv py uv requirements constraints plan candidate
+  local -a remedy
 
   venv="$checkout/.venv"
   py="$venv/bin/python"
   requirements="$checkout/requirements.txt"
+  mapfile -t remedy < <(venv_remedy "$kind" "$checkout")
 
   if [ ! -x "$py" ]; then
-    refuse "no $kind venv at $venv" \
-           "see the $kind repo's AGENTS.md for its environment setup"
+    refuse "no $kind venv at $venv" "${remedy[@]}"
     return 1
   fi
   [ -f "$requirements" ] || { refuse "missing $requirements"; return 1; }
@@ -279,7 +318,7 @@ guard_python_venv() {
   if ! constraints="$("$py" -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")' 2>/dev/null)"; then
     refuse "homeassistant is not importable from $venv" \
            "the venv does not realize $requirements at all" \
-           "rebuild it — see the $kind repo's AGENTS.md"
+           "${remedy[@]}"
     return 1
   fi
 
@@ -290,11 +329,13 @@ guard_python_venv() {
     return 0
   fi
 
+  if [ -L "$venv" ]; then
+    remedy=("$venv links to $(readlink -f "$venv"), which other checkouts run too" "${remedy[@]}")
+  fi
   refuse "$kind environment drift — refusing to validate $checkout" \
          "$venv does not realize $requirements" \
          "green here would describe a dependency set this branch does not declare" \
-         "if this venv is shared, rebuilding it affects every worktree that runs it" \
-         "rebuild — see the $kind repo's AGENTS.md, or re-run the hub setup that created this worktree"
+         "${remedy[@]}"
   # uv already says exactly which requirement is unmet; relay it verbatim rather
   # than paraphrasing, but drop the interpreter preamble that is not the news.
   printf '%s\n' "$plan" | grep -v '^Using Python' | sed 's/^/  │ /' >&2
