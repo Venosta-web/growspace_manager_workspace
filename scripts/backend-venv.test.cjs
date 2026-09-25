@@ -5,9 +5,9 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 
-// scripts/backend-venv decides, from a branch's own pre-commit config, whether a
-// Python worktree gets a private venv or shares the main checkout's. These
-// tests drive the real script against a fake `uv` that models what matters: a
+// scripts/backend-venv gives every supported Python worktree a private venv and
+// refuses branches whose fixed-path hooks would ignore it. These tests drive
+// the real script against a fake `uv` that models what matters: a
 // venv realizes a requirements.txt iff it was installed from one with the same
 // content, and every install writes to the venv its --python resolves to — so
 // an install through a `.venv` link lands in the lender, as it does for real.
@@ -148,8 +148,8 @@ function fixture(t, { hooks, pins = MAIN_PINS, name = "x", mainVenvPins = MAIN_P
   return { root, hub, main, worktree, log, env };
 }
 
-function backendVenv(f, worktree = f.worktree) {
-  return spawnSync(path.join(f.hub, "scripts", "backend-venv"), [f.main, worktree, "backend"], {
+function backendVenv(f, worktree = f.worktree, kind = "backend") {
+  return spawnSync(path.join(f.hub, "scripts", "backend-venv"), [f.main, worktree, kind], {
     encoding: "utf8",
     env: f.env,
   });
@@ -181,7 +181,6 @@ test("new-form hooks: a feature worktree gets a private venv realizing its own p
   assert.equal(fs.lstatSync(own).isSymbolicLink(), false);
   assert.equal(fs.readFileSync(path.join(own, "pins"), "utf8"), BUMPED_PINS);
   assert.match(result.stdout, /private backend venv at .*\.worktrees\/x\/\.venv/);
-  assert.match(result.stdout, /hooks run the worktree's own \.venv/);
   assertMainVenvUntouched(f);
 });
 
@@ -234,49 +233,43 @@ test("new-form hooks: a drifted private venv is rebuilt, a current one left alon
   assert.doesNotMatch(uvLog(f), /^venv /m);
 });
 
-test("old-form hooks: the shared venv is verified and linked, and the hook form is named", (t) => {
-  const f = fixture(t, { hooks: OLD_HOOKS });
+test("fixed-path hooks refuse before creating or changing a venv", (t) => {
+  const f = fixture(t, { hooks: OLD_HOOKS, pins: BUMPED_PINS });
+  const own = path.join(f.worktree, ".venv");
+  fs.symlinkSync(path.join(f.main, ".venv"), own);
+
+  const result = backendVenv(f);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /hooks declare `entry: \.\.\/\.\.\/\.venv\/bin\/\.\.\.`/);
+  assert.match(result.stderr, /rebase onto a base that has the hook runner/);
+  assert.equal(fs.readlinkSync(own), path.join(f.main, ".venv"));
+  assert.equal(uvLog(f), "");
+  assertMainVenvUntouched(f);
+});
+
+test("quoted fixed-path TC hooks are refused too", (t) => {
+  const f = fixture(t, { hooks: OLD_HOOKS.replace("entry: ../../", 'entry: "../../')
+    .replace("/pytest\n", '/pytest"\n') });
+
+  const result = backendVenv(f, f.worktree, "tc");
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /rebase onto a base that has the hook runner/);
+  assert.equal(fs.existsSync(path.join(f.worktree, ".venv")), false);
+  assert.equal(uvLog(f), "");
+  assertMainVenvUntouched(f);
+});
+
+test("a branch with no pre-commit config gets a private venv", (t) => {
+  const f = fixture(t);
+  fs.rmSync(path.join(f.worktree, ".pre-commit-config.yaml"));
 
   const result = backendVenv(f);
 
   assert.equal(result.status, 0, result.stderr);
-  const own = path.join(f.worktree, ".venv");
-  assert.equal(fs.lstatSync(own).isSymbolicLink(), true);
-  assert.equal(fs.realpathSync(own), fs.realpathSync(path.join(f.main, ".venv")));
-  assert.match(result.stdout, /sharing the main backend venv/);
-  assert.match(result.stdout, /hooks declare `entry: \.\.\/\.\.\/\.venv\/bin\/\.\.\.`/);
+  assert.equal(fs.lstatSync(path.join(f.worktree, ".venv")).isSymbolicLink(), false);
   assertMainVenvUntouched(f);
-});
-
-test("old-form hooks on bumped pins: refuses, and never advises rebuilding main from the branch", (t) => {
-  const f = fixture(t, { hooks: OLD_HOOKS, pins: BUMPED_PINS });
-
-  const result = backendVenv(f);
-
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /main backend venv does not realize .*\.worktrees\/x\/requirements\.txt/);
-  assert.match(result.stderr, /it is\s+this branch's pins that differ/);
-  assert.match(result.stderr, /never rebuilt from a branch's pins/);
-  assert.match(result.stderr, /\.\/scripts\/feature env x/);
-  assert.match(result.stderr, /codex-worktree setup/);
-  assert.doesNotMatch(result.stderr, /refresh the shared venv/);
-  assert.doesNotMatch(result.stderr, /uv pip install/);
-  assert.equal(fs.existsSync(path.join(f.worktree, ".venv")), false);
-  assertMainVenvUntouched(f);
-});
-
-test("old-form hooks with a drifted main venv: points at main's own pins, in the main checkout", (t) => {
-  const f = fixture(t, { hooks: OLD_HOOKS, mainVenvPins: "homeassistant==2026.8.1\n" });
-
-  const result = backendVenv(f);
-
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /it is the main venv that has drifted/);
-  assert.match(result.stderr, new RegExp(`git -C ${f.main} pull`));
-  // The one rebuild command anywhere in these messages runs in the main
-  // checkout, against the main checkout's requirements.txt.
-  assert.match(result.stderr, new RegExp(`cd ${f.main} && uv pip install --python \\.venv/bin/python -r requirements\\.txt`));
-  assert.doesNotMatch(result.stderr, /\.worktrees\/x\/requirements\.txt -c/);
 });
 
 test("the main checkout itself is refused", (t) => {
@@ -379,18 +372,17 @@ function codexWorktree(f, hooks, pins = MAIN_PINS) {
   return { container, worktree };
 }
 
-test("old-form hooks in a Codex set: the private venv stays at the path those hooks read", (t) => {
+test("fixed-path hooks in a Codex set are refused without creating a container venv", (t) => {
   const f = fixture(t);
   const { container, worktree } = codexWorktree(f, OLD_HOOKS, BUMPED_PINS);
 
   const result = backendVenv(f, worktree);
 
-  assert.equal(result.status, 0, result.stderr);
-  const containerVenv = path.join(container, ".venv");
-  assert.equal(fs.lstatSync(containerVenv).isSymbolicLink(), false);
-  assert.equal(fs.readFileSync(path.join(containerVenv, "pins"), "utf8"), BUMPED_PINS);
-  assert.equal(fs.readlinkSync(path.join(worktree, ".venv")), containerVenv);
-  assert.match(result.stdout, /hooks declare `entry: \.\.\/\.\.\/\.venv/);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /rebase onto a base that has the hook runner/);
+  assert.equal(fs.existsSync(path.join(container, ".venv")), false);
+  assert.equal(fs.existsSync(path.join(worktree, ".venv")), false);
+  assert.equal(uvLog(f), "");
   assertMainVenvUntouched(f);
 });
 

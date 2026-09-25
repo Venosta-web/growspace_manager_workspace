@@ -799,56 +799,23 @@ localhost/loopback allowlist. E2E credentials are never copied automatically;
 place the ignored `tests/e2e/.env.test` in the managed card worktree explicitly
 when E2E is required.
 
-**Backend and TC worktrees live at `<repo>/.worktrees/<name>`.** Which Python
-environment one runs is decided by its branch's own pre-commit hooks, and the
-two repositories are part-way through moving between two forms of them:
+**Backend and TC worktrees live at `<repo>/.worktrees/<name>` and use a private
+`<worktree>/.venv`.** `scripts/backend-venv` prepares that environment for both
+repositories and both hub worktree layouts. It replaces a `.venv` link before
+building, and rebuilds a private venv when it no longer realizes that branch's
+`requirements.txt`. The main checkout's venv serves only the main checkout.
 
-- **Worktree-venv hooks** — `entry: python3 .github/scripts/run_venv_tool.py pytest`.
-  The hook runs `<worktree>/.venv`, falls back to the main checkout's venv (found
-  through `git rev-parse --git-common-dir`), and falls back to `PATH` for the lint
-  tools only. Where the worktree sits no longer matters. `growspace_manager` has
-  these on `prerelease` since
-  [GSM#841](https://github.com/Venosta-web/growspace_manager/issues/841);
-  `growspace_manager_tc` does not yet
-  ([TC#23](https://github.com/Venosta-web/growspace_manager_tc/issues/23)).
-- **Fixed-path hooks** — `entry: ../../.venv/bin/pytest`. The path is relative to
-  the worktree, so it reaches a repo venv only from exactly
-  `<repo>/.worktrees/<name>`, and from there it *is* the main checkout's venv.
-  `growspace_manager`'s `main` and every TC branch still carry them.
-
-With fixed-path hooks, a commit from the main checkout was rejected only as a
-side effect of the path: from there `../../.venv` is `~/dev/.venv`, which does
-not exist. Worktree-venv hooks remove that accident, so `growspace_manager` now
-lists `prerelease` in `no-commit-to-branch` explicitly. TC still relies on the
-side effect until TC#23 lands.
-
-`scripts/backend-venv` is the one implementation for both repositories, and every
-setup path calls it. It reads the worktree's own `.pre-commit-config.yaml` and
-acts on the hook form it finds there:
-
-| hooks | layout | what setup does |
-|---|---|---|
-| worktree-venv | any | builds a **private venv** at `<worktree>/.venv`; replaces a link to the main venv with one; rebuilds one that drifted |
-| fixed-path | `<repo>/.worktrees/<name>` (`scripts/feature`) | **verifies** the main checkout's venv realizes the branch's `requirements.txt`, links `<worktree>/.venv` to it, and refuses if not |
-| fixed-path | `<pair>/<repo>/.worktrees/{backend,tc}` (`scripts/codex-worktree`) | builds a **private venv** at `<pair>/<repo>/.venv`, the hub-owned path those hooks read, and links `<worktree>/.venv` to it |
-
-Either way `<worktree>/.venv` ends up as the environment the hooks run, so
-`./scripts/check backend` and `./scripts/check tc` cannot validate a different
-one. Run tests from a worktree as `.venv/bin/pytest tests/ -q`.
-
-**The main checkout's venv matches the main checkout's own pins and serves
-nothing else.** No setup path rebuilds it from a branch's `requirements.txt`, and
-no message advises doing so. Refreshing the shared venv from one branch's pins is
-how it ended up on that branch's fpdf2 2.8.8 on 2026-09-24, underneath every
-other worktree. When a fixed-path branch's pins differ from main's, the refusal
-says so and names both ways out: bring the branch onto a base with worktree-venv
-hooks and run `feature env`, or take the change on a Codex-managed set. When the
-main venv has drifted from the main checkout itself, the refusal says that
-instead, and points at the main checkout's own pins.
+The worktree's own pre-commit config must run its `.venv` through
+`.github/scripts/run_venv_tool.py`. If it still declares
+`entry: ../../.venv/bin/...`, setup refuses before changing any venv and tells
+you to rebase onto a base with the hook runner. From a `scripts/feature`
+worktree, the old path reaches the main checkout's venv, so preparing a private
+venv would leave commits running a different environment from `./scripts/check`.
+Run tests from a worktree as `.venv/bin/pytest tests/ -q`.
 
 `./scripts/feature env <name>` re-runs `backend-venv` for an existing pair's
-backend and TC worktrees. Use it to convert a linked worktree once its branch has
-the new hooks, or to rebuild a private venv that drifted. Run it from the main hub
+backend and TC worktrees. Use it to convert a linked worktree after its branch has the hook runner, or to
+rebuild a private venv that drifted. Run it from the main hub
 checkout, since like `feature new` it finds the product repositories relative to
 the hub it runs from.
 
@@ -864,12 +831,6 @@ every other install verb, because pip and uv follow the symlink to the real
 [`docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md`](docs/adr/0002-private-backend-venvs-for-hub-managed-worktrees.md)
 and
 [`docs/adr/0004-python-hooks-run-the-worktrees-own-venv.md`](docs/adr/0004-python-hooks-run-the-worktrees-own-venv.md).
-
-A `scripts/feature` worktree on a **fixed-path** branch still cannot carry a
-dependency change: its hook path *is* the main checkout's venv, so a private venv
-in the worktree would be read by nothing. That limit now comes from the hook
-form, not from the layout. Once the branch has worktree-venv hooks, the same
-worktree carries pin changes in its own private venv after `feature env`.
 
 The card has no such constraint — its hooks are `npm run ...` — but how it gets
 `node_modules` depends on who created the worktree. The vocabulary, used
