@@ -8,6 +8,9 @@
 #   growspace-repos <repo>        where sibling <repo> lives, printed whether or
 #                                 not it exists — reporting a missing checkout
 #                                 is the caller's business
+#   growspace-repos --base <repo> the ref a new worktree of <repo> starts from,
+#                                 `origin/<branch>`; refuses when the checkout
+#                                 has no such remote-tracking branch
 #
 # Siblings hang off the MAIN hub checkout rather than off this script's parent.
 # Run from a hub worktree — `.claude/worktrees/<name>`, `worktrees/<name>` — and
@@ -15,10 +18,29 @@
 #
 # A hub that is not a git checkout at all (a copied tree, a test fixture) is its
 # own main checkout, so its siblings are simply `..` again.
+#
+# Each repository integrates on its own branch, and its own AGENTS.md says which:
+# the backend on `prerelease`, TC and Vision on `main`, the card on `dev`. One
+# branch for all of them is how a card worktree once started from `main` with
+# nothing saying so. `scripts/feature` and `scripts/codex-worktree` both ask
+# `--base`, and it names the branch or refuses — never a different branch.
+# Override one repository with GROWSPACE_<BACKEND|TC|CARD|VISION>_BASE_BRANCH.
 set -euo pipefail
 
 REPOS=(growspace_manager growspace_manager_tc growspace_manager_vision
        lovelace-growspace-manager-card)
+
+# repo -> short name (which also names its override) and integration branch.
+role() {
+  case "$1" in
+    growspace_manager)               printf 'backend prerelease\n' ;;
+    growspace_manager_tc)            printf 'tc main\n' ;;
+    growspace_manager_vision)        printf 'vision main\n' ;;
+    lovelace-growspace-manager-card) printf 'card dev\n' ;;
+    *) echo "growspace-repos: unknown repository '$1' (known: ${REPOS[*]})" >&2
+       exit 2 ;;
+  esac
+}
 
 WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 HUB="$WS"
@@ -39,18 +61,34 @@ case "${1:-}" in
   --hub)
     printf '%s\n' "$HUB"
     ;;
-  *)
-    for name in "${REPOS[@]}"; do
-      if [ "$1" = "$name" ]; then
-        if [ -d "$DEV_ROOT/$name" ]; then
-          (cd "$DEV_ROOT/$name" && pwd -P)
+  --base)
+    name="${2:?usage: growspace-repos --base <repo>}"
+    info="$(role "$name")"
+    read -r short branch <<<"$info"
+    var="GROWSPACE_${short^^}_BASE_BRANCH"
+    branch="${!var:-$branch}"
+    repo="$DEV_ROOT/$name"
+    if ! git -C "$repo" show-ref --verify --quiet "refs/remotes/origin/$branch" 2>/dev/null; then
+      {
+        echo "ERROR: $name has no origin/$branch to base a worktree on"
+        echo "  checkout: $repo"
+        if [ -n "${!var:-}" ]; then
+          echo "  $branch came from $var; unset it for the default"
         else
-          printf '%s\n' "$DEV_ROOT/$name"
+          echo "  $branch is where $short integrates; fetch it with: git -C $repo fetch origin"
+          echo "  or name another base with $var=<branch>"
         fi
-        exit 0
-      fi
-    done
-    echo "growspace-repos: unknown repository '$1' (known: ${REPOS[*]})" >&2
-    exit 2
+      } >&2
+      exit 1
+    fi
+    printf 'origin/%s\n' "$branch"
+    ;;
+  *)
+    role "$1" >/dev/null
+    if [ -d "$DEV_ROOT/$1" ]; then
+      (cd "$DEV_ROOT/$1" && pwd -P)
+    else
+      printf '%s\n' "$DEV_ROOT/$1"
+    fi
     ;;
 esac

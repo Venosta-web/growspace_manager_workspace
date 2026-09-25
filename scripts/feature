@@ -33,8 +33,14 @@
 # moves to the new hooks, or to rebuild a private venv that drifted. See
 # docs/adr/0004-python-hooks-run-the-worktrees-own-venv.md.
 #
-# Base branch: upstream integrates architecture/refactor work on `prerelease`.
-# Override with BASE=main ./scripts/feature new <name>
+# Base branch: each repository starts from the branch it integrates on — the
+# backend from origin/prerelease, TC from origin/main, the card from origin/dev —
+# as scripts/growspace-repos --base decides for this script and codex-worktree
+# alike. A missing base refuses before any worktree is made; it never falls back
+# to another branch. Override one repository at a time:
+#   GROWSPACE_CARD_BASE_BRANCH=main ./scripts/feature new <name>
+# (also GROWSPACE_BACKEND_BASE_BRANCH and GROWSPACE_TC_BASE_BRANCH). An existing
+# local feature/<name> branch is checked out as it is, whatever the base.
 set -euo pipefail
 
 WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -46,17 +52,32 @@ BACKEND="$("$WS/scripts/growspace-repos" growspace_manager)"
 TC="$("$WS/scripts/growspace-repos" growspace_manager_tc)"
 CARD="$("$WS/scripts/growspace-repos" lovelace-growspace-manager-card)"
 ROOT="$HUB/worktrees"
-BASE="${BASE:-prerelease}"
 
-add_wt() { # repo, dest, branch
-  local repo="$1" dest="$2" branch="$3"
-  if git -C "$repo" show-ref --verify --quiet "refs/heads/$branch"; then
-    git -C "$repo" worktree add "$dest" "$branch"
+# What a new worktree of <repo> starts from: the feature branch itself when it
+# already exists locally, otherwise the repository's freshly fetched base.
+start_point() { # repo path, repo name
+  if git -C "$1" show-ref --verify --quiet "refs/heads/$BRANCH"; then
+    printf '%s\n' "$BRANCH"
+    return
+  fi
+  git -C "$1" fetch --quiet origin || true
+  "$WS/scripts/growspace-repos" --base "$2"
+}
+
+add_wt() { # repo, dest, start point
+  local repo="$1" dest="$2" from="$3"
+  if [ "$from" = "$BRANCH" ]; then
+    git -C "$repo" worktree add "$dest" "$BRANCH"
   else
-    git -C "$repo" fetch --quiet origin || true
-    git -C "$repo" worktree add -b "$branch" "$dest" "origin/$BASE" 2>/dev/null \
-      || git -C "$repo" worktree add -b "$branch" "$dest" "origin/main" 2>/dev/null \
-      || git -C "$repo" worktree add -b "$branch" "$dest" main
+    git -C "$repo" worktree add -b "$BRANCH" "$dest" "$from"
+  fi
+}
+
+describe() { # start point
+  if [ "$1" = "$BRANCH" ]; then
+    printf 'existing branch %s\n' "$BRANCH"
+  else
+    printf 'base %s\n' "$1"
   fi
 }
 
@@ -80,11 +101,27 @@ case "${1:-}" in
         exit 2
         ;;
     esac
+    # BASE= once applied one branch to every repository, which is how a card
+    # worktree came to start from main. The bases now differ per repository.
+    if [ -n "${BASE:-}" ]; then
+      echo "ERROR: BASE=$BASE would base every repository on one branch, but each" >&2
+      echo "  integrates on its own (backend prerelease, TC main, card dev)." >&2
+      echo "  Override one repository instead, e.g. GROWSPACE_BACKEND_BASE_BRANCH=$BASE" >&2
+      echo "  (also GROWSPACE_TC_BASE_BRANCH, GROWSPACE_CARD_BASE_BRANCH), and unset BASE." >&2
+      exit 2
+    fi
+
+    # Every base is resolved before any worktree exists, so a missing one
+    # refuses cleanly instead of leaving half a pair behind.
+    [ "$WANT_BACKEND" -eq 1 ] && BACKEND_FROM="$(start_point "$BACKEND" growspace_manager)"
+    [ "$WANT_TC" -eq 1 ] && TC_FROM="$(start_point "$TC" growspace_manager_tc)"
+    [ "$WANT_CARD" -eq 1 ] && CARD_FROM="$(start_point "$CARD" lovelace-growspace-manager-card)"
+
     mkdir -p "$ROOT/$NAME"
 
     if [ "$WANT_BACKEND" -eq 1 ]; then
       BW="$BACKEND/.worktrees/$NAME"
-      add_wt "$BACKEND" "$BW" "$BRANCH"
+      add_wt "$BACKEND" "$BW" "$BACKEND_FROM"
       ln -sfn "$BW" "$ROOT/$NAME/backend"
       # The environment can only be checked once the branch is checked out, so a
       # refusal necessarily arrives with the worktree already created. Say so.
@@ -99,7 +136,7 @@ case "${1:-}" in
 
     if [ "$WANT_TC" -eq 1 ]; then
       TW="$TC/.worktrees/$NAME"
-      add_wt "$TC" "$TW" "$BRANCH"
+      add_wt "$TC" "$TW" "$TC_FROM"
       ln -sfn "$TW" "$ROOT/$NAME/tc"
       "$WS/scripts/backend-venv" "$TC" "$TW" tc || {
         echo >&2
@@ -111,23 +148,28 @@ case "${1:-}" in
     fi
 
     if [ "$WANT_CARD" -eq 1 ]; then
-      add_wt "$CARD" "$ROOT/$NAME/card" "$BRANCH"
+      add_wt "$CARD" "$ROOT/$NAME/card" "$CARD_FROM"
       "$WS/scripts/card-node-modules" "$CARD" "$ROOT/$NAME/card"
     fi
 
     echo
-    echo "✓ feature '$NAME' ready on branch $BRANCH (base: origin/$BASE)"
-    if [ -e "$ROOT/$NAME/backend" ]; then
+    echo "✓ feature '$NAME' ready on branch $BRANCH"
+    if [ "$WANT_BACKEND" -eq 1 ]; then
       echo "   backend: $BACKEND/.worktrees/$NAME"
+      echo "            from:   $(describe "$BACKEND_FROM")"
       echo "            (also at $ROOT/$NAME/backend)"
       echo "            tests:  .venv/bin/pytest tests/ -q"
     fi
-    if [ -e "$ROOT/$NAME/tc" ]; then
+    if [ "$WANT_TC" -eq 1 ]; then
       echo "   tc:      $TC/.worktrees/$NAME"
+      echo "            from:   $(describe "$TC_FROM")"
       echo "            (also at $ROOT/$NAME/tc)"
       echo "            tests:  .venv/bin/pytest tests/ -q"
     fi
-    [ -d "$ROOT/$NAME/card" ] && echo "   card:    $ROOT/$NAME/card"
+    if [ "$WANT_CARD" -eq 1 ]; then
+      echo "   card:    $ROOT/$NAME/card"
+      echo "            from:   $(describe "$CARD_FROM")"
+    fi
     echo
     echo "Cross-repo roots are grouped under: $ROOT/$NAME"
     ;;
@@ -174,5 +216,5 @@ case "${1:-}" in
     echo "✓ removed worktrees for '$NAME' (branches kept)"
     ;;
 
-  *) sed -n '2,37p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 2 ;;
+  *) sed -n '2,43p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 2 ;;
 esac

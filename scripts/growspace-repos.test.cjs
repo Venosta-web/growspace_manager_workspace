@@ -12,6 +12,13 @@ const REPOS = [
   "growspace_manager_vision",
   "lovelace-growspace-manager-card",
 ];
+// The branch each repository integrates on, per its own AGENTS.md.
+const BASES = {
+  growspace_manager: "prerelease",
+  growspace_manager_tc: "main",
+  growspace_manager_vision: "main",
+  "lovelace-growspace-manager-card": "dev",
+};
 
 function git(repository, ...args) {
   return execFileSync("git", ["-C", repository, ...args], {
@@ -34,6 +41,16 @@ function initRepository(repository) {
 function commitAll(repository, message) {
   git(repository, "add", "-A");
   git(repository, "commit", "-q", "-m", message);
+}
+
+// A remote-tracking `origin/<branch>` on a commit of its own, so a worktree
+// that started anywhere else is told apart by its HEAD.
+function originBranch(repository, branch) {
+  const commit = git(
+    repository, "commit-tree", "HEAD^{tree}", "-p", "HEAD", "-m", `origin/${branch}`,
+  );
+  git(repository, "update-ref", `refs/remotes/origin/${branch}`, commit);
+  return commit;
 }
 
 // Scrub the developer's own overrides so every default is the one under test.
@@ -66,6 +83,7 @@ function fixture(t, scripts = []) {
     initRepository(repos[name]);
     fs.writeFileSync(path.join(repos[name], "README.md"), name);
     commitAll(repos[name], "seed");
+    originBranch(repos[name], BASES[name]);
   }
 
   const hub = path.join(root, "growspace_manager_workspace");
@@ -195,7 +213,7 @@ test("feature new from a hub worktree builds the pair on the main checkouts", (t
     ["new", "irrigation-v2"],
     {
       encoding: "utf8",
-      env: cleanEnv({ BASE: "main", HELPER_LOG: f.helperLog }),
+      env: cleanEnv({ HELPER_LOG: f.helperLog }),
     },
   );
   assert.equal(result.status, 0, result.stderr);
@@ -215,6 +233,117 @@ test("feature new from a hub worktree builds the pair on the main checkouts", (t
     `venv:${f.repos.growspace_manager}|${backendWorktree}\n` +
       `card:${f.repos["lovelace-growspace-manager-card"]}|${path.join(pair, "card")}\n`,
   );
+});
+
+test("--base names each repository's own integration branch", (t) => {
+  const f = fixture(t);
+  for (const name of REPOS) {
+    assert.equal(resolve(f.worktree, "--base", name), `origin/${BASES[name]}`);
+  }
+});
+
+test("--base takes a per-repository override and refuses a branch that is not there", (t) => {
+  const f = fixture(t);
+  const card = f.repos["lovelace-growspace-manager-card"];
+  originBranch(card, "main");
+  const base = (env) =>
+    spawnSync(
+      path.join(f.worktree, "scripts", "growspace-repos"),
+      ["--base", "lovelace-growspace-manager-card"],
+      { encoding: "utf8", env: cleanEnv(env) },
+    );
+
+  assert.equal(base({ GROWSPACE_CARD_BASE_BRANCH: "main" }).stdout, "origin/main\n");
+  // The override is per repository: the backend's does not move the card.
+  assert.equal(base({ GROWSPACE_BACKEND_BASE_BRANCH: "main" }).stdout, "origin/dev\n");
+
+  const missing = base({ GROWSPACE_CARD_BASE_BRANCH: "prerelease" });
+  assert.equal(missing.status, 1);
+  assert.equal(missing.stdout, "");
+  assert.match(missing.stderr, /lovelace-growspace-manager-card has no origin\/prerelease/);
+  assert.match(missing.stderr, /GROWSPACE_CARD_BASE_BRANCH/);
+
+  git(card, "update-ref", "-d", "refs/remotes/origin/dev");
+  const noDefault = base({});
+  assert.equal(noDefault.status, 1);
+  assert.match(noDefault.stderr, /lovelace-growspace-manager-card has no origin\/dev/);
+  assert.match(noDefault.stderr, new RegExp(`git -C ${card} fetch origin`));
+});
+
+test("feature new starts every repository from its own base and says which", (t) => {
+  const f = fixture(t, ["feature"]);
+  const result = spawnSync(
+    path.join(f.worktree, "scripts", "feature"),
+    ["new", "coverage", "--all"],
+    { encoding: "utf8", env: cleanEnv({ HELPER_LOG: f.helperLog }) },
+  );
+  assert.equal(result.status, 0, result.stderr);
+
+  const pair = path.join(f.hub, "worktrees", "coverage");
+  const worktrees = {
+    growspace_manager: path.join(pair, "backend"),
+    growspace_manager_tc: path.join(pair, "tc"),
+    "lovelace-growspace-manager-card": path.join(pair, "card"),
+  };
+  for (const [name, worktree] of Object.entries(worktrees)) {
+    assert.equal(
+      git(worktree, "rev-parse", "HEAD"),
+      git(f.repos[name], "rev-parse", `refs/remotes/origin/${BASES[name]}`),
+      `${name} should start from origin/${BASES[name]}`,
+    );
+  }
+  assert.match(result.stdout, /backend:[^\n]*\n\s+from:\s+base origin\/prerelease$/m);
+  assert.match(result.stdout, /tc:[^\n]*\n\s+from:\s+base origin\/main$/m);
+  assert.match(result.stdout, /card:[^\n]*\n\s+from:\s+base origin\/dev$/m);
+  assert.doesNotMatch(result.stdout, /\(base: origin/);
+});
+
+test("feature new says so when it reuses an existing branch", (t) => {
+  const f = fixture(t, ["feature"]);
+  git(f.repos.growspace_manager, "branch", "feature/resume");
+  const result = spawnSync(
+    path.join(f.worktree, "scripts", "feature"),
+    ["new", "resume", "--backend-only"],
+    { encoding: "utf8", env: cleanEnv({ HELPER_LOG: f.helperLog }) },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /from:\s+existing branch feature\/resume$/m);
+});
+
+test("feature new refuses a missing base before making any worktree", (t) => {
+  const f = fixture(t, ["feature"]);
+  const card = f.repos["lovelace-growspace-manager-card"];
+  git(card, "update-ref", "-d", "refs/remotes/origin/dev");
+
+  const result = spawnSync(
+    path.join(f.worktree, "scripts", "feature"),
+    ["new", "stranded"],
+    { encoding: "utf8", env: cleanEnv({ HELPER_LOG: f.helperLog }) },
+  );
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /lovelace-growspace-manager-card has no origin\/dev/);
+  // Nothing silently fell back to main, and the backend was not left half-made.
+  assert.equal(fs.existsSync(path.join(f.repos.growspace_manager, ".worktrees", "stranded")), false);
+  assert.equal(fs.existsSync(path.join(f.hub, "worktrees", "stranded")), false);
+  assert.equal(
+    spawnSync("git", ["-C", card, "show-ref", "--quiet", "refs/heads/feature/stranded"]).status,
+    1,
+  );
+});
+
+test("feature new refuses a global BASE and names the per-repository overrides", (t) => {
+  const f = fixture(t, ["feature"]);
+  const result = spawnSync(
+    path.join(f.worktree, "scripts", "feature"),
+    ["new", "global"],
+    { encoding: "utf8", env: cleanEnv({ BASE: "main", HELPER_LOG: f.helperLog }) },
+  );
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /BASE=main would base every repository on one branch/);
+  assert.match(result.stderr, /GROWSPACE_BACKEND_BASE_BRANCH=main/);
+  assert.equal(fs.existsSync(path.join(f.hub, "worktrees", "global")), false);
 });
 
 test("e2e from a hub worktree runs the main card and backend checkouts", (t) => {
