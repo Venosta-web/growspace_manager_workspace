@@ -1,0 +1,16 @@
+---
+version: 2
+
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "ci(deps)"
+
+# The lint tools (ruff, yamllint, codespell, shellcheck-py) are pinned in
+# workflow run: steps. Dependabot cannot update those pins; maintain them by hand
+# alongside the configs documented in AGENTS.md. Do not add a pip ecosystem for
+# them: this hub has no pip dependency manifest for Dependabot to update.
