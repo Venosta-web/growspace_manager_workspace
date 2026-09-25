@@ -16,14 +16,18 @@
 set -uo pipefail
 
 WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BACKEND="${GROWSPACE_BACKEND:-$WS/../growspace_manager}"
-TC="${GROWSPACE_TC:-$WS/../growspace_manager_tc}"
-CARD="${GROWSPACE_CARD:-$WS/../lovelace-growspace-manager-card}"
-VISION="${GROWSPACE_VISION:-$WS/../growspace_manager_vision}"
+# The defaults are the MAIN checkouts, found from the main hub checkout, so a run
+# from a hub worktree reports the same trees as a run from the hub itself.
+repo() { "$WS/scripts/growspace-repos" "$1"; }
+BACKEND="${GROWSPACE_BACKEND:-$(repo growspace_manager)}"
+TC="${GROWSPACE_TC:-$(repo growspace_manager_tc)}"
+CARD="${GROWSPACE_CARD:-$(repo lovelace-growspace-manager-card)}"
+VISION="${GROWSPACE_VISION:-$(repo growspace_manager_vision)}"
 # Normalize all of them, so every path this script prints or compares is the one a
-# reader would recognize. The defaults are `$WS/../<repo>`, which never equals
-# the same directory's real path as a string — and the checkout comparison below
-# is a string comparison. A missing tree keeps its raw value for the report.
+# reader would recognize. An override may be relative or reach its tree through
+# `..`, which never equals the same directory's real path as a string — and the
+# checkout comparison below is a string comparison. A missing tree keeps its raw
+# value for the report.
 abspath() { (cd "$1" 2>/dev/null && pwd) || printf '%s\n' "$1"; }
 BACKEND="$(abspath "$BACKEND")"
 TC="$(abspath "$TC")"
@@ -305,7 +309,7 @@ guard_python_venv() {
   # Assistant — so do not assume this venv has one. Any binary will do; it only
   # acts on the interpreter named by --python.
   uv=""
-  for candidate in "$venv/bin/uv" "$WS/../growspace_manager/.venv/bin/uv" "$(command -v uv 2>/dev/null || true)"; do
+  for candidate in "$venv/bin/uv" "$(repo growspace_manager)/.venv/bin/uv" "$(command -v uv 2>/dev/null || true)"; do
     [ -n "$candidate" ] && [ -x "$candidate" ] && { uv="$candidate"; break; }
   done
   if [ -z "$uv" ]; then

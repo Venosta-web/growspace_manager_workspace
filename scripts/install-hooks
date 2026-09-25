@@ -31,8 +31,7 @@
 set -euo pipefail
 
 WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HUB="$(git -C "$WS" rev-parse --path-format=absolute --git-common-dir)"
-HUB="$(cd "$(dirname "$HUB")" && pwd -P)"
+HUB="$("$WS/scripts/growspace-repos" --hub)"
 
 SENTINEL="growspace-hub: worktree-gc nudge"
 HOOKS=(post-merge post-rewrite)

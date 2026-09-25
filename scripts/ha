@@ -31,7 +31,8 @@ dc() { docker compose "${PROFILE[@]}" "$@"; }
 prepare_tc_source() {
   [ "$INSTANCE" = dev ] || return 0
   [ -z "${GROWSPACE_TC_SRC:-}" ] || return 0
-  local main_tc="$WS/../growspace_manager_tc/custom_components/growspace_manager_tc"
+  local main_tc
+  main_tc="$("$WS/scripts/growspace-repos" growspace_manager_tc)/custom_components/growspace_manager_tc"
   if [ -d "$main_tc" ]; then
     export GROWSPACE_TC_SRC="$main_tc"
   else
@@ -53,11 +54,9 @@ prepare_tc_source() {
 # ha-dev/ (onboarding, tokens, the SQLite DB) lives beside the compose file too,
 # so a worktree run would also point HA at an empty config.
 require_main_checkout() {
-  local common main
-  common="$(git -C "$WS" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
-  [ -n "$common" ] || return 0          # not a git checkout at all; nothing to guard
-  main="$(dirname "$common")"
-  [ "$main" = "$WS" ] && return 0
+  local main
+  main="$("$WS/scripts/growspace-repos" --hub)"
+  [ "$main" = "$(pwd -P)" ] && return 0   # also a hub that is no git checkout at all
 
   echo "ERROR: '$INSTANCE $CMD' must run from the main hub checkout, not a worktree." >&2
   echo "       here: $WS" >&2
@@ -67,7 +66,7 @@ require_main_checkout() {
   echo >&2
   echo "       To serve worktree sources, run from the" >&2
   echo "       main checkout with the source overrides — ha-$INSTANCE/ stays correct:" >&2
-  echo "         GROWSPACE_CARD_DIST=$WS/../lovelace-growspace-manager-card/dist \\" >&2
+  echo "         GROWSPACE_CARD_DIST=$("$WS/scripts/growspace-repos" lovelace-growspace-manager-card)/dist \\" >&2
   echo "         GROWSPACE_BACKEND_SRC=<worktree>/custom_components/growspace_manager \\" >&2
   echo "         GROWSPACE_TC_SRC=<tc-worktree>/custom_components/growspace_manager_tc \\" >&2
   echo "           $main/scripts/ha $INSTANCE restart" >&2

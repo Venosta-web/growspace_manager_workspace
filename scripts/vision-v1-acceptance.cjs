@@ -19,6 +19,7 @@ const {
   connectHaWebSocket,
   parseEnvFile,
 } = require("./gen-e2e-dashboards.cjs");
+const { mainHub, siblingRepo } = require("./growspace-repos.cjs");
 
 const HERE = path.resolve(__dirname, "..");
 const CAMERAS = ["camera.e2e_vision_1", "camera.e2e_vision_2"];
@@ -35,25 +36,6 @@ const DEFAULT_SCHEDULE = {
 function readOption(argv, name, fallback) {
   const index = argv.indexOf(name);
   return index === -1 ? fallback : argv[index + 1];
-}
-
-function mainHubCheckout(checkout = HERE) {
-  try {
-    const common = execFileSync(
-      "git",
-      [
-        "-C",
-        checkout,
-        "rev-parse",
-        "--path-format=absolute",
-        "--git-common-dir",
-      ],
-      { encoding: "utf8" },
-    ).trim();
-    return path.resolve(common, "..");
-  } catch {
-    return checkout;
-  }
 }
 
 function percentile(values, fraction) {
@@ -520,13 +502,13 @@ function markdownReport(result) {
 }
 
 async function main(argv = process.argv.slice(2)) {
-  const mainHub = mainHubCheckout();
+  const hub = mainHub();
   const cardRoot = path.resolve(
     readOption(
       argv,
       "--card-root",
       process.env.GROWSPACE_CARD ||
-        path.join(mainHub, "..", "lovelace-growspace-manager-card"),
+        siblingRepo("lovelace-growspace-manager-card"),
     ),
   );
   const backendRoot = path.resolve(
@@ -534,7 +516,7 @@ async function main(argv = process.argv.slice(2)) {
       argv,
       "--backend-root",
       process.env.GROWSPACE_BACKEND ||
-        path.join(mainHub, "..", "growspace_manager"),
+        siblingRepo("growspace_manager"),
     ),
   );
   const envFile = path.resolve(
@@ -555,7 +537,7 @@ async function main(argv = process.argv.slice(2)) {
     "--vision-url",
     env.GROWSPACE_VISION_URL || DEFAULT_VISION_URL,
   );
-  const tokenFile = path.join(mainHub, ".ha-token");
+  const tokenFile = path.join(hub, ".ha-token");
   const token =
     env.HA_ACCESS_TOKEN ||
     (fs.existsSync(tokenFile) ? fs.readFileSync(tokenFile, "utf8").trim() : "");
@@ -574,7 +556,7 @@ async function main(argv = process.argv.slice(2)) {
     `backend checkout not found at ${backendRoot}`,
   );
 
-  const optionsFile = path.join(mainHub, "vision-dev/options.json");
+  const optionsFile = path.join(hub, "vision-dev/options.json");
   const visionToken = JSON.parse(
     fs.readFileSync(optionsFile, "utf8"),
   ).access_token;
@@ -585,7 +567,7 @@ async function main(argv = process.argv.slice(2)) {
     .replaceAll(":", "")
     .replace(/\.\d{3}Z$/, "Z");
   const artifactDir = path.join(
-    mainHub,
+    hub,
     "artifacts/vision-v1-acceptance",
     stamp,
   );
@@ -597,7 +579,7 @@ async function main(argv = process.argv.slice(2)) {
   const generatedReference = path.join(temporary, "reference");
   const generatedUnusable = path.join(temporary, "unusable");
   const backup = path.join(temporary, "backup");
-  const runtimeCameras = path.join(mainHub, "ha-dev/www/e2e-camera-assets");
+  const runtimeCameras = path.join(hub, "ha-dev/www/e2e-camera-assets");
   fs.mkdirSync(generatedReference);
   fs.mkdirSync(generatedUnusable);
   fs.mkdirSync(backup);
@@ -623,8 +605,8 @@ async function main(argv = process.argv.slice(2)) {
       );
   };
   const restart = async () => {
-    run(path.join(mainHub, "scripts/ha"), ["dev", "restart"], {
-      cwd: mainHub,
+    run(path.join(hub, "scripts/ha"), ["dev", "restart"], {
+      cwd: hub,
       env: mountEnvironment,
     });
     await waitForHomeAssistant(baseUrl, token);
@@ -970,7 +952,6 @@ module.exports = {
   browserBaseUrl,
   evidenceItems,
   localClock,
-  mainHubCheckout,
   newCompletedScheduledCheckup,
   percentile,
   renderCard,

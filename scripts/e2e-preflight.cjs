@@ -4,6 +4,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { siblingRepo } = require('./growspace-repos.cjs');
 const {
   CARD_URL,
   buildDashboardStages,
@@ -394,7 +395,7 @@ function readOption(argv, name, fallback) {
 }
 
 async function main(argv = process.argv.slice(2)) {
-  const cardRoot = path.resolve(readOption(argv, '--card-root', process.env.GROWSPACE_CARD || path.join(WORKSPACE, '..', 'lovelace-growspace-manager-card')));
+  const cardRoot = path.resolve(readOption(argv, '--card-root', process.env.GROWSPACE_CARD || siblingRepo('lovelace-growspace-manager-card')));
   const envFile = path.resolve(readOption(argv, '--env-file', path.join(cardRoot, 'tests/e2e/.env.test')));
   const tokenFile = path.resolve(readOption(argv, '--token-file', path.join(WORKSPACE, '.ha-token')));
   const logFile = path.resolve(readOption(argv, '--log-file', path.join(WORKSPACE, 'ha-dev/home-assistant.log')));

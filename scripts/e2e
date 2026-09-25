@@ -9,11 +9,9 @@
 set -euo pipefail
 
 WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-GIT_COMMON="$(git -C "$WS" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
-RUNTIME_WS="${GIT_COMMON:+$(dirname "$GIT_COMMON")}"
-RUNTIME_WS="${RUNTIME_WS:-$WS}"
-CARD="${GROWSPACE_CARD:-$WS/../lovelace-growspace-manager-card}"
-BACKEND="${GROWSPACE_BACKEND:-$WS/../growspace_manager}"
+RUNTIME_WS="$("$WS/scripts/growspace-repos" --hub)"
+CARD="${GROWSPACE_CARD:-$("$WS/scripts/growspace-repos" lovelace-growspace-manager-card)}"
+BACKEND="${GROWSPACE_BACKEND:-$("$WS/scripts/growspace-repos" growspace_manager)}"
 BASE_URL="${HA_BASE_URL:-http://127.0.0.1:8123}"
 ENV_FILE="${E2E_ENV_FILE:-$CARD/tests/e2e/.env.test}"
 TOKEN_FILE="${E2E_TOKEN_FILE:-$RUNTIME_WS/.ha-token}"
@@ -47,14 +45,10 @@ require_inputs() {
 }
 
 require_main_checkout() {
-  local common main
-  common="$(git -C "$WS" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
-  [ -z "$common" ] && return 0
-  main="$(dirname "$common")"
-  if [ "$main" != "$WS" ]; then
+  if [ "$RUNTIME_WS" != "$(cd "$WS" && pwd -P)" ]; then
     echo "ERROR: provision must run from the main workspace checkout." >&2
     echo "       here: $WS" >&2
-    echo "       main: $main" >&2
+    echo "       main: $RUNTIME_WS" >&2
     echo "       Use GROWSPACE_CARD/GROWSPACE_BACKEND there to serve worktree code." >&2
     exit 1
   fi

@@ -41,8 +41,8 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 
 const { connectHaWebSocket } = require("./gen-e2e-dashboards.cjs");
+const { mainHub } = require("./growspace-repos.cjs");
 
-const HERE = path.resolve(__dirname, "..");
 const CARD_REPOSITORY = "Venosta-web/lovelace-growspace-manager-card";
 const CARD_DIRECTORY = CARD_REPOSITORY.split("/")[1];
 const HACS_FILES_PREFIX = `/hacsfiles/${CARD_DIRECTORY}`;
@@ -59,25 +59,6 @@ const CARD_REPOSITORY_ID = "1052170854";
 /* ------------------------------------------------------------------ *
  * Pure helpers — everything scripts/card-hacs-update.test.cjs asserts.
  * ------------------------------------------------------------------ */
-
-function mainHubCheckout(checkout = HERE) {
-  try {
-    const common = execFileSync(
-      "git",
-      [
-        "-C",
-        checkout,
-        "rev-parse",
-        "--path-format=absolute",
-        "--git-common-dir",
-      ],
-      { encoding: "utf8" },
-    ).trim();
-    return path.resolve(common, "..");
-  } catch {
-    return checkout;
-  }
-}
 
 /*
  * The dev instance is off limits, and saying so is half of what this guard is
@@ -714,7 +695,7 @@ async function main(argv = process.argv.slice(2)) {
     return switches.has("--help") ? 0 : 2;
   }
 
-  const runtimeWorkspace = mainHubCheckout();
+  const runtimeWorkspace = mainHub();
   const baseUrl = (options["--base-url"] || DEFAULT_BASE_URL).replace(/\/$/, "");
   const configDir = path.resolve(
     options["--config-dir"] ||
@@ -897,7 +878,6 @@ module.exports = {
   formatWalk,
   hacsConfigEntry,
   hacsRepositoryRow,
-  mainHubCheckout,
   parseArguments,
   parseModuleSpecifiers,
   resolveSpecifier,
