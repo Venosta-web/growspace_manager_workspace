@@ -19,7 +19,7 @@ function commit(repository, name, contents) {
   git(repository, "commit", "-q", "-m", name);
 }
 
-// A hub holding nothing but `scripts/check`. The header is printed before any
+// A hub holding nothing but `scripts/check` and the resolver it asks. The header is printed before any
 // stage runs and every target below refuses at its guards, so the fixture never
 // needs a venv, a node_modules, or the rest of the workspace.
 function fixture(t) {
@@ -28,11 +28,13 @@ function fixture(t) {
 
   const hub = path.join(root, "growspace_manager_workspace");
   fs.mkdirSync(path.join(hub, "scripts"), { recursive: true });
-  fs.copyFileSync(
-    path.join(SOURCE_ROOT, "scripts", "check"),
-    path.join(hub, "scripts", "check"),
-  );
-  fs.chmodSync(path.join(hub, "scripts", "check"), 0o755);
+  for (const script of ["check", "growspace-repos"]) {
+    fs.copyFileSync(
+      path.join(SOURCE_ROOT, "scripts", script),
+      path.join(hub, "scripts", script),
+    );
+    fs.chmodSync(path.join(hub, "scripts", script), 0o755);
+  }
   return { root, hub };
 }
 

@@ -673,6 +673,17 @@ Never run two agents in the same checkout. Create a matched worktree pair:
 ./scripts/feature rm  irrigation-v2
 ```
 
+This works the same from a hub worktree (`.claude/worktrees/<name>`,
+`worktrees/<name>`) as from the main checkout, and so does every other hub
+script: none of them finds a sibling repository as `<script dir>/../<repo>`,
+which from a worktree is a directory of worktrees with no repository in it.
+They all ask **`scripts/growspace-repos`**, the one resolver: `--hub` prints the
+main hub checkout, `<repo>` prints where that sibling lives beside it, and no
+argument lists every sibling that is cloned. Node scripts reach it through
+`scripts/growspace-repos.cjs`; the Python ones call it with `subprocess`. A
+pair made from a worktree therefore lands in the **main** hub's `worktrees/`,
+where it outlives the session that made it.
+
 Worktrees accumulate: a merged feature leaves its directories behind, and a card
 worktree costs ~700 MB in build caches even though its `node_modules` is a
 symlink. **Nothing upstream collects them.** A merge happens on a GitHub runner

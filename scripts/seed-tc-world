@@ -77,34 +77,25 @@ from datetime import UTC, datetime, timedelta
 HERE = pathlib.Path(__file__).resolve().parent.parent
 
 
-def main_hub_checkout() -> pathlib.Path:
-    """Return the main hub checkout, even when run from one of its worktrees."""
-    try:
-        common = subprocess.run(
-            [
-                "git",
-                "-C",
-                str(HERE),
-                "rev-parse",
-                "--path-format=absolute",
-                "--git-common-dir",
-            ],
+def growspace_repos(*args: str) -> pathlib.Path:
+    """Ask scripts/growspace-repos, the one place hub tooling locates a checkout."""
+    return pathlib.Path(
+        subprocess.run(
+            [str(HERE / "scripts" / "growspace-repos"), *args],
             capture_output=True,
             text=True,
             check=True,
         ).stdout.strip()
-    except (OSError, subprocess.CalledProcessError):
-        return HERE
-    return pathlib.Path(common).parent.resolve()
+    )
 
 
-WORKSPACE = main_hub_checkout()
+WORKSPACE = growspace_repos("--hub")
 HA_DEV = WORKSPACE / "ha-dev"
 STORAGE = HA_DEV / ".storage"
 STRAIN_LIBRARY = HA_DEV / "strain_library.db"
 
 TC = pathlib.Path(
-    os.environ.get("GROWSPACE_TC", WORKSPACE / ".." / "growspace_manager_tc")
+    os.environ.get("GROWSPACE_TC", growspace_repos("growspace_manager_tc"))
 ).resolve()
 
 HA_URL = os.environ.get("HA_BASE_URL", "http://127.0.0.1:8123")
