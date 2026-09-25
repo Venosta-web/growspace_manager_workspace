@@ -27,7 +27,7 @@ jobs:
     name: Shell, Python, YAML and spelling
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v7.0.1
       - uses: actions/setup-python@v7.0.0
         name: Setup Python
         with:
