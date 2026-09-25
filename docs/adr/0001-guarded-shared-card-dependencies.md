@@ -154,9 +154,9 @@ Named here because they are open, not enforced:
   ~7.9 MiB and ~0.4 s rather than the card's 465 MB, and a symlinked venv adds a
   destructive write-through class this one does not have — `uv venv --clear`
   through a link wipes the lender's environment where `npm ci` merely deletes
-  the link. Hub-managed backend worktrees therefore get a private venv wherever
-  the hub owns upstream's `../../.venv` hook path, and a verified shared one
-  where it does not.
+  the link. [ADR 0004](0004-python-hooks-run-the-worktrees-own-venv.md) now
+  gives every hub-managed backend and TC worktree a private venv at its own
+  `.venv` and refuses fixed-path hooks.
 - **Write-through has no ticket** and will not get one; see the section above.
 
 ## Considered options

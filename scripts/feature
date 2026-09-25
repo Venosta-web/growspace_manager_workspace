@@ -22,15 +22,11 @@
 #   worktrees/<name>/card                        real card worktree
 #
 # The backend and TC worktrees live at <repo>/.worktrees/<name> (gitignored in
-# the Python repositories) because a branch whose pre-commit hooks still declare
-# `../../.venv/bin/...` only resolves them from exactly that depth.
+# the Python repositories).
 #
-# Which Python environment a worktree runs is scripts/backend-venv's call, made
-# from that branch's own pre-commit config. Hooks that run the worktree's own
-# `.venv` get a private venv there; old-form hooks share the main checkout's
-# venv, verified against this branch's requirements.txt. `env` re-runs that
-# decision for an existing pair — to convert a linked worktree once its branch
-# moves to the new hooks, or to rebuild a private venv that drifted. See
+# scripts/backend-venv creates a private <worktree>/.venv and refuses a branch
+# with fixed-path hooks until it is rebased onto a hook-runner base. `env`
+# re-runs setup for an existing pair to replace a link or rebuild a drifted venv. See
 # docs/adr/0004-python-hooks-run-the-worktrees-own-venv.md.
 #
 # Base branch: upstream integrates architecture/refactor work on `prerelease`.

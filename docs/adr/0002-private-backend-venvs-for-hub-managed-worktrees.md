@@ -1,10 +1,9 @@
 # ADR 0002 — Hub-managed backend worktrees do not share the main checkout's venv
 
-**Status:** Accepted; partly superseded by
-[ADR 0004](0004-python-hooks-run-the-worktrees-own-venv.md). A branch whose
-hooks run the worktree's own `.venv` gets a private venv in every layout, so the
-`scripts/feature` sharing below now applies only to branches whose hooks still
-declare `../../.venv/bin/...`.
+**Status:** Historical venv policy, superseded by
+[ADR 0004](0004-python-hooks-run-the-worktrees-own-venv.md). The measurements
+below explain the decision; current hub setup always prepares a private
+`<worktree>/.venv` and refuses branches with fixed-path hooks.
 
 Decided and measured on 2026-08-23 in
 [hub#12](https://github.com/Venosta-web/growspace_manager_workspace/issues/12),
