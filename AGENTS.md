@@ -605,6 +605,11 @@ is gated by three workflows on every pull request:
 | `Workspace quality` | Workspace contracts and tooling | the E2E coverage contract, and every `scripts/**/*.test.cjs` |
 | `PR Title` | Conventional commit title | the PR title, against the card repository's type list |
 
+Dependabot proposes GitHub Actions version updates weekly on Monday. The lint
+tools pinned inside workflow `run:` steps (ruff, yamllint, codespell and
+shellcheck-py) are outside its reach; update those pins by hand alongside the
+checked-in configs described below.
+
 Every tool is **pinned in the workflow** rather than taken from the runner image,
 and every rule lives in a checked-in config — `ruff.toml`, `.yamllint`,
 `.codespellrc` — never in a flag, so a local run and CI cannot disagree about
