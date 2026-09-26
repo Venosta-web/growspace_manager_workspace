@@ -298,6 +298,38 @@ test("feature new starts every repository from its own base and says which", (t)
   assert.doesNotMatch(result.stdout, /\(base: origin/);
 });
 
+// Creating worktrees is the moment to mention the merged ones piling up, so
+// `feature new` asks worktree-gc for its nudge and prints whatever it says —
+// the threshold is worktree-gc's decision, tested there.
+test("feature new ends with the worktree-gc nudge", (t) => {
+  const f = fixture(t, ["feature"]);
+  executable(
+    path.join(f.worktree, "scripts", "worktree-gc"),
+    '#!/usr/bin/env bash\nprintf "gc:%s\\n" "$*" >> "$HELPER_LOG"\n' +
+      'echo "worktree-gc: 42 landed worktree(s) holding 9.9 GiB"\n',
+  );
+  const result = spawnSync(
+    path.join(f.worktree, "scripts", "feature"),
+    ["new", "nudged", "--backend-only"],
+    { encoding: "utf8", env: cleanEnv({ HELPER_LOG: f.helperLog }) },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /grouped under: .*\n\nworktree-gc: 42 landed worktree\(s\) holding 9\.9 GiB\n$/);
+  assert.match(fs.readFileSync(f.helperLog, "utf8"), /^gc:--nudge$/m);
+});
+
+test("feature new adds nothing when the nudge has nothing to say", (t) => {
+  const f = fixture(t, ["feature"]);
+  executable(path.join(f.worktree, "scripts", "worktree-gc"), "#!/usr/bin/env bash\n");
+  const result = spawnSync(
+    path.join(f.worktree, "scripts", "feature"),
+    ["new", "quiet", "--backend-only"],
+    { encoding: "utf8", env: cleanEnv({ HELPER_LOG: f.helperLog }) },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /grouped under: [^\n]*\n$/);
+});
+
 test("feature new says so when it reuses an existing branch", (t) => {
   const f = fixture(t, ["feature"]);
   git(f.repos.growspace_manager, "branch", "feature/resume");

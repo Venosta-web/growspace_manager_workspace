@@ -10,6 +10,9 @@
 # gets out of the way. It is silent when there is nothing to collect, because a
 # hook that speaks up for no reason is a hook you learn to scroll past.
 #
+# The line carries the disk the landed worktrees hold, not just their count: a
+# count is what 134 merged worktrees sat behind while nobody acted on it.
+#
 # It runs `--offline`, which skips the `gh` lookup: that lookup is one network
 # round trip per repository — about six seconds here — and a `git pull` should
 # not wait for it. The cost is that squash-merged branches are invisible to the

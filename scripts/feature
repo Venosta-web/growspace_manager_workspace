@@ -53,6 +53,25 @@ TC="$("$WS/scripts/growspace-repos" growspace_manager_tc)"
 CARD="$("$WS/scripts/growspace-repos" lovelace-growspace-manager-card)"
 ROOT="$HUB/worktrees"
 
+# The worktree-gc nudge: one line when merged worktrees have piled up past its
+# threshold, because making more is the moment to mention the ones already
+# done with. Started before the worktrees and read after them, so the sweep
+# runs alongside the venv and node_modules setup instead of after it.
+NUDGE_OUT=""
+trap 'rm -f "${NUDGE_OUT:-}"' EXIT
+nudge_start() {
+  [ -x "$WS/scripts/worktree-gc" ] || return 0
+  NUDGE_OUT="$(mktemp)"
+  "$WS/scripts/worktree-gc" --nudge >"$NUDGE_OUT" 2>/dev/null &
+  NUDGE_PID=$!
+}
+nudge_finish() {
+  [ -n "$NUDGE_OUT" ] || return 0
+  wait "$NUDGE_PID" 2>/dev/null || true
+  [ -s "$NUDGE_OUT" ] && { echo; cat "$NUDGE_OUT"; }
+  return 0
+}
+
 # What a new worktree of <repo> starts from: the feature branch itself when it
 # already exists locally, otherwise the repository's freshly fetched base.
 start_point() { # repo path, repo name
@@ -117,6 +136,7 @@ case "${1:-}" in
     [ "$WANT_TC" -eq 1 ] && TC_FROM="$(start_point "$TC" growspace_manager_tc)"
     [ "$WANT_CARD" -eq 1 ] && CARD_FROM="$(start_point "$CARD" lovelace-growspace-manager-card)"
 
+    nudge_start
     mkdir -p "$ROOT/$NAME"
 
     if [ "$WANT_BACKEND" -eq 1 ]; then
@@ -172,6 +192,7 @@ case "${1:-}" in
     fi
     echo
     echo "Cross-repo roots are grouped under: $ROOT/$NAME"
+    nudge_finish
     ;;
 
   list)

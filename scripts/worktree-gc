@@ -6,6 +6,20 @@
 #   ./scripts/worktree-gc --prune --untracked  also those dirty only with junk
 #   ./scripts/worktree-gc --prune --branches   delete the landed branches too
 #   ./scripts/worktree-gc --summary --offline  one line, no network — for hooks
+#   ./scripts/worktree-gc --nudge            that line, only past the threshold
+#
+# Every report says how much disk the removable worktrees hold, because a count
+# alone is what 134 merged worktrees and 14 GB under worktrees/ hid for months.
+#
+# --nudge is what `feature new` and `codex-worktree setup` run: the moment a
+# person is creating more worktrees is the moment to mention the pile, but only
+# once it is a pile. It is `--summary --offline` that stays silent below
+# 20 removable worktrees — GROWSPACE_WORKTREE_GC_THRESHOLD moves the line.
+#
+# STALE ENTRIES. A worktree whose directory is gone — a `/tmp` checkout the
+# machine cleared — leaves its registration behind, and only `git worktree
+# prune` drops it. `--prune` does, and names each entry it dropped; a locked one
+# is left alone, as git leaves it, and the report says why.
 #
 # A branch outlives its worktree, so `--branches` runs a second pass over the
 # refs themselves, after any worktree removal — a branch still checked out
@@ -43,10 +57,16 @@
 #
 # THE SYMLINKS ARE THE DANGEROUS PART. A hub-managed card worktree's
 # `node_modules` is one symlink into the MAIN checkout's 465 MB tree, and a
-# backend worktree's `.venv` is a symlink into the main checkout's environment.
-# `git worktree remove` unlinks rather than descends, but the cost of being
-# wrong is the main checkout, so every link is unlinked explicitly first — the
-# same order `scripts/feature rm` uses.
+# backend worktree on a branch with old-form hooks has a `.venv` symlink into
+# the main checkout's environment. `git worktree remove` unlinks rather than
+# descends, but the cost of being wrong is the main checkout, so every link is
+# unlinked explicitly first — the same order `scripts/feature rm` uses.
+#
+# A PRIVATE `.venv` is the other layout (ADR 0004): a real directory the setup
+# scripts built, which is build output exactly as `node_modules` is. Both are
+# left out of the untracked-files test at a worktree's root whatever the
+# branch's .gitignore says, so a merged worktree is not held back for carrying
+# the environment the hub gave it. Neither is ever tracked work.
 set -euo pipefail
 
 WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -61,6 +81,11 @@ UNTRACKED=0
 BRANCHES_TOO=0
 OFFLINE=0
 SUMMARY=0
+NUDGE=0
+NUDGE_THRESHOLD="${GROWSPACE_WORKTREE_GC_THRESHOLD:-20}"
+# `du` over 151 cold worktrees has taken 18 s here, and 2 s warm. A report run
+# by hand waits for it; a one-line summary on a pull or a `feature new` does not.
+SUMMARY_DU_SECONDS=5
 
 # The merged-pull-request list costs a network round trip per repository, and
 # the branch pass needs the same answer the worktree pass did.
@@ -73,13 +98,20 @@ for arg in "$@"; do
     --branches)  BRANCHES_TOO=1 ;;
     --offline)   OFFLINE=1 ;;
     --summary)   SUMMARY=1 ;;
-    -h|--help)   sed -n '2,9p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 0 ;;
+    --nudge)     SUMMARY=1; OFFLINE=1; NUDGE=1 ;;
+    -h|--help)   sed -n '2,10p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'; exit 0 ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
 done
 
+case "$NUDGE_THRESHOLD" in
+  ''|*[!0-9]*)
+    echo "GROWSPACE_WORKTREE_GC_THRESHOLD must be a whole number, not '$NUDGE_THRESHOLD'" >&2
+    exit 2 ;;
+esac
+
 if [ "$SUMMARY" -eq 1 ] && [ "$PRUNE" -eq 1 ]; then
-  echo "--summary is a report; it does not combine with --prune." >&2
+  echo "--summary and --nudge are reports; it does not combine with --prune." >&2
   echo "Deleting worktrees and branches wants a human at the keyboard, and a" >&2
   echo "hook runs on every pull without one." >&2
   exit 2
@@ -108,12 +140,49 @@ merged_prs() { # repo path -> "branch<TAB>merged head sha", one per line
      --jq '.[] | [.headRefName, .headRefOid] | @tsv' 2>/dev/null || true
 }
 
+# Untracked content, less the dependency trees the hub itself put at a
+# worktree's root: a shared `node_modules` link, and a `.venv` that is either a
+# link or the private environment backend-venv built.
+untracked() { # worktree path
+  git -C "$1" status --porcelain -- . ':(exclude).venv' ':(exclude)node_modules' 2>/dev/null
+}
+
+# What the given directories hold on disk, in one `du` so nested worktrees and
+# hardlinks shared between them are counted once. Prints e.g. `14.2 GiB`, or
+# nothing when it was not measured in time.
+disk_size() { # seconds (0 = no limit), paths...
+  local limit="$1"; shift
+  [ "$#" -gt 0 ] || { echo "0 B"; return 0; }
+  local cmd=(du -sck --)
+  if [ "$limit" -gt 0 ] && command -v timeout >/dev/null; then
+    cmd=(timeout "$limit" "${cmd[@]}")
+  fi
+  "${cmd[@]}" "$@" 2>/dev/null | LC_ALL=C awk -F'\t' '
+    $2 == "total" { k = $1; found = 1 }
+    END {
+      if (!found) exit 1
+      split("KiB MiB GiB TiB", unit, " ")
+      i = 1
+      while (k >= 1024 && i < 4) { k /= 1024; i++ }
+      printf (i == 1 ? "%d %s\n" : "%.1f %s\n"), k, unit[i]
+    }' || true
+}
+
+landed_paths() {
+  local line
+  for line in ${LANDED[@]+"${LANDED[@]}"}; do
+    IFS=$'\t' read -r _ p _ _ <<<"$line"
+    printf '%s\n' "$p"
+  done
+}
+
 # Removal happens deepest path first: a Codex-managed set nests a repo's
 # worktree inside the hub's, and removing the outer one first would leave the
 # inner registered against a directory that no longer exists.
 LANDED=()   # repo<TAB>path<TAB>branch<TAB>why
 HELD=()     # repo<TAB>path<TAB>branch<TAB>why
 SKIPPED=()
+STALE=()    # repo<TAB>path<TAB>branch<TAB>why — registered, directory gone
 
 while IFS=$'\t' read -r name repo; do
   mapfile -t refs < <(integration_refs "$repo")
@@ -121,12 +190,17 @@ while IFS=$'\t' read -r name repo; do
   mapfile -t squashed < "$CACHE/$name.prs"
   main_checkout="$repo"
 
-  path=""; branch=""; head=""; prunable=0
+  path=""; branch=""; head=""; prunable=""; locked=0
   flush() {
     [ -n "$path" ] || return 0
     local label="${branch:-(detached)}"
-    if [ "$prunable" -eq 1 ] || [ ! -d "$path" ]; then
-      SKIPPED+=("$name"$'\t'"$path"$'\t'"$label"$'\t'"gone — git worktree prune")
+    if [ -n "$prunable" ] || [ ! -d "$path" ]; then
+      local gone="${prunable:-directory gone}"
+      if [ "$locked" -eq 1 ]; then
+        SKIPPED+=("$name"$'\t'"$path"$'\t'"$label"$'\t'"$gone, but locked — git worktree unlock")
+      else
+        STALE+=("$name"$'\t'"$path"$'\t'"$label"$'\t'"$gone")
+      fi
     elif [ "$path" = "$main_checkout" ]; then
       :
     elif [ "$path" = "$HERE" ] || [ "${HERE#"$path"/}" != "$HERE" ]; then
@@ -151,13 +225,13 @@ while IFS=$'\t' read -r name repo; do
         HELD+=("$name"$'\t'"$path"$'\t'"$label"$'\t'"not landed upstream")
       elif [ -n "$(git -C "$path" diff --name-only HEAD 2>/dev/null)" ]; then
         HELD+=("$name"$'\t'"$path"$'\t'"$label"$'\t'"$why, but has uncommitted changes")
-      elif [ -n "$(git -C "$path" status --porcelain 2>/dev/null)" ] && [ "$UNTRACKED" -eq 0 ]; then
+      elif [ -n "$(untracked "$path")" ] && [ "$UNTRACKED" -eq 0 ]; then
         HELD+=("$name"$'\t'"$path"$'\t'"$label"$'\t'"$why, untracked files — pass --untracked")
       else
         LANDED+=("$name"$'\t'"$path"$'\t'"$label"$'\t'"$why")
       fi
     fi
-    path=""; branch=""; head=""; prunable=0
+    path=""; branch=""; head=""; prunable=""; locked=0
   }
 
   while IFS= read -r line; do
@@ -165,7 +239,9 @@ while IFS=$'\t' read -r name repo; do
       "worktree "*) flush; path="${line#worktree }" ;;
       "HEAD "*)     head="${line#HEAD }" ;;
       "branch "*)   branch="${line#branch refs/heads/}" ;;
-      "prunable"*)  prunable=1 ;;
+      "prunable"*)  prunable="${line#prunable}"; prunable="${prunable# }"
+                    prunable="${prunable:-prunable}" ;;
+      "locked"*)    locked=1 ;;
     esac
   done < <(git -C "$repo" worktree list --porcelain)
   flush
@@ -258,19 +334,36 @@ if [ "$BRANCHES_TOO" -eq 1 ]; then
 fi
 
 if [ "$SUMMARY" -eq 1 ]; then
-  if [ "${#LANDED[@]}" -gt 0 ] || [ "${#LANDED_BRANCHES[@]}" -gt 0 ]; then
-    printf 'worktree-gc: %d worktree(s), %d branch(es) have landed%s\n' \
-      "${#LANDED[@]}" "${#LANDED_BRANCHES[@]}" \
-      "$([ "$OFFLINE" -eq 1 ] && echo " (offline count — gh may find more)")"
-    printf '            collect them with: %s --prune --branches --untracked\n' \
-      "${BASH_SOURCE[0]}"
+  worth_saying=0
+  if [ "$NUDGE" -eq 1 ]; then
+    # A nudge counts worktrees only: branches cost nothing on disk, and a stale
+    # entry is one line in .git/worktrees.
+    [ "${#LANDED[@]}" -ge "$NUDGE_THRESHOLD" ] && worth_saying=1
+  elif [ "${#LANDED[@]}" -gt 0 ] || [ "${#LANDED_BRANCHES[@]}" -gt 0 ] \
+       || [ "${#STALE[@]}" -gt 0 ]; then
+    worth_saying=1
   fi
+  [ "$worth_saying" -eq 1 ] || exit 0
+
+  parts="${#LANDED[@]} landed worktree(s)"
+  if [ "${#LANDED[@]}" -gt 0 ]; then
+    mapfile -t paths < <(landed_paths)
+    size="$(disk_size "$SUMMARY_DU_SECONDS" "${paths[@]}")"
+    parts+=" holding ${size:-"? (du ran past ${SUMMARY_DU_SECONDS}s)"}"
+  fi
+  [ "$BRANCHES_TOO" -eq 1 ] && parts+=", ${#LANDED_BRANCHES[@]} landed branch(es)"
+  [ "${#STALE[@]}" -gt 0 ] && parts+=", ${#STALE[@]} stale entr(ies)"
+  printf 'worktree-gc: %s%s\n' "$parts" \
+    "$([ "$OFFLINE" -eq 1 ] && echo " (offline count — gh may find more)")"
+  printf '            collect them with: %s --prune --branches --untracked\n' \
+    "$HUB/scripts/worktree-gc"
   exit 0
 fi
 
 report "landed — removable" ${LANDED[@]+"${LANDED[@]}"}
 report "held back" ${HELD[@]+"${HELD[@]}"}
 report "skipped" ${SKIPPED[@]+"${SKIPPED[@]}"}
+report "stale entries — --prune drops them" ${STALE[@]+"${STALE[@]}"}
 
 if [ "$BRANCHES_TOO" -eq 1 ] && [ "${#LANDED_BRANCHES[@]}" -gt 0 ]; then
   printf '\n── landed branches — deletable (%d)\n' "${#LANDED_BRANCHES[@]}"
@@ -281,7 +374,11 @@ if [ "$BRANCHES_TOO" -eq 1 ] && [ "${#LANDED_BRANCHES[@]}" -gt 0 ]; then
 fi
 
 if [ "$PRUNE" -eq 0 ]; then
-  printf '\n%d worktree(s) can be removed. Re-run with --prune to do it.\n' "${#LANDED[@]}"
+  mapfile -t paths < <(landed_paths)
+  printf '\n%d worktree(s) can be removed, holding %s. Re-run with --prune to do it.\n' \
+    "${#LANDED[@]}" "$(disk_size 0 ${paths[@]+"${paths[@]}"})"
+  [ "${#STALE[@]}" -eq 0 ] \
+    || printf '%d stale entr(ies) would be pruned with them.\n' "${#STALE[@]}"
   if [ "$BRANCHES_TOO" -eq 1 ]; then
     printf '%d branch(es) would be deleted with them.\n' "${#LANDED_BRANCHES[@]}"
   else
@@ -315,6 +412,20 @@ while IFS=$'\t' read -r name repo; do
   git -C "$repo" worktree prune
 done < <(repos)
 
+# Said entry by entry, from what git lists afterwards rather than from what
+# prune was asked to do: an entry git kept is reported as kept.
+pruned=0
+for line in ${STALE[@]+"${STALE[@]}"}; do
+  IFS=$'\t' read -r name path branch _ <<<"$line"
+  repo="$(repos | awk -F'\t' -v n="$name" '$1 == n { print $2 }')"
+  if git -C "$repo" worktree list --porcelain | grep -qxF "worktree $path"; then
+    printf 'kept    stale entry %s  git would not prune it  (%s)\n' "$path" "$name"
+  else
+    printf 'pruned  stale entry %s  %s  (%s)\n' "$path" "$branch" "$name"
+    pruned=$((pruned + 1))
+  fi
+done
+
 deleted=0
 for line in ${LANDED_BRANCHES[@]+"${LANDED_BRANCHES[@]}"}; do
   IFS=$'\t' read -r name repo branch sha why <<<"$line"
@@ -330,4 +441,5 @@ for line in ${LANDED_BRANCHES[@]+"${LANDED_BRANCHES[@]}"}; do
   fi
 done
 
-printf '\n✓ removed %d worktree(s), deleted %d branch(es).\n' "${#LANDED[@]}" "$deleted"
+printf '\n✓ removed %d worktree(s), pruned %d stale entr(ies), deleted %d branch(es).\n' \
+  "${#LANDED[@]}" "$pruned" "$deleted"

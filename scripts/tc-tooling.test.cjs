@@ -284,6 +284,12 @@ test("Codex setup gives TC a private-venv-compatible worktree depth", (t) => {
     path.join(hub, "scripts", "card-node-modules"),
     '#!/usr/bin/env bash\nprintf "card:%s|%s\\n" "$1" "$2" >> "$HELPER_LOG"\n',
   );
+  // setup ends with worktree-gc's nudge; the threshold is tested there.
+  executable(
+    path.join(hub, "scripts", "worktree-gc"),
+    '#!/usr/bin/env bash\nprintf "gc:%s\\n" "$*" >> "$HELPER_LOG"\n' +
+      'echo "worktree-gc: 42 landed worktree(s) holding 9.9 GiB"\n',
+  );
 
   const result = spawnSync(
     path.join(hub, "scripts", "codex-worktree"),
@@ -324,6 +330,8 @@ test("Codex setup gives TC a private-venv-compatible worktree depth", (t) => {
   assert.match(result.stdout, /tc: .*\(base origin\/main\)$/m);
   assert.match(result.stdout, /card: .*\(base origin\/dev\)$/m);
   assert.match(result.stdout, /vision: .*\(base origin\/main\)$/m);
+  assert.match(result.stdout, /pair: [^\n]*\n\nworktree-gc: 42 landed worktree\(s\) holding 9\.9 GiB\n$/);
+  assert.match(fs.readFileSync(helperLog, "utf8"), /^gc:--nudge$/m);
 
   const rerun = spawnSync(
     path.join(hub, "scripts", "codex-worktree"),
