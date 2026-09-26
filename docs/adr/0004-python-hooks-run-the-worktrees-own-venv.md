@@ -58,6 +58,18 @@ feature-worktree path and old Codex container-venv path were removed from
 `backend-venv`, along with their tests. The tooling suite instead asserts that
 both layouts refuse an old-hook branch without changing any venv.
 
+### Codex sets flattened
+
+With no hook reading `../../.venv`, the Codex set's nesting —
+`<pair>/growspace_manager/.worktrees/backend`, kept only so that path landed on
+a hub-owned directory — did nothing but lengthen paths. Since
+[hub#259](https://github.com/Venosta-web/growspace_manager_workspace/issues/259)
+`scripts/codex-worktree` puts the backend and TC worktrees at `<pair>/backend`
+and `<pair>/tc`, and moves an older nested pair there with `git worktree move`,
+dropping the venv that moved along because its entry points name the old path.
+Migrating rather than supporting both layouts keeps one shape for every
+consumer: `scripts/check`'s refusal, the override examples, and the tests.
+
 ## Consequences
 
 - A branch can change dependencies without altering another checkout's venv.

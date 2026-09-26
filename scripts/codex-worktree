@@ -14,10 +14,8 @@ WORKTREE_KEY="$(printf '%s' "$HUB_WORKTREE" | sha256sum | cut -c1-12)"
 NAME="codex-$WORKTREE_KEY"
 BRANCH="codex/$NAME"
 PAIR_ROOT="$HUB_WORKTREE/worktrees/$NAME"
-BACKEND_CONTAINER="$PAIR_ROOT/growspace_manager"
-BACKEND_WORKTREE="$BACKEND_CONTAINER/.worktrees/backend"
-TC_CONTAINER="$PAIR_ROOT/growspace_manager_tc"
-TC_WORKTREE="$TC_CONTAINER/.worktrees/tc"
+BACKEND_WORKTREE="$PAIR_ROOT/backend"
+TC_WORKTREE="$PAIR_ROOT/tc"
 CARD_WORKTREE="$PAIR_ROOT/card"
 VISION_WORKTREE="$PAIR_ROOT/vision"
 
@@ -81,6 +79,44 @@ add_worktree() {
   fi
 }
 
+# Before hub#259 a pair nested its Python worktrees one level down, at
+# <pair>/<repo>/.worktrees/{backend,tc}, and linked <pair>/backend and
+# <pair>/tc to them. That depth existed only so fixed-path hooks' ../../.venv
+# landed on a directory the hub owned (ADR 0002). Hooks now run the worktree's
+# own .venv (ADR 0004), so a pair is flat, and an old one is moved rather than
+# kept working beside it: `git worktree move` is a rename, so uncommitted and
+# untracked work travel with the tree, and <pair>/backend — the path everything
+# already addressed the pair by — names the same tree before and after.
+migrate_nested() { # repo, legacy container, worktree
+  local repo="$1" container="$2" worktree="$3" legacy
+  legacy="$container/.worktrees/$(basename "$worktree")"
+  [ -d "$legacy" ] || return 0
+
+  if [ -e "$worktree" ] && [ ! -L "$worktree" ]; then
+    echo "ERROR: $worktree and the pre-hub#259 $legacy both exist; keep one and rerun setup" >&2
+    exit 1
+  fi
+  [ -L "$worktree" ] && unlink "$worktree"
+  if ! git -C "$repo" worktree move "$legacy" "$worktree"; then
+    ln -sfn "$legacy" "$worktree"
+    echo "ERROR: could not move $legacy to $worktree; the pair is left as it was" >&2
+    exit 1
+  fi
+
+  # A venv records its own absolute path in every entry point's shebang, so the
+  # one that moved with the tree starts pre-commit from a directory that no
+  # longer exists; backend-venv builds it again below. The container's is the
+  # ADR 0002 hub-owned venv, which nothing reads any more. Links are unlinked,
+  # never descended.
+  local venv
+  for venv in "$worktree/.venv" "$container/.venv"; do
+    if [ -L "$venv" ]; then unlink "$venv"; else rm -rf "$venv"; fi
+  done
+  rmdir "$container/.worktrees" "$container" 2>/dev/null \
+    || echo "note: left $container in place; it holds something setup did not put there" >&2
+  printf '→ moved %s to %s\n' "$legacy" "$worktree"
+}
+
 link_node_modules() {
   "$HUB_WORKTREE/scripts/card-node-modules" "$CARD_REPO" "$CARD_WORKTREE"
 }
@@ -120,13 +156,13 @@ setup_pair() {
     exit 1
   }
 
-  mkdir -p "$BACKEND_CONTAINER" "$TC_CONTAINER" "$PAIR_ROOT/.cache"
+  mkdir -p "$PAIR_ROOT/.cache"
+  migrate_nested "$BACKEND_REPO" "$PAIR_ROOT/growspace_manager" "$BACKEND_WORKTREE"
+  migrate_nested "$TC_REPO" "$PAIR_ROOT/growspace_manager_tc" "$TC_WORKTREE"
   add_worktree "$BACKEND_REPO" growspace_manager "$BACKEND_WORKTREE"
   add_worktree "$TC_REPO" growspace_manager_tc "$TC_WORKTREE"
   add_worktree "$CARD_REPO" lovelace-growspace-manager-card "$CARD_WORKTREE"
   add_worktree "$VISION_REPO" growspace_manager_vision "$VISION_WORKTREE"
-  ln -sfn "$BACKEND_WORKTREE" "$PAIR_ROOT/backend"
-  ln -sfn "$TC_WORKTREE" "$PAIR_ROOT/tc"
   prepare_backend_venv
   prepare_tc_venv
   link_node_modules

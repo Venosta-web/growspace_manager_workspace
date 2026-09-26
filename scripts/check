@@ -270,7 +270,7 @@ venv_remedy() { # kind, checkout
     return
   fi
   case "$checkout" in
-    */worktrees/codex-*/growspace_manager*/.worktrees/*)
+    */worktrees/codex-*/backend|*/worktrees/codex-*/tc)
       owner="${checkout%%/worktrees/codex-*}"
       printf '%s\n' \
         "this checkout belongs to a Codex-managed set; its setup rebuilds the venv:" \

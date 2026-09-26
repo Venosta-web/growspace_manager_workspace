@@ -331,7 +331,7 @@ test("check's drift refusal in a feature worktree names feature env", (t) => {
 test("check's drift refusal in a Codex set names codex-worktree setup", (t) => {
   const f = fixture(t);
   const owner = path.join(f.root, "hub-worktree");
-  const pairWorktree = path.join(owner, "worktrees", "codex-abc123", "growspace_manager", ".worktrees", "backend");
+  const pairWorktree = path.join(owner, "worktrees", "codex-abc123", "backend");
   git(f.main, "worktree", "add", "-q", "-b", "codex/abc", pairWorktree);
   commitAll(pairWorktree, { "requirements.txt": BUMPED_PINS });
   makeVenv(path.join(pairWorktree, ".venv"), MAIN_PINS);
@@ -365,33 +365,35 @@ test("check with no venv in a feature worktree names feature env", (t) => {
 });
 
 function codexWorktree(f, hooks, pins = MAIN_PINS) {
-  const container = path.join(f.root, "hub-worktree", "worktrees", "codex-abc123", "growspace_manager");
-  const worktree = path.join(container, ".worktrees", "backend");
+  const worktree = path.join(f.root, "hub-worktree", "worktrees", "codex-abc123", "backend");
   git(f.main, "worktree", "add", "-q", "-b", "codex/abc", worktree);
   commitAll(worktree, { ".pre-commit-config.yaml": hooks, "requirements.txt": pins });
-  return { container, worktree };
+  return worktree;
 }
 
-test("fixed-path hooks in a Codex set are refused without creating a container venv", (t) => {
+test("fixed-path hooks in a Codex set are refused without creating any venv", (t) => {
   const f = fixture(t);
-  const { container, worktree } = codexWorktree(f, OLD_HOOKS, BUMPED_PINS);
+  const worktree = codexWorktree(f, OLD_HOOKS, BUMPED_PINS);
 
   const result = backendVenv(f, worktree);
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /rebase onto a base that has the hook runner/);
-  assert.equal(fs.existsSync(path.join(container, ".venv")), false);
+  // Where the old hooks would look from a flat pair: the hub worktree's
+  // worktrees/ directory, which nothing may populate on their behalf.
+  assert.equal(fs.existsSync(path.resolve(worktree, "..", "..", ".venv")), false);
   assert.equal(fs.existsSync(path.join(worktree, ".venv")), false);
   assert.equal(uvLog(f), "");
   assertMainVenvUntouched(f);
 });
 
-test("new-form hooks in a Codex set: the link to the container venv becomes the worktree's own", (t) => {
+test("new-form hooks in a Codex set: a .venv link becomes the worktree's own", (t) => {
   const f = fixture(t);
-  const { container, worktree } = codexWorktree(f, NEW_HOOKS, BUMPED_PINS);
-  const containerVenv = path.join(container, ".venv");
-  makeVenv(containerVenv, MAIN_PINS);
-  fs.symlinkSync(containerVenv, path.join(worktree, ".venv"));
+  const worktree = codexWorktree(f, NEW_HOOKS, BUMPED_PINS);
+  // The ADR 0002 container venv an old pair linked to.
+  const lender = path.join(f.root, "hub-worktree", "worktrees", "codex-abc123", "growspace_manager", ".venv");
+  makeVenv(lender, MAIN_PINS);
+  fs.symlinkSync(lender, path.join(worktree, ".venv"));
 
   const result = backendVenv(f, worktree);
 
@@ -400,6 +402,6 @@ test("new-form hooks in a Codex set: the link to the container venv becomes the 
   assert.equal(fs.lstatSync(own).isSymbolicLink(), false);
   assert.equal(fs.readFileSync(path.join(own, "pins"), "utf8"), BUMPED_PINS);
   // Replaced by unlinking, not by clearing through the link.
-  assert.equal(fs.readFileSync(path.join(containerVenv, "pins"), "utf8"), MAIN_PINS);
+  assert.equal(fs.readFileSync(path.join(lender, "pins"), "utf8"), MAIN_PINS);
   assertMainVenvUntouched(f);
 });

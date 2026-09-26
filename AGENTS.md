@@ -91,6 +91,12 @@ GROWSPACE_CARD_DIST=./worktrees/<name>/card/dist \
   ./scripts/ha dev restart
 ```
 
+A Codex-managed set is flat: `<pair>/backend`, `<pair>/tc` and `<pair>/card`
+are the worktrees themselves, where `<pair>` is what `./scripts/codex-worktree
+path` prints from that Codex worktree — so its overrides are
+`<pair>/backend/custom_components/growspace_manager`,
+`<pair>/tc/custom_components/growspace_manager_tc` and `<pair>/card/dist`.
+
 #### An override outlives the restart that set it
 
 The runtime is one container shared by every session, so its mounts are shared
@@ -828,11 +834,27 @@ localhost/loopback allowlist. E2E credentials are never copied automatically;
 place the ignored `tests/e2e/.env.test` in the managed card worktree explicitly
 when E2E is required.
 
-**Backend and TC worktrees live at `<repo>/.worktrees/<name>` and use a private
-`<worktree>/.venv`.** `scripts/backend-venv` prepares that environment for both
-repositories and both hub worktree layouts. It replaces a `.venv` link before
+**Backend and TC worktrees use a private `<worktree>/.venv`**, wherever they
+live:
+
+| made by | backend | TC |
+|---|---|---|
+| `scripts/feature` | `growspace_manager/.worktrees/<name>` | `growspace_manager_tc/.worktrees/<name>` |
+| `scripts/codex-worktree` | `<pair>/backend` | `<pair>/tc` |
+
+`scripts/backend-venv` prepares that environment for both repositories and
+both layouts. It replaces a `.venv` link before
 building, and rebuilds a private venv when it no longer realizes that branch's
 `requirements.txt`. The main checkout's venv serves only the main checkout.
+
+A Codex set made before
+[hub#259](https://github.com/Venosta-web/growspace_manager_workspace/issues/259)
+nested its Python worktrees at `<pair>/<repo>/.worktrees/{backend,tc}` so that
+fixed-path hooks' `../../.venv` landed on a hub-owned directory. Hooks run the
+worktree's own venv now, so the next `codex-worktree` command moves such a pair
+flat with `git worktree move` — uncommitted and untracked work travel with it,
+and `<pair>/backend` names the same tree before and after — then rebuilds the
+venv that moved along, whose entry points still name the old path.
 
 The worktree's own pre-commit config must run its `.venv` through
 `.github/scripts/run_venv_tool.py`. If it still declares
