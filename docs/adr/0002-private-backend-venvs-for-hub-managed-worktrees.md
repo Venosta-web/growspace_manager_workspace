@@ -3,7 +3,9 @@
 **Status:** Historical venv policy, superseded by
 [ADR 0004](0004-python-hooks-run-the-worktrees-own-venv.md). The measurements
 below explain the decision; current hub setup always prepares a private
-`<worktree>/.venv` and refuses branches with fixed-path hooks.
+`<worktree>/.venv` and refuses branches with fixed-path hooks. The Codex
+layout in the table below no longer exists either: since hub#259 a Codex set's
+Python worktrees sit at `<pair>/backend` and `<pair>/tc`.
 
 Decided and measured on 2026-08-23 in
 [hub#12](https://github.com/Venosta-web/growspace_manager_workspace/issues/12),

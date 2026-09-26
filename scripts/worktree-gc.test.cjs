@@ -36,7 +36,7 @@ function fixture(t, { merged = [] } = {}) {
     commit(seed, "README.md", name);
     // The real hub gitignores `worktrees/`, which is why a directory holding
     // nested worktrees reads as clean rather than as untracked content.
-    commit(seed, ".gitignore", "nested/\n");
+    commit(seed, ".gitignore", "worktrees/\n");
     git(seed, "remote", "add", "origin", origin);
     git(seed, "push", "-q", "origin", "main");
 
@@ -187,8 +187,9 @@ test("never deletes through a shared dependency link", (t) => {
   );
 });
 
-// Codex nests a repository's worktree inside the hub's, so a landed outer
-// directory can sit on top of unlanded work in a different repository. `rm -rf`
+// Codex nests a repository's worktree inside the hub's — a Codex hub worktree
+// holds its set at worktrees/codex-<key>/backend — so a landed outer directory
+// can sit on top of unlanded work in a different repository. `rm -rf`
 // does not consult the inner worktree's status: classifying the two
 // independently deletes work the report claims to be holding back.
 test("holds back a landed worktree that contains held-back work", (t) => {
@@ -196,7 +197,7 @@ test("holds back a landed worktree that contains held-back work", (t) => {
   const outer = path.join(f.hub, "worktrees", "nest");
   git(f.hub, "worktree", "add", "-q", "-b", "feature/outer", outer, "origin/main");
 
-  const inner = path.join(outer, "nested", "backend");
+  const inner = path.join(outer, "worktrees", "codex-abc123", "backend");
   git(f.backend, "worktree", "add", "-q", "-b", "feature/inner", inner, "origin/main");
   commit(inner, "unlanded.md", "work that never reached origin");
 

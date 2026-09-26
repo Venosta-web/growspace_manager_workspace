@@ -248,7 +248,9 @@ test("feature --tc creates a hook-depth TC worktree paired with the card", (t) =
   );
 });
 
-test("Codex setup gives TC a private-venv-compatible worktree depth", (t) => {
+// The four product repositories a Codex set is cut from, with codex-worktree's
+// helpers stubbed to log what they were asked to prepare.
+function codexSet(t) {
   const { root, hub } = fixture(t);
   const backend = path.join(root, "growspace_manager");
   const tc = path.join(root, "growspace_manager_tc");
@@ -290,56 +292,134 @@ test("Codex setup gives TC a private-venv-compatible worktree depth", (t) => {
     '#!/usr/bin/env bash\nprintf "gc:%s\\n" "$*" >> "$HELPER_LOG"\n' +
       'echo "worktree-gc: 42 landed worktree(s) holding 9.9 GiB"\n',
   );
-
-  const result = spawnSync(
-    path.join(hub, "scripts", "codex-worktree"),
-    ["setup"],
-    {
+  const run = (...args) =>
+    spawnSync(path.join(hub, "scripts", "codex-worktree"), args, {
       encoding: "utf8",
       env: { ...process.env, HELPER_LOG: helperLog },
-    },
-  );
+    });
+  const pairRoot = run("path").stdout.trim();
+  return { root, hub, backend, tc, helperLog, run, pairRoot };
+}
+
+test("Codex setup puts backend and TC at the top of the pair, each with its own venv", (t) => {
+  const { tc, helperLog, run, pairRoot } = codexSet(t);
+
+  const result = run("setup");
   assert.equal(result.status, 0, result.stderr);
 
-  const pairRoot = spawnSync(
-    path.join(hub, "scripts", "codex-worktree"),
-    ["path"],
-    {
-      encoding: "utf8",
-    },
-  ).stdout.trim();
-  const tcWorktree = path.join(
-    pairRoot,
-    "growspace_manager_tc",
-    ".worktrees",
-    "tc",
-  );
-  assert.equal(
-    fs.realpathSync(path.join(pairRoot, "tc")),
-    fs.realpathSync(tcWorktree),
-  );
-  assert.equal(
-    path.resolve(tcWorktree, "..", "..", ".venv"),
-    path.join(pairRoot, "growspace_manager_tc", ".venv"),
-  );
-  assert.match(
-    fs.readFileSync(helperLog, "utf8"),
-    /venv:.*growspace_manager_tc.*\|tc/,
-  );
-  assert.match(result.stdout, /backend: .*\(base origin\/prerelease\)$/m);
-  assert.match(result.stdout, /tc: .*\(base origin\/main\)$/m);
+  const backendWorktree = path.join(pairRoot, "backend");
+  const tcWorktree = path.join(pairRoot, "tc");
+  for (const worktree of [backendWorktree, tcWorktree]) {
+    // The worktree itself, not a link to one somewhere deeper.
+    assert.equal(fs.lstatSync(worktree).isSymbolicLink(), false);
+    assert.equal(git(worktree, "rev-parse", "--show-toplevel"), worktree);
+  }
+  assert.equal(fs.existsSync(path.join(pairRoot, "growspace_manager")), false);
+  assert.equal(fs.existsSync(path.join(pairRoot, "growspace_manager_tc")), false);
+  const log = fs.readFileSync(helperLog, "utf8");
+  assert.match(log, new RegExp(`^venv:[^|]*growspace_manager\\|${backendWorktree}\\|backend$`, "m"));
+  assert.match(log, new RegExp(`^venv:${tc}\\|${tcWorktree}\\|tc$`, "m"));
+  assert.match(result.stdout, new RegExp(`backend: ${backendWorktree} {2}\\(base origin/prerelease\\)$`, "m"));
+  assert.match(result.stdout, new RegExp(`tc: {6}${tcWorktree} {2}\\(base origin/main\\)$`, "m"));
   assert.match(result.stdout, /card: .*\(base origin\/dev\)$/m);
   assert.match(result.stdout, /vision: .*\(base origin\/main\)$/m);
   assert.match(result.stdout, /pair: [^\n]*\n\nworktree-gc: 42 landed worktree\(s\) holding 9\.9 GiB\n$/);
-  assert.match(fs.readFileSync(helperLog, "utf8"), /^gc:--nudge$/m);
+  assert.match(log, /^gc:--nudge$/m);
 
-  const rerun = spawnSync(
-    path.join(hub, "scripts", "codex-worktree"),
-    ["setup"],
-    { encoding: "utf8", env: { ...process.env, HELPER_LOG: helperLog } },
-  );
+  const rerun = run("setup");
   assert.equal(rerun.status, 0, rerun.stderr);
+  assert.match(rerun.stdout, /backend: .*\(existing worktree\)$/m);
   assert.match(rerun.stdout, /card: .*\(existing worktree\)$/m);
+
+  const status = run("status");
+  assert.equal(status.status, 0, status.stderr);
+  assert.match(status.stdout, /^## codex\/codex-[0-9a-f]{12}$/m);
+});
+
+// A pair made before hub#259 nested its Python worktrees at
+// <pair>/<repo>/.worktrees/<name>, linked from <pair>/backend and <pair>/tc.
+test("Codex setup moves a nested pre-flattening pair to the top, keeping its work", (t) => {
+  const { backend, tc, helperLog, run, pairRoot } = codexSet(t);
+  const branch = `codex/${path.basename(pairRoot)}`;
+  const nested = {
+    backend: path.join(pairRoot, "growspace_manager", ".worktrees", "backend"),
+    tc: path.join(pairRoot, "growspace_manager_tc", ".worktrees", "tc"),
+  };
+  for (const [name, repo] of [["backend", backend], ["tc", tc]]) {
+    git(repo, "worktree", "add", "-q", "-b", branch, nested[name], "HEAD");
+    fs.symlinkSync(nested[name], path.join(pairRoot, name));
+    // Work in progress, tracked and untracked, and a venv whose entry points
+    // name the nested path.
+    fs.appendFileSync(path.join(nested[name], "requirements.txt"), "# wip\n");
+    fs.writeFileSync(path.join(nested[name], "notes.txt"), "untracked\n");
+    executable(path.join(nested[name], ".venv", "bin", "pre-commit"), `#!${nested[name]}/.venv/bin/python\n`);
+  }
+  // The ADR 0002 container venv, which nothing reads any more.
+  executable(path.join(pairRoot, "growspace_manager", ".venv", "bin", "python"), "#!/usr/bin/env bash\n");
+
+  const result = run("setup");
+  assert.equal(result.status, 0, result.stderr);
+
+  for (const [name, repo] of [["backend", backend], ["tc", tc]]) {
+    const worktree = path.join(pairRoot, name);
+    assert.equal(fs.lstatSync(worktree).isSymbolicLink(), false);
+    assert.equal(git(worktree, "branch", "--show-current"), branch);
+    assert.match(fs.readFileSync(path.join(worktree, "requirements.txt"), "utf8"), /# wip\n$/);
+    assert.equal(fs.readFileSync(path.join(worktree, "notes.txt"), "utf8"), "untracked\n");
+    // Dropped so backend-venv builds one whose shebangs name where it now is.
+    assert.equal(fs.existsSync(path.join(worktree, ".venv")), false);
+    const registered = git(repo, "worktree", "list", "--porcelain");
+    assert.match(registered, new RegExp(`^worktree ${worktree}$`, "m"));
+    assert.doesNotMatch(registered, /\.worktrees\//);
+  }
+  assert.equal(fs.existsSync(path.join(pairRoot, "growspace_manager")), false);
+  assert.equal(fs.existsSync(path.join(pairRoot, "growspace_manager_tc")), false);
+  assert.match(result.stdout, new RegExp(`→ moved ${nested.backend} to ${path.join(pairRoot, "backend")}`));
+  assert.match(result.stdout, /backend: .*\(existing worktree\)$/m);
+  assert.match(fs.readFileSync(helperLog, "utf8"), new RegExp(`^venv:${tc}\\|${path.join(pairRoot, "tc")}\\|tc$`, "m"));
+});
+
+test("Codex setup refuses to migrate onto a flat worktree that already exists", (t) => {
+  const { backend, run, pairRoot } = codexSet(t);
+  const nested = path.join(pairRoot, "growspace_manager", ".worktrees", "backend");
+  git(backend, "worktree", "add", "-q", "-b", "codex/old", nested, "HEAD");
+  git(backend, "worktree", "add", "-q", "-b", "codex/new", path.join(pairRoot, "backend"), "HEAD");
+
+  const result = run("setup");
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /both exist; keep one and rerun setup/);
+  assert.equal(git(nested, "branch", "--show-current"), "codex/old");
+});
+
+test("Codex check, precommit and tc-precommit address the flat worktrees", (t) => {
+  const { root, hub, run, pairRoot } = codexSet(t);
+  const log = path.join(root, "run.log");
+  // A backend-venv that leaves behind a pre-commit reporting where it ran.
+  executable(
+    path.join(hub, "scripts", "backend-venv"),
+    "#!/usr/bin/env bash\n" +
+      'mkdir -p "$2/.venv/bin"\n' +
+      `printf '#!/usr/bin/env bash\\necho "precommit:$(pwd)|$*" >> ${log}\\n' > "$2/.venv/bin/pre-commit"\n` +
+      'chmod +x "$2/.venv/bin/pre-commit"\n',
+  );
+  executable(
+    path.join(hub, "scripts", "check"),
+    `#!/usr/bin/env bash\necho "check:$*|$GROWSPACE_BACKEND|$GROWSPACE_TC" >> ${log}\n`,
+  );
+
+  for (const args of [["check", "all", "fast"], ["precommit"], ["tc-precommit"]]) {
+    const result = run(...args);
+    assert.equal(result.status, 0, `${args.join(" ")}: ${result.stderr}`);
+  }
+
+  const backendWorktree = path.join(pairRoot, "backend");
+  const tcWorktree = path.join(pairRoot, "tc");
+  assert.deepEqual(fs.readFileSync(log, "utf8").trim().split("\n"), [
+    `check:all fast|${backendWorktree}|${tcWorktree}`,
+    `precommit:${backendWorktree}|run --all-files`,
+    `precommit:${tcWorktree}|run --all-files`,
+  ]);
 });
 
 test("Codex setup refuses a missing base instead of falling back to main", (t) => {
