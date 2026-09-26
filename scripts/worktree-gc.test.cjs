@@ -396,3 +396,25 @@ test("--nudge refuses to combine with --prune", (t) => {
   assert.equal(result.status, 2);
   assert.match(result.stderr, /are reports/);
 });
+
+// Branch names repeat across repositories — a Codex set uses one name in all of
+// them. Freeing the hub's worktree must not free the backend's branch of the
+// same name while its own worktree is still held back.
+test("a branch freed in one repository stays checked out in another", (t) => {
+  const f = fixture(t);
+  const hubWt = path.join(f.hub, "worktrees", "shared-name");
+  git(f.hub, "worktree", "add", "-q", "-b", "codex/shared", hubWt, "origin/main");
+  const backendWt = path.join(f.backend, ".worktrees", "shared-name");
+  git(f.backend, "worktree", "add", "-q", "-b", "codex/shared", backendWt, "origin/main");
+  fs.writeFileSync(path.join(backendWt, "draft.py"), "unsaved work");
+
+  const report = run(f, ["--branches"]);
+  assert.match(report.stdout, /landed branches — deletable \(1\)/);
+  assert.match(report.stdout, /codex\/shared\s+contained in main\s+\S+\s+growspace_manager_workspace/);
+
+  const done = run(f, ["--prune", "--branches"]);
+  assert.equal(done.status, 0, done.stderr);
+  assert.doesNotMatch(done.stdout, /git refused/);
+  assert.equal(fs.existsSync(backendWt), true);
+  assert.match(git(f.backend, "branch", "--list", "codex/shared"), /codex\/shared/);
+});

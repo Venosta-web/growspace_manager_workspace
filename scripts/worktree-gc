@@ -284,7 +284,7 @@ collect_branches() {
         [ "$h" = "$branch" ] || continue
         blocked=1
         for f in ${freed[@]+"${freed[@]}"}; do
-          [ "$f" = "$branch" ] && blocked=0
+          [ "$f" = "$name"$'\t'"$branch" ] && blocked=0
         done
       done
       [ "$blocked" -eq 0 ] || continue
@@ -327,8 +327,10 @@ fi
 if [ "$BRANCHES_TOO" -eq 1 ]; then
   freed=()
   for line in ${LANDED[@]+"${LANDED[@]}"}; do
-    IFS=$'\t' read -r _ _ freed_branch _ <<<"$line"
-    [ "$freed_branch" = "(detached)" ] || freed+=("$freed_branch")
+    # Per repository: a hub worktree and a backend worktree can carry the same
+    # branch name, and freeing one says nothing about the other.
+    IFS=$'\t' read -r freed_repo _ freed_branch _ <<<"$line"
+    [ "$freed_branch" = "(detached)" ] || freed+=("$freed_repo"$'\t'"$freed_branch")
   done
   collect_branches ${freed[@]+"${freed[@]}"}
 fi
