@@ -767,6 +767,35 @@ worktree you are standing in, `.claude/worktrees/` agent sessions, anything with
 modified tracked files, and any landed worktree that *contains* one of those —
 Codex nests a repository's worktree inside the hub's, and `rm -rf` on the outer
 directory does not consult the inner one's status.
+
+Untracked files hold a worktree back until you pass `--untracked`, with two
+exceptions at the worktree's root: `node_modules` and `.venv`. Those are the
+dependency trees hub setup put there — the shared card link, and either a link
+to the main venv or the private venv `backend-venv` builds for
+[ADR 0004](docs/adr/0004-python-hooks-run-the-worktrees-own-venv.md) — so a
+merged worktree carrying one is removable whatever its branch's `.gitignore`
+says. The links are unlinked before anything recursive runs; a private venv is
+deleted with the worktree it belongs to.
+
+A worktree whose **directory is already gone** — the `/tmp` checkouts a reboot
+clears — stays registered until `git worktree prune`. The report lists those as
+stale entries, and `--prune` drops them and names each one; a locked entry is
+left alone, as git leaves it, and the report says `git worktree unlock`.
+
+Every report says how much disk the removable worktrees hold, measured in one
+`du` so nested sets and shared hardlinks count once. A count alone is what let
+134 merged worktrees and 14 GB under `worktrees/` sit behind a reminder nobody
+acted on. The one-line forms give `du` five seconds and say so when it needed
+more: the first run after a boot has taken 18 s over 151 worktrees.
+
+`./scripts/feature new` and `./scripts/codex-worktree setup` end with the same
+one line once **20 or more** worktrees are removable — making more is the moment
+to mention the ones already finished with. That is `worktree-gc --nudge`: an
+offline `--summary` that stays silent below the threshold, which
+`GROWSPACE_WORKTREE_GC_THRESHOLD` moves. It runs in the background alongside
+the venv and `node_modules` setup, so it costs those commands no time of its
+own.
+
 To be reminded without remembering, install the nudge once:
 
 ```bash
@@ -776,8 +805,8 @@ To be reminded without remembering, install the nudge once:
 
 The hook **reports and never deletes** — it fires on every pull with nobody
 necessarily watching, and collecting is a decision that wants a human at the
-keyboard. It prints one line naming the command when something has landed, and
-is silent when nothing has. It runs `--offline`, because the `gh` lookup is a
+keyboard. It prints one line naming the command and the disk the landed
+worktrees hold when something has landed, and is silent when nothing has. It runs `--offline`, because the `gh` lookup is a
 network round trip per repository (~6 s) and a pull should not wait for it; the
 count then misses squash merges, says so, and the real command finds them.
 

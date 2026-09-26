@@ -133,7 +133,7 @@ test("the installed hook reports landed work and is otherwise silent", (t) => {
   git(f.backend, "branch", "feature/landed", "main");
   const loud = spawnSync(hook, ["0"], { cwd: f.backend, encoding: "utf8" });
   assert.equal(loud.status, 0, loud.stderr);
-  assert.match(loud.stdout, /worktree-gc: 0 worktree\(s\), 1 branch\(es\) have landed/);
+  assert.match(loud.stdout, /worktree-gc: 0 landed worktree\(s\), 1 landed branch\(es\)/);
   assert.match(loud.stdout, /--prune --branches/);
 });
 
@@ -173,5 +173,5 @@ test("the hook stays quiet on an amend", (t) => {
     cwd: f.backend,
     encoding: "utf8",
   });
-  assert.match(rebase.stdout, /have landed/);
+  assert.match(rebase.stdout, /1 landed branch\(es\)/);
 });

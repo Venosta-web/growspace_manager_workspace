@@ -21,6 +21,25 @@ TC_WORKTREE="$TC_CONTAINER/.worktrees/tc"
 CARD_WORKTREE="$PAIR_ROOT/card"
 VISION_WORKTREE="$PAIR_ROOT/vision"
 
+# The worktree-gc nudge: one line when merged worktrees have piled up past its
+# threshold, because making more is the moment to mention the ones already
+# done with. Started before the worktrees and read after them, so the sweep
+# runs alongside the venv and node_modules setup instead of after it.
+NUDGE_OUT=""
+trap 'rm -f "${NUDGE_OUT:-}"' EXIT
+nudge_start() {
+  [ -x "$HUB_WORKTREE/scripts/worktree-gc" ] || return 0
+  NUDGE_OUT="$(mktemp)"
+  "$HUB_WORKTREE/scripts/worktree-gc" --nudge >"$NUDGE_OUT" 2>/dev/null &
+  NUDGE_PID=$!
+}
+nudge_finish() {
+  [ -n "$NUDGE_OUT" ] || return 0
+  wait "$NUDGE_PID" 2>/dev/null || true
+  [ -s "$NUDGE_OUT" ] && { echo; cat "$NUDGE_OUT"; }
+  return 0
+}
+
 require_repo() {
   local repo="$1"
   git -C "$repo" rev-parse --git-dir >/dev/null 2>&1 || {
@@ -226,7 +245,7 @@ run_card_e2e() {
 }
 
 case "${1:-setup}" in
-  setup) setup_pair ;;
+  setup) nudge_start; setup_pair; nudge_finish ;;
   path) printf '%s\n' "$PAIR_ROOT" ;;
   check) shift; run_check "$@" ;;
   precommit) run_precommit ;;

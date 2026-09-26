@@ -265,3 +265,134 @@ test("refuses the main checkout, its own directory and agent sessions", (t) => {
   assert.equal(fs.existsSync(standing), true);
   assert.equal(fs.existsSync(path.join(f.hub, "README.md")), true);
 });
+
+// A worktree made under /tmp outlives nothing: the directory goes with a
+// reboot and the registration stays until `git worktree prune`. The report
+// names it, and --prune drops it and says which entry it dropped.
+test("prunes the entry of a worktree whose directory is gone, and says so", (t) => {
+  const f = fixture(t);
+  const gone = path.join(f.root, "tmp", "gone");
+  git(f.hub, "worktree", "add", "-q", "-b", "scratch/gone", gone, "origin/main");
+  fs.rmSync(gone, { recursive: true, force: true });
+
+  const report = run(f);
+  assert.match(report.stdout, /stale entries — --prune drops them \(1\)/);
+  assert.match(report.stdout, /1 stale entr\(ies\) would be pruned/);
+  assert.match(git(f.hub, "worktree", "list"), /tmp\/gone/);
+
+  const pruned = run(f, ["--prune"]);
+  assert.equal(pruned.status, 0, pruned.stderr);
+  assert.match(pruned.stdout, new RegExp(`pruned\\s+stale entry ${gone}\\s+scratch/gone`));
+  assert.match(pruned.stdout, /pruned 1 stale entr\(ies\)/);
+  assert.doesNotMatch(git(f.hub, "worktree", "list"), /tmp\/gone/);
+});
+
+// git itself will not prune a locked entry, and neither does this: the report
+// says it is locked instead of promising a removal that will not happen.
+test("leaves a locked stale entry alone and says how to release it", (t) => {
+  const f = fixture(t);
+  const gone = path.join(f.root, "usb", "locked");
+  git(f.hub, "worktree", "add", "-q", "--lock", "-b", "scratch/locked", gone, "origin/main");
+  fs.rmSync(gone, { recursive: true, force: true });
+
+  const report = run(f);
+  assert.match(report.stdout, /locked — git worktree unlock/);
+  assert.doesNotMatch(report.stdout, /stale entries/);
+
+  const pruned = run(f, ["--prune"]);
+  assert.equal(pruned.status, 0, pruned.stderr);
+  assert.match(git(f.hub, "worktree", "list"), /usb\/locked/);
+  assert.match(pruned.stdout, /pruned 0 stale entr\(ies\)/);
+});
+
+// A private venv is the environment backend-venv built for the worktree, not
+// work in progress — and it is excluded whatever the branch's .gitignore says,
+// which in this fixture says nothing about it.
+test("counts a private .venv as build output, not as untracked work", (t) => {
+  const f = fixture(t);
+  const wt = path.join(f.backend, ".worktrees", "private-venv");
+  git(f.backend, "worktree", "add", "-q", "-b", "feature/private-venv", wt, "origin/main");
+  fs.mkdirSync(path.join(wt, ".venv", "bin"), { recursive: true });
+  fs.writeFileSync(path.join(wt, ".venv", "bin", "python"), "#!/bin/sh\n");
+  fs.writeFileSync(path.join(wt, ".venv", "pyvenv.cfg"), "home = /usr/bin\n");
+
+  const report = run(f);
+  assert.match(report.stdout, /landed — removable \(1\)/);
+  assert.doesNotMatch(report.stdout, /pass --untracked/);
+
+  const pruned = run(f, ["--prune"]);
+  assert.equal(pruned.status, 0, pruned.stderr);
+  assert.equal(fs.existsSync(wt), false);
+});
+
+// Only the root-level dependency trees are exempt. A `.venv` somewhere deeper
+// is not something the hub put there.
+test("still holds back untracked files beside a private .venv", (t) => {
+  const f = fixture(t);
+  const wt = path.join(f.backend, ".worktrees", "venv-and-work");
+  git(f.backend, "worktree", "add", "-q", "-b", "feature/venv-and-work", wt, "origin/main");
+  fs.mkdirSync(path.join(wt, ".venv"));
+  fs.mkdirSync(path.join(wt, "tests", ".venv"), { recursive: true });
+  fs.writeFileSync(path.join(wt, "tests", ".venv", "draft.py"), "");
+
+  assert.match(run(f).stdout, /untracked files — pass --untracked/);
+  run(f, ["--prune"]);
+  assert.equal(fs.existsSync(wt), true);
+});
+
+// The count alone is what let the pile grow: every report says what it costs.
+test("the report and the summary say how much disk the removable ones hold", (t) => {
+  const f = fixture(t);
+  const wt = path.join(f.backend, ".worktrees", "heavy");
+  git(f.backend, "worktree", "add", "-q", "-b", "feature/heavy", wt, "origin/main");
+  fs.mkdirSync(path.join(wt, ".venv"));
+  fs.writeFileSync(path.join(wt, ".venv", "blob"), Buffer.alloc(3 * 1024 * 1024));
+
+  const report = run(f);
+  assert.match(report.stdout, /1 worktree\(s\) can be removed, holding 3\.\d MiB\./);
+
+  const summary = run(f, ["--summary", "--offline"]);
+  assert.equal(summary.status, 0, summary.stderr);
+  assert.match(summary.stdout, /^worktree-gc: 1 landed worktree\(s\) holding 3\.\d MiB/);
+  assert.match(summary.stdout, /collect them with: .*worktree-gc --prune --branches --untracked/);
+});
+
+// --nudge is for `feature new` and `codex-worktree setup`: silent below the
+// threshold, the summary line at or above it.
+test("--nudge speaks only once the removable count reaches the threshold", (t) => {
+  const f = fixture(t);
+  for (const name of ["one", "two"]) {
+    git(f.backend, "worktree", "add", "-q", "-b", `feature/${name}`,
+      path.join(f.backend, ".worktrees", name), "origin/main");
+  }
+  const nudge = (threshold) =>
+    spawnSync(path.join(f.hub, "scripts", "worktree-gc"), ["--nudge"], {
+      cwd: f.hub,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: `${f.bin}:${process.env.PATH}`,
+        GROWSPACE_WORKTREE_GC_THRESHOLD: threshold,
+      },
+    });
+
+  const quiet = nudge("3");
+  assert.equal(quiet.status, 0, quiet.stderr);
+  assert.equal(quiet.stdout, "");
+
+  const loud = nudge("2");
+  assert.equal(loud.status, 0, loud.stderr);
+  assert.match(loud.stdout, /^worktree-gc: 2 landed worktree\(s\) holding /);
+  assert.match(loud.stdout, /offline count/);
+
+  const bad = nudge("lots");
+  assert.equal(bad.status, 2);
+  assert.match(bad.stderr, /must be a whole number/);
+});
+
+test("--nudge refuses to combine with --prune", (t) => {
+  const f = fixture(t);
+  const result = run(f, ["--nudge", "--prune"]);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /are reports/);
+});
