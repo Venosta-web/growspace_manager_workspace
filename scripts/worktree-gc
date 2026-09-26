@@ -39,6 +39,19 @@
 # `gh` is missing or unauthenticated only the first signal runs, so squashed
 # branches are reported as unlanded — conservative, never the reverse.
 #
+# ANCESTRY ALONE CANNOT TELL "MERGED" FROM "NOT STARTED". A worktree that
+# `feature new` or `codex-worktree setup` cut a minute ago has HEAD == its
+# base, which is trivially an ancestor of that base — and a session that has
+# only written new files so far has nothing but untracked work, exactly what
+# `--untracked` deletes. So a branch that has never moved since it was created
+# (every entry in its reflog names the commit it points at now; for a detached
+# worktree, its own HEAD's reflog) is held back as having no commits of its
+# own. Anything that has been merged has moved: a merged branch carries the
+# commits it merged, and a squash-merged one still has them locally. The one
+# exception is a merged pull request whose head is exactly this tip — a
+# worktree made to review someone else's branch — and the `gh` signal still
+# collects that. An empty reflog is no evidence either way, and changes nothing.
+#
 # WHAT IT REFUSES TO TOUCH, always, with no flag to override:
 #
 #   - a main checkout, and the worktree this run is standing in
@@ -168,6 +181,15 @@ disk_size() { # seconds (0 = no limit), paths...
     }' || true
 }
 
+# Whether a worktree's branch — or, detached, the worktree's own HEAD — has
+# only ever pointed at the commit it points at now: created, and never moved.
+never_moved() { # worktree path, branch ("" when detached), head
+  local ref="HEAD" seen
+  [ -z "$2" ] || ref="refs/heads/$2"
+  seen="$(git -C "$1" reflog show --format=%H "$ref" 2>/dev/null | sort -u)"
+  [ "$seen" = "$3" ]
+}
+
 landed_paths() {
   local line
   for line in ${LANDED[@]+"${LANDED[@]}"}; do
@@ -208,20 +230,28 @@ while IFS=$'\t' read -r name repo; do
     elif [[ "$path" == */.claude/worktrees/* ]]; then
       SKIPPED+=("$name"$'\t'"$path"$'\t'"$label"$'\t'"live agent session")
     else
-      local why=""
+      local why="" base="" fresh=0
       for ref in ${refs[@]+"${refs[@]}"}; do
         if git -C "$repo" merge-base --is-ancestor "$head" "$ref" 2>/dev/null; then
-          why="contained in ${ref#origin/}"; break
+          base="${ref#origin/}"; why="contained in $base"; break
         fi
       done
+      # Contained because it never left its base, not because it merged.
+      if [ -n "$why" ] && never_moved "$path" "$branch" "$head"; then
+        why=""; fresh=1
+      fi
       if [ -z "$why" ] && [ -n "$branch" ]; then
         for merged in ${squashed[@]+"${squashed[@]}"}; do
           IFS=$'\t' read -r merged_branch merged_oid <<<"$merged"
           [ "$merged_branch" = "$branch" ] || continue
-          [ "$merged_oid" = "$head" ] && { why="PR merged (squashed)"; break; }
+          [ "$merged_oid" = "$head" ] || continue
+          if [ -n "$base" ]; then why="PR merged into $base"; else why="PR merged (squashed)"; fi
+          break
         done
       fi
-      if [ -z "$why" ]; then
+      if [ -z "$why" ] && [ "$fresh" -eq 1 ]; then
+        HELD+=("$name"$'\t'"$path"$'\t'"$label"$'\t'"no commits of its own yet")
+      elif [ -z "$why" ]; then
         HELD+=("$name"$'\t'"$path"$'\t'"$label"$'\t'"not landed upstream")
       elif [ -n "$(git -C "$path" diff --name-only HEAD 2>/dev/null)" ]; then
         HELD+=("$name"$'\t'"$path"$'\t'"$label"$'\t'"$why, but has uncommitted changes")

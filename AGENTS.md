@@ -761,6 +761,21 @@ and pinning it to the SHA is what stops a branch *reused* after its PR merged
 from reading as landed on the strength of its name. Without `gh` those read as
 unlanded rather than guessing.
 
+Ancestry alone cannot tell *merged* from *not started*. A worktree `feature new`
+or `codex-worktree setup` cut a minute ago has HEAD equal to its base, which is
+trivially contained in it — and a session that has only written new files so
+far holds nothing but untracked work, which is exactly what `--untracked`
+deletes. So a worktree whose branch has **never moved since it was created**
+(every entry in the branch's reflog names its current tip; for a detached
+worktree, its own HEAD's reflog) is held back as `no commits of its own yet`,
+however far `origin/main` has moved on since. Anything genuinely merged has
+moved, because it carries the commits that merged; the one never-moved worktree
+that has landed — one made to review someone else's branch — is still collected
+when `gh` reports a merged pull request at exactly its tip. An empty reflog is
+no evidence either way and changes nothing. What this does not catch is a branch
+that moved without commits of its own — only fast-forwarded by `git pull` —
+which still reads as landed.
+
 `--branches` adds a second pass over the refs themselves, after any worktree
 removal, so a branch and the worktree holding it are collected in the same run
 rather than a run apart. `main`, `dev` and `prerelease` are excluded by name
