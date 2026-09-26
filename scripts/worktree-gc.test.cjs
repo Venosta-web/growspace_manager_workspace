@@ -71,6 +71,17 @@ function fixture(t, { merged = [] } = {}) {
   return { root, hub, backend: clones.growspace_manager, bin, table };
 }
 
+// A worktree whose branch carries a commit origin/main has since merged. One cut
+// from origin/main with nothing committed is not this: its HEAD is an ancestor
+// of main only because it has not left main yet.
+function landedWorktree(repository, wt, branch) {
+  git(repository, "worktree", "add", "-q", "-b", branch, wt, "origin/main");
+  commit(wt, `${path.basename(wt)}.md`, "work that has since merged");
+  git(wt, "push", "-q", "origin", "HEAD:main");
+  git(repository, "fetch", "-q", "origin");
+  return wt;
+}
+
 // gh reports the commit a pull request merged, and the tool insists on it.
 function declareMerged(f, repository, branch) {
   const oid = git(repository, "rev-parse", branch);
@@ -90,7 +101,7 @@ function run(f, args = [], cwd = f.hub) {
 test("removes a landed worktree and keeps its branch", (t) => {
   const f = fixture(t);
   const wt = path.join(f.backend, ".worktrees", "landed");
-  git(f.backend, "worktree", "add", "-q", "-b", "feature/landed", wt, "origin/main");
+  landedWorktree(f.backend, wt, "feature/landed");
 
   const report = run(f);
   assert.match(report.stdout, /landed — removable \(1\)/);
@@ -101,6 +112,51 @@ test("removes a landed worktree and keeps its branch", (t) => {
   assert.equal(pruned.status, 0, pruned.stderr);
   assert.equal(fs.existsSync(wt), false);
   assert.match(git(f.backend, "branch", "--list", "feature/landed"), /feature\/landed/);
+});
+
+// A worktree cut a minute ago has HEAD == its base, an ancestor of origin/main
+// by construction. A session that has so far only written new files holds
+// nothing but untracked work — exactly what --untracked deletes — so "never
+// moved" must read as not started, not as merged. It still does once
+// origin/main has moved on and HEAD is no longer its tip, and the merged
+// worktree beside it is collected by the same run.
+test("holds back a fresh worktree with no commits of its own", (t) => {
+  const f = fixture(t);
+  const fresh = path.join(f.backend, ".worktrees", "fresh");
+  git(f.backend, "worktree", "add", "-q", "-b", "feature/fresh", fresh, "origin/main");
+  fs.writeFileSync(path.join(fresh, "draft.py"), "the session's only work so far");
+  const detached = path.join(f.backend, ".worktrees", "detached");
+  git(f.backend, "worktree", "add", "-q", "--detach", detached, "origin/main");
+  fs.writeFileSync(path.join(detached, "notes.md"), "not committed yet");
+  const merged = landedWorktree(
+    f.backend, path.join(f.backend, ".worktrees", "merged"), "feature/merged");
+
+  const report = run(f);
+  assert.match(report.stdout, /feature\/fresh\s+no commits of its own yet/);
+  assert.match(report.stdout, /\(detached\)\s+no commits of its own yet/);
+  assert.match(report.stdout, /landed — removable \(1\)/);
+
+  const pruned = run(f, ["--prune", "--untracked", "--branches"]);
+  assert.equal(pruned.status, 0, pruned.stderr);
+  assert.equal(fs.readFileSync(path.join(fresh, "draft.py"), "utf8"),
+    "the session's only work so far");
+  assert.equal(fs.existsSync(path.join(detached, "notes.md")), true);
+  assert.match(git(f.backend, "branch", "--list", "feature/fresh"), /feature\/fresh/);
+  assert.equal(fs.existsSync(merged), false, "the merged one still goes");
+});
+
+// The one never-moved branch that has landed: a worktree made to review a pull
+// request, whose tip is exactly the head gh says merged.
+test("collects a never-moved branch whose exact tip gh reports merged", (t) => {
+  const f = fixture(t);
+  git(f.backend, "branch", "feature/review", "origin/main");
+  declareMerged(f, f.backend, "feature/review");
+  const wt = path.join(f.backend, ".worktrees", "review");
+  git(f.backend, "worktree", "add", "-q", wt, "feature/review");
+
+  assert.match(run(f).stdout, /feature\/review\s+PR merged into main/);
+  run(f, ["--prune"]);
+  assert.equal(fs.existsSync(wt), false);
 });
 
 // Squashed commits are ancestors of nothing, so without the pull-request
@@ -142,7 +198,7 @@ test("holds back a merged branch that was reused afterwards", (t) => {
 test("holds back a worktree with uncommitted tracked changes", (t) => {
   const f = fixture(t);
   const wt = path.join(f.backend, ".worktrees", "dirty");
-  git(f.backend, "worktree", "add", "-q", "-b", "feature/dirty", wt, "origin/main");
+  landedWorktree(f.backend, wt, "feature/dirty");
   fs.writeFileSync(path.join(wt, "README.md"), "edited");
 
   assert.match(run(f).stdout, /has uncommitted changes/);
@@ -155,7 +211,7 @@ test("holds back a worktree with uncommitted tracked changes", (t) => {
 test("removes untracked-only fallout only when asked", (t) => {
   const f = fixture(t);
   const wt = path.join(f.backend, ".worktrees", "fallout");
-  git(f.backend, "worktree", "add", "-q", "-b", "feature/fallout", wt, "origin/main");
+  landedWorktree(f.backend, wt, "feature/fallout");
   fs.mkdirSync(path.join(wt, ".cache"));
   fs.writeFileSync(path.join(wt, ".cache", "vite"), "");
 
@@ -176,7 +232,7 @@ test("never deletes through a shared dependency link", (t) => {
   fs.writeFileSync(path.join(shared, "sentinel"), "the lender's tree");
 
   const wt = path.join(f.backend, ".worktrees", "linked");
-  git(f.backend, "worktree", "add", "-q", "-b", "feature/linked", wt, "origin/main");
+  landedWorktree(f.backend, wt, "feature/linked");
   fs.symlinkSync(shared, path.join(wt, "node_modules"));
 
   run(f, ["--prune", "--untracked"]);
@@ -194,7 +250,7 @@ test("never deletes through a shared dependency link", (t) => {
 test("holds back a landed worktree that contains held-back work", (t) => {
   const f = fixture(t);
   const outer = path.join(f.hub, "worktrees", "nest");
-  git(f.hub, "worktree", "add", "-q", "-b", "feature/outer", outer, "origin/main");
+  landedWorktree(f.hub, outer, "feature/outer");
 
   const inner = path.join(outer, "nested", "backend");
   git(f.backend, "worktree", "add", "-q", "-b", "feature/inner", inner, "origin/main");
@@ -239,7 +295,7 @@ test("deletes landed branches only when asked, and never the protected ones", (t
 test("collects a branch freed by the same run", (t) => {
   const f = fixture(t);
   const wt = path.join(f.backend, ".worktrees", "paired");
-  git(f.backend, "worktree", "add", "-q", "-b", "feature/paired", wt, "origin/main");
+  landedWorktree(f.backend, wt, "feature/paired");
 
   const done = run(f, ["--prune", "--branches", "--untracked"]);
   assert.equal(done.status, 0, done.stderr);
@@ -311,7 +367,7 @@ test("leaves a locked stale entry alone and says how to release it", (t) => {
 test("counts a private .venv as build output, not as untracked work", (t) => {
   const f = fixture(t);
   const wt = path.join(f.backend, ".worktrees", "private-venv");
-  git(f.backend, "worktree", "add", "-q", "-b", "feature/private-venv", wt, "origin/main");
+  landedWorktree(f.backend, wt, "feature/private-venv");
   fs.mkdirSync(path.join(wt, ".venv", "bin"), { recursive: true });
   fs.writeFileSync(path.join(wt, ".venv", "bin", "python"), "#!/bin/sh\n");
   fs.writeFileSync(path.join(wt, ".venv", "pyvenv.cfg"), "home = /usr/bin\n");
@@ -330,7 +386,7 @@ test("counts a private .venv as build output, not as untracked work", (t) => {
 test("still holds back untracked files beside a private .venv", (t) => {
   const f = fixture(t);
   const wt = path.join(f.backend, ".worktrees", "venv-and-work");
-  git(f.backend, "worktree", "add", "-q", "-b", "feature/venv-and-work", wt, "origin/main");
+  landedWorktree(f.backend, wt, "feature/venv-and-work");
   fs.mkdirSync(path.join(wt, ".venv"));
   fs.mkdirSync(path.join(wt, "tests", ".venv"), { recursive: true });
   fs.writeFileSync(path.join(wt, "tests", ".venv", "draft.py"), "");
@@ -344,7 +400,7 @@ test("still holds back untracked files beside a private .venv", (t) => {
 test("the report and the summary say how much disk the removable ones hold", (t) => {
   const f = fixture(t);
   const wt = path.join(f.backend, ".worktrees", "heavy");
-  git(f.backend, "worktree", "add", "-q", "-b", "feature/heavy", wt, "origin/main");
+  landedWorktree(f.backend, wt, "feature/heavy");
   fs.mkdirSync(path.join(wt, ".venv"));
   fs.writeFileSync(path.join(wt, ".venv", "blob"), Buffer.alloc(3 * 1024 * 1024));
 
@@ -362,8 +418,7 @@ test("the report and the summary say how much disk the removable ones hold", (t)
 test("--nudge speaks only once the removable count reaches the threshold", (t) => {
   const f = fixture(t);
   for (const name of ["one", "two"]) {
-    git(f.backend, "worktree", "add", "-q", "-b", `feature/${name}`,
-      path.join(f.backend, ".worktrees", name), "origin/main");
+    landedWorktree(f.backend, path.join(f.backend, ".worktrees", name), `feature/${name}`);
   }
   const nudge = (threshold) =>
     spawnSync(path.join(f.hub, "scripts", "worktree-gc"), ["--nudge"], {
