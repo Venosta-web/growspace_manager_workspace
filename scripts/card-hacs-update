@@ -872,6 +872,16 @@ async function main(argv = process.argv.slice(2)) {
 
 module.exports = {
   CARD_REPOSITORY,
+  command,
+  compose,
+  connectTestInstance,
+  ensureHacsComponent,
+  fetchText,
+  githubToken,
+  onboard,
+  postJson,
+  until,
+  waitForHacs,
   assertTestInstance,
   brokenModules,
   findCardRepository,
