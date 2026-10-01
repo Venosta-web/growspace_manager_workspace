@@ -501,6 +501,38 @@ for and the entry's graph resolves. What it does show is 66 files where 34
 belong. `--hacs-version` points it at the HACS a report came from, which is the
 next thing to vary when a report says otherwise.
 
+### Checking the backend zone upgrade before release
+
+Before cutting the zone release, run `./scripts/backend-hacs-update <candidate>`
+(or `<from> <candidate>` to override v1.2.3). This is a manual release-checklist
+step. It installs both tags through HACS on :8124 and provisions the old release
+through HA's config flow and services: crop steering, a schedule, a tank, a
+moisture probe and a plant. It requires the same Docker and GitHub credentials
+as `card-hacs-update` and refuses any target except the main hub's `ha-test`
+bind mount and local :8124.
+
+An existing backend store or entry is refused. `--reset` explicitly clears the
+test instance's state and backend download, including old migration copies;
+use it only when that release-test state can be discarded. A worktree invocation
+still drives the main hub's test runtime.
+
+The check asserts store major version 2, one valid `default` zone, every moved
+field and its removed growspace copy, unchanged backend entity unique_ids, and
+an exact `growspace_manager.config.v1` pre-migration copy. It compares a fixed
+steering day and schedule gate verdicts using each HACS-installed release's
+own code, requiring both fire and hold decisions. New entities may be added;
+every old unique_id must remain. Tick comparisons include shot, phase and gate
+decisions, excluding log wording and new persistence annotations. The probe executes pure
+functions in the HA image; every runtime document is read from the host and
+passed on stdin. Changes in verdicts fail the check, even when caused by another
+intentional release change: inspect the JSON rather than accepting a migration
+on a partial result.
+
+Success and failure records land under
+`artifacts/backend-hacs-update/<from>-to-<candidate>.json`. Pure assertions and
+target guards are covered by `scripts/backend-hacs-update.test.cjs`, selected by
+the Workspace quality glob. The candidate remains installed for inspection.
+
 #### Every published release replays that update
 
 Reproducing a pair on demand only helps someone who already suspects the bug.

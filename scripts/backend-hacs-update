@@ -1,0 +1,556 @@
+#!/usr/bin/env node
+"use strict";
+
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const { execFileSync } = require("node:child_process");
+const {
+  command,
+  compose,
+  connectTestInstance,
+  ensureHacsComponent,
+  fetchText,
+  githubToken,
+  hacsConfigEntry,
+  onboard,
+  parseArguments,
+  postJson,
+  until,
+  waitForHacs,
+  withHacsEntry,
+} = require("./card-hacs-update");
+
+const { mainHub } = require("./growspace-repos.cjs");
+
+const REPOSITORY = "Venosta-web/growspace_manager";
+const STORE = "growspace_manager.config";
+const NAME = "Backend upgrade check";
+
+// Compose drives the main hub's one test runtime. Accept only its actual bind
+// mount and loopback port; an alternate URL/config must not split API and disk.
+function assertTarget(baseUrl, configDir, runtime) {
+  const url = new URL(baseUrl);
+  assert(
+    url.protocol === "http:" &&
+      url.port === "8124" &&
+      ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) &&
+      url.pathname === "/" &&
+      !url.search &&
+      !url.hash &&
+      !url.username &&
+      !url.password,
+    "refusing target: use the local test instance on :8124; :8123 is the dev instance",
+  );
+  assert.equal(
+    fs.realpathSync(configDir),
+    fs.realpathSync(path.join(runtime, "ha-test")),
+    "refusing config directory: use the main hub's ha-test bind mount",
+  );
+}
+
+function tags(positional) {
+  assert(
+    positional.length === 1 || positional.length === 2,
+    "give <to> or <from> <to>",
+  );
+  const pair = positional.length === 1 ? ["v1.2.3", positional[0]] : positional;
+  for (const tag of pair)
+    assert(
+      /^v?\d+\.\d+\.\d+(?:b\d+|[-.][A-Za-z0-9.-]+)?$/.test(tag),
+      "expected release tags",
+    );
+  assert.notEqual(pair[0], pair[1], "from and to must differ");
+  return pair;
+}
+
+function uniqueIds(entities) {
+  return entities
+    .filter((entry) => entry.platform === "growspace_manager")
+    .map((entry) => entry.unique_id)
+    .sort();
+}
+
+// Compare decisions, not new logging or persistence annotations on a verdict.
+// Keep unknown-tank refusals in the comparison even though v1.2.3 had none.
+function decisions(ticks, kind) {
+  const fields =
+    kind === "steering"
+      ? [
+          "phase",
+          "canonical",
+          "phase_changed",
+          "reset_composer",
+          "fire",
+          "suppressed_by",
+        ]
+      : ["fire", "reason", "low_tank", "unknown_tank"];
+  return ticks.map((tick) =>
+    Object.fromEntries(fields.map((field) => [field, tick[field] ?? null])),
+  );
+}
+
+function assertUpgrade(
+  before,
+  after,
+  backup,
+  beforeIds,
+  afterIds,
+  beforeTicks,
+  afterTicks,
+  id,
+) {
+  assert.equal(before.version, 1, "from-release must write a v1 store");
+  assert.equal(after.version, 2, "candidate must write a v2 store");
+  assert.deepEqual(
+    { ...backup, key: before.key },
+    before,
+    "pre-migration copy differs from the pre-upgrade document",
+  );
+  assert.equal(backup.key, `${before.key}.v1`, "wrong pre-migration copy key");
+  assert(beforeIds.length > 0, "no backend entities registered before upgrade");
+  const remaining = [...afterIds];
+  for (const uniqueId of beforeIds) {
+    const index = remaining.indexOf(uniqueId);
+    assert(index !== -1, `entity unique_id disappeared: ${uniqueId}`);
+    remaining.splice(index, 1);
+  }
+  const old = before.data.growspaces[id];
+  const current = after.data.growspaces[id];
+  const contract = afterTicks.contract;
+  assert(contract, "candidate has no zone contract");
+  assert.deepEqual(contract.problems, [], "invalid default zone");
+  assert.equal(current.irrigation_zones.length, 1);
+  const zone = current.irrigation_zones[0];
+  assert.equal(zone.id, "default");
+  for (const [section, fields] of [
+    ["irrigation_config", contract.config_fields],
+    ["environment_config", contract.environment_fields],
+  ]) {
+    assert(fields.length > 0, `empty ${section} field contract`);
+    for (const field of fields) {
+      if (Object.hasOwn(old[section], field))
+        assert.deepEqual(zone[field], old[section][field], field);
+      assert(
+        !Object.hasOwn(current[section], field),
+        `${field} left on growspace`,
+      );
+    }
+  }
+  for (const [field, value] of Object.entries(old.irrigation_strategy)) {
+    const owner = contract.light_fields.includes(field)
+      ? current.light_cycle
+      : zone.strategy;
+    assert.deepEqual(owner[field] ?? null, value, `strategy.${field}`);
+  }
+  for (const [field, value] of Object.entries(old.substrate_history)) {
+    assert.deepEqual(zone.substrate_history[field], value, `history.${field}`);
+  }
+  assert(!Object.hasOwn(current, "irrigation_strategy"));
+  assert(!Object.hasOwn(current, "substrate_history"));
+  const oldTanks = old.environment_config.irrigation_tanks;
+  const newTanks = current.environment_config.irrigation_tanks;
+  assert.equal(newTanks.length, oldTanks.length, "tanks changed");
+  oldTanks.forEach((tank, index) => {
+    for (const [field, value] of Object.entries(tank)) {
+      assert.deepEqual(newTanks[index][field], value, `tank.${field}`);
+    }
+  });
+  for (const kind of ["steering", "schedule"]) {
+    assert(beforeTicks[kind].length > 0, `${kind} produced no ticks`);
+    assert.deepEqual(
+      decisions(afterTicks[kind], kind),
+      decisions(beforeTicks[kind], kind),
+      `${kind} verdicts changed`,
+    );
+    assert(
+      beforeTicks[kind].some((tick) => tick.fire),
+      `${kind} replay never fires`,
+    );
+    assert(
+      beforeTicks[kind].some((tick) => !tick.fire),
+      `${kind} replay never holds`,
+    );
+  }
+}
+
+async function main(argv = process.argv.slice(2)) {
+  const { options, switches, positional } = parseArguments(argv);
+  if (switches.has("--help") || positional.length === 0) {
+    console.log(
+      "usage: ./scripts/backend-hacs-update [<from=v1.2.3>] <to> [--reset] [--hacs-version V] [--github-token T]\n" +
+        "Real HACS integration update on :8124. --reset wipes ha-test state, backend download and old migration copies.\n" +
+        "Requires Docker, Node 24, Python in the HA image, and gh auth or HACS_GITHUB_TOKEN.\n" +
+        "--base-url and --config-dir may only identify the main hub's local ha-test runtime.",
+    );
+    return switches.has("--help") ? 0 : 2;
+  }
+  const [from, to] = tags(positional);
+  const runtime = mainHub();
+  const configDir = path.resolve(
+    options["--config-dir"] || path.join(runtime, "ha-test"),
+  );
+  const baseUrl = (options["--base-url"] || "http://localhost:8124").replace(
+    /\/$/,
+    "",
+  );
+  assertTarget(baseUrl, configDir, runtime);
+  const token = githubToken(options["--github-token"]);
+  assert(
+    token,
+    "HACS needs a GitHub token: gh auth login or HACS_GITHUB_TOKEN",
+  );
+  const storage = path.join(configDir, ".storage");
+  const read = (key) =>
+    JSON.parse(fs.readFileSync(path.join(storage, key), "utf8"));
+  const tokenFile = path.join(runtime, ".ha-test-token");
+  const artifact = path.join(
+    runtime,
+    "artifacts/backend-hacs-update",
+    `${from}-to-${to}.json`,
+  );
+  const report = {
+    repository: REPOSITORY,
+    from,
+    to,
+    started_at: new Date().toISOString(),
+    passed: false,
+  };
+  let connection;
+  const waitApi = () =>
+    until(
+      "test API",
+      async () => (await fetchText(`${baseUrl}/api/`)).status === 401,
+      { timeoutMs: 300_000 },
+    );
+  const restart = async () => {
+    connection?.close();
+    compose(runtime, ["up", "-d", "--force-recreate", "ha-test"]);
+    await waitApi();
+  };
+  const probe = (doc) =>
+    JSON.parse(
+      execFileSync(
+        "docker",
+        [
+          "compose",
+          "--profile",
+          "test",
+          "exec",
+          "-T",
+          "ha-test",
+          "python",
+          "-c",
+          fs.readFileSync(
+            path.join(__dirname, "backend-upgrade-probe.py"),
+            "utf8",
+          ),
+        ],
+        {
+          cwd: runtime,
+          input: JSON.stringify(doc),
+          encoding: "utf8",
+          timeout: 60_000,
+          maxBuffer: 8 * 1024 * 1024,
+        },
+      ),
+    );
+  try {
+    if (!switches.has("--reset")) {
+      assert(
+        !fs.existsSync(path.join(storage, STORE)),
+        "backend store already exists; use --reset for a clean upgrade run",
+      );
+      if (fs.existsSync(path.join(storage, "core.config_entries"))) {
+        assert(
+          !read("core.config_entries").data.entries.some(
+            (e) => e.domain === "growspace_manager",
+          ),
+          "backend config entry already exists; use --reset",
+        );
+      }
+    }
+    compose(runtime, ["stop", "ha-test"]);
+    if (switches.has("--reset")) {
+      for (const entry of fs.readdirSync(configDir)) {
+        if (entry === ".storage" || entry.startsWith("home-assistant"))
+          fs.rmSync(path.join(configDir, entry), {
+            recursive: true,
+            force: true,
+          });
+      }
+      fs.rmSync(
+        path.join(configDir, "custom_components", "growspace_manager"),
+        { recursive: true, force: true },
+      );
+      fs.rmSync(tokenFile, { force: true });
+    }
+    await ensureHacsComponent({
+      configDir,
+      version: options["--hacs-version"] || "2.0.5",
+    });
+    await restart();
+    const accessToken = await onboard({ baseUrl, tokenFile });
+    await until(
+      "config entries store",
+      () => fs.existsSync(path.join(storage, "core.config_entries")),
+      { timeoutMs: 120_000 },
+    );
+    // Stop before reading, so the final HA save cannot overwrite our patch.
+    compose(runtime, ["stop", "ha-test"]);
+    const patched = withHacsEntry(
+      read("core.config_entries"),
+      hacsConfigEntry({ token }),
+    );
+    if (patched)
+      fs.writeFileSync(
+        path.join(storage, "core.config_entries"),
+        JSON.stringify(patched),
+      );
+    await restart();
+    const connect = async () => {
+      connection = await connectTestInstance(baseUrl, accessToken);
+      await waitForHacs(connection);
+    };
+    await connect();
+    const list = () =>
+      command(connection, {
+        type: "hacs/repositories/list",
+        categories: ["integration"],
+      });
+    const find = async () =>
+      (await list()).find(
+        (r) => r.full_name.toLowerCase() === REPOSITORY.toLowerCase(),
+      );
+    let repository = await find();
+    if (!repository) {
+      await command(connection, {
+        type: "hacs/repositories/add",
+        repository: REPOSITORY,
+        category: "integration",
+      });
+      repository = await until("backend HACS registration", find, {
+        timeoutMs: 60_000,
+      });
+    }
+    await command(connection, {
+      type: "hacs/repository/beta",
+      repository: String(repository.id),
+      show_beta: true,
+    });
+    let finalBefore;
+    const download = async (tag) => {
+      console.log(`Downloading ${tag} through HACS`);
+      await command(connection, {
+        type: "hacs/repository/download",
+        repository: String(repository.id),
+        version: tag,
+      });
+      assert.equal(
+        (await find()).installed_version,
+        tag,
+        "HACS did not install requested tag",
+      );
+      const manifest = JSON.parse(
+        fs.readFileSync(
+          path.join(
+            configDir,
+            "custom_components/growspace_manager/manifest.json",
+          ),
+        ),
+      );
+      assert.equal(
+        manifest.version.replace(/^v/, ""),
+        tag.replace(/^v/, ""),
+        "downloaded manifest version differs",
+      );
+      if (tag === to) {
+        connection.close();
+        compose(runtime, ["stop", "ha-test"]);
+        finalBefore = read(STORE);
+      }
+      await restart();
+      await connect();
+    };
+    await download(from);
+    const headers = { authorization: `Bearer ${accessToken}` };
+    const post = async (route, body) => {
+      const result = await postJson(`${baseUrl}${route}`, body, { headers });
+      assert.equal(result.status, 200, `${route}: ${result.body}`);
+      return result.json;
+    };
+    const flow = await post("/api/config/config_entries/flow", {
+      handler: "growspace_manager",
+      show_advanced_options: false,
+    });
+    const entry = await post(
+      `/api/config/config_entries/flow/${flow.flow_id}`,
+      { name: NAME },
+    );
+    assert.equal(
+      entry.type,
+      "create_entry",
+      "from release config flow did not finish",
+    );
+    await until(
+      "backend services",
+      async () =>
+        (await command(connection, { type: "get_services" })).growspace_manager
+          ?.add_growspace,
+      { timeoutMs: 120_000 },
+    );
+    const service = (name, data) =>
+      command(connection, {
+        type: "call_service",
+        domain: "growspace_manager",
+        service: name,
+        service_data: data,
+      });
+    await service("add_growspace", { name: NAME, rows: 2, plants_per_row: 3 });
+    const id = await until(
+      "provisioned growspace store",
+      () =>
+        Object.entries(read(STORE).data.growspaces).find(
+          ([, gs]) => gs.name === NAME,
+        )?.[0],
+      { timeoutMs: 120_000 },
+    );
+    await service("configure_environment", {
+      growspace_id: id,
+      soil_moisture_sensor: "sensor.upgrade_moisture",
+      irrigation_tanks: [
+        {
+          sensor_entity: "sensor.upgrade_tank",
+          name: "Reservoir",
+          volume_liters: 60,
+        },
+      ],
+    });
+    await service("set_irrigation_settings", {
+      growspace_id: id,
+      irrigation_pump_entity: "switch.upgrade_pump",
+      irrigation_duration: 45,
+      pump_flow_rate_ml_per_sec: 12.5,
+      soil_trigger_percent: 38,
+      daily_volume_cap_liters: 18,
+      max_cycles_per_day: 40,
+      skip_during_dark: true,
+    });
+    await service("set_irrigation_strategy", {
+      growspace_id: id,
+      enabled: true,
+      lights_on_time: "06:30:00",
+      target_vwc_percent: 52,
+      maintenance_dryback_percent: 3,
+      p1_shot_duration_seconds: 30,
+      p2_shot_duration_seconds: 20,
+    });
+    await service("add_irrigation_time", {
+      growspace_id: id,
+      time: "09:00:00",
+      duration: 45,
+    });
+    await service("add_plant", {
+      growspace_id: id,
+      strain: "Upgrade fixture",
+      row: 1,
+      col: 1,
+      flower_start: "2026-08-24",
+    });
+    let beforeIds = uniqueIds(
+      await command(connection, { type: "config/entity_registry/list" }),
+    );
+    connection.close();
+    compose(runtime, ["stop", "ha-test"]);
+    const before = read(STORE);
+    assert.equal(before.version, 1, "from-release is already zoned");
+    const fixture = before.data.growspaces[id];
+    assert(
+      fixture.irrigation_strategy.enabled &&
+        fixture.irrigation_config.irrigation_times.length &&
+        fixture.environment_config.irrigation_tanks.length &&
+        fixture.environment_config.soil_moisture_sensor,
+      "provisioning did not persist every fixture feature",
+    );
+    await restart();
+    const beforeTicks = probe(fixture);
+    report.before = {
+      document: before,
+      unique_ids: beforeIds,
+      ticks: beforeTicks,
+    };
+    await connect();
+    beforeIds = uniqueIds(
+      await command(connection, { type: "config/entity_registry/list" }),
+    );
+    report.before.unique_ids = beforeIds;
+    await download(to);
+    assert.deepEqual(
+      finalBefore.data.growspaces[id],
+      fixture,
+      "fixture changed between baseline replay and final old-release shutdown",
+    );
+    report.before.document = finalBefore;
+    await until(
+      "loaded backend after update",
+      async () =>
+        (
+          await command(connection, {
+            type: "config_entries/get",
+            domain: "growspace_manager",
+          })
+        ).some((e) => e.state === "loaded"),
+      { timeoutMs: 120_000 },
+    );
+    const afterIds = uniqueIds(
+      await command(connection, { type: "config/entity_registry/list" }),
+    );
+    connection.close();
+    compose(runtime, ["stop", "ha-test"]);
+    const after = read(STORE);
+    const backup = read(`${STORE}.v1`);
+    await restart();
+    const afterTicks = probe(after.data.growspaces[id]);
+    report.after = {
+      document: after,
+      unique_ids: afterIds,
+      ticks: afterTicks,
+      backup,
+    };
+    assertUpgrade(
+      finalBefore,
+      after,
+      backup,
+      beforeIds,
+      afterIds,
+      beforeTicks,
+      afterTicks,
+      id,
+    );
+    report.passed = true;
+    console.log(
+      "PASS: v2 default zone, moved fields, pre-migration copy, entity IDs and tick verdicts",
+    );
+    return 0;
+  } catch (error) {
+    report.error = error.message;
+    throw error;
+  } finally {
+    connection?.close();
+    report.finished_at = new Date().toISOString();
+    fs.mkdirSync(path.dirname(artifact), { recursive: true });
+    fs.writeFileSync(artifact, `${JSON.stringify(report, null, 2)}\n`);
+    console.log(`Report: ${artifact}`);
+  }
+}
+
+module.exports = { assertTarget, assertUpgrade, tags, uniqueIds };
+if (require.main === module)
+  main()
+    .then((code) => {
+      process.exitCode = code;
+    })
+    .catch((error) => {
+      console.error(`ERROR: ${error.message}`);
+      process.exitCode = 1;
+    });
